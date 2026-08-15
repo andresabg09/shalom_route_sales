@@ -1,0 +1,1706 @@
+<title>Ruta Shalom</title>
+<style>
+  :root{
+    --bg:#faf6f4;
+    --surface:#ffffff;
+    --surface-2:#f2e8e4;
+    --ink:#271b22;
+    --ink-muted:#7a6169;
+    --line:#e9dad4;
+    --accent:#b1245a;
+    --accent-ink:#ffffff;
+    --accent-soft:#f7dde7;
+    --pendiente:#c1791d;
+    --pendiente-soft:#faeacc;
+    --completado:#2c7a56;
+    --completado-soft:#d9efe2;
+    --noquiso:#8c5060;
+    --noquiso-soft:#efe1e6;
+    --cancelado:#5c6470;
+    --cancelado-soft:#e3e5e9;
+    --info:#2461c7;
+    --info-soft:#dfe9fa;
+    --shadow:0 10px 30px -12px rgba(60,20,35,0.28);
+    --radius-lg:22px;
+    --radius-md:14px;
+    --radius-sm:10px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#180f14;
+      --surface:#241820;
+      --surface-2:#2e1e28;
+      --ink:#f5e9ee;
+      --ink-muted:#b79aa5;
+      --line:#3d2a34;
+      --accent:#ec5c92;
+      --accent-ink:#1a0a10;
+      --accent-soft:#3a1d2a;
+      --pendiente:#e3a04a;
+      --pendiente-soft:#3a2c17;
+      --completado:#5bc491;
+      --completado-soft:#153826;
+      --noquiso:#c98ca0;
+      --noquiso-soft:#33212a;
+      --cancelado:#9aa2ae;
+      --cancelado-soft:#2b2e34;
+      --info:#7aaaf5;
+      --info-soft:#1c2c47;
+      --shadow:0 10px 30px -12px rgba(0,0,0,0.6);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#180f14;
+    --surface:#241820;
+    --surface-2:#2e1e28;
+    --ink:#f5e9ee;
+    --ink-muted:#b79aa5;
+    --line:#3d2a34;
+    --accent:#ec5c92;
+    --accent-ink:#1a0a10;
+    --accent-soft:#3a1d2a;
+    --pendiente:#e3a04a;
+    --pendiente-soft:#3a2c17;
+    --completado:#5bc491;
+    --completado-soft:#153826;
+    --noquiso:#c98ca0;
+    --noquiso-soft:#33212a;
+    --cancelado:#9aa2ae;
+    --cancelado-soft:#2b2e34;
+    --info:#7aaaf5;
+    --info-soft:#1c2c47;
+    --shadow:0 10px 30px -12px rgba(0,0,0,0.6);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-variant-numeric:tabular-nums;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:28px 14px 60px;
+  }
+  h1,h2,h3{text-wrap:balance; margin:0;}
+
+  .lab{
+    max-width:640px;
+    width:100%;
+    text-align:center;
+    margin-bottom:20px;
+  }
+  .lab h1{font-size:1.5rem; font-weight:800; letter-spacing:-0.01em;}
+  .lab p{color:var(--ink-muted); font-size:.92rem; margin:6px 0 0; line-height:1.5;}
+
+  .hint{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:var(--surface-2);
+    color:var(--ink-muted);
+    border-radius:999px;
+    padding:7px 14px;
+    font-size:.78rem;
+    font-weight:700;
+    margin-top:14px;
+  }
+
+  /* device frame: fluido, sin tamaño fijo -- se acomoda solo al ancho
+     real de la ventana/pantalla, igual que en un dispositivo real. */
+  #device{
+    width:100%;
+    max-width:520px;
+    height:min(88vh, 840px);
+    min-height:560px;
+    background:var(--surface);
+    border-radius:32px;
+    box-shadow:var(--shadow), 0 0 0 8px var(--surface-2);
+    overflow:hidden;
+    position:relative;
+    display:flex;
+    flex-direction:column;
+  }
+  @media (min-width:760px){
+    #device{max-width:760px; border-radius:22px;}
+  }
+
+  .statusbar{
+    height:30px;
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 22px;
+    font-size:.72rem;
+    font-weight:700;
+    color:var(--ink-muted);
+  }
+
+  .app{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+    position:relative;
+  }
+  .screen{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+  .screen[hidden]{display:none;}
+
+  .topbar{
+    padding:6px 18px 12px;
+    flex:0 0 auto;
+  }
+  .topbar-row{display:flex; align-items:center; gap:10px;}
+  .topbar .route-name{font-size:1.15rem; font-weight:800;}
+  .topbar .route-sub{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:3px;
+    color:var(--ink-muted);
+    font-size:.82rem;
+  }
+  .progress-pill{
+    background:var(--completado-soft);
+    color:var(--completado);
+    font-weight:800;
+    font-size:.76rem;
+    padding:3px 10px;
+    border-radius:999px;
+  }
+
+  .segmented{
+    display:flex;
+    background:var(--surface-2);
+    border-radius:999px;
+    padding:3px;
+    margin:10px 18px 0;
+    flex:0 0 auto;
+  }
+  .segmented button{
+    flex:1;
+    border:none;
+    background:transparent;
+    color:var(--ink-muted);
+    font-weight:700;
+    font-size:.86rem;
+    padding:9px 0;
+    border-radius:999px;
+    cursor:pointer;
+    font-family:inherit;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+  }
+  .segmented button.active{background:var(--accent); color:var(--accent-ink);}
+
+  .view{
+    flex:1;
+    min-height:0;
+    overflow-y:auto;
+    padding:14px 14px 90px;
+  }
+  .view::-webkit-scrollbar{width:0;}
+
+  /* stop cards */
+  .stop-card{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius-lg);
+    padding:12px 14px;
+    margin-bottom:10px;
+    cursor:pointer;
+    text-align:left;
+  }
+  .stop-card:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .stop-num{
+    flex:0 0 auto;
+    width:34px; height:34px;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800;
+    font-size:.88rem;
+    background:var(--surface-2);
+    color:var(--ink-muted);
+  }
+  .stop-card.st-pendiente .stop-num{background:var(--pendiente-soft); color:var(--pendiente);}
+  .stop-card.st-completado .stop-num{background:var(--completado-soft); color:var(--completado);}
+  .stop-card.st-no_quiso .stop-num{background:var(--noquiso-soft); color:var(--noquiso);}
+  .stop-card.st-cancelado .stop-num{background:var(--cancelado-soft); color:var(--cancelado);}
+  .stop-card.st-cancelado{opacity:.72;}
+  .stop-info{flex:1; min-width:0;}
+  .stop-info .name{font-weight:700; font-size:.98rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .stop-info .addr{color:var(--ink-muted); font-size:.8rem; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .stop-badge{
+    flex:0 0 auto;
+    font-size:.72rem;
+    font-weight:800;
+    padding:4px 9px;
+    border-radius:999px;
+  }
+  .stop-card.st-pendiente .stop-badge{background:var(--pendiente-soft); color:var(--pendiente);}
+  .stop-card.st-completado .stop-badge{background:var(--completado-soft); color:var(--completado);}
+  .stop-card.st-no_quiso .stop-badge{background:var(--noquiso-soft); color:var(--noquiso);}
+  .stop-card.st-cancelado .stop-badge{background:var(--cancelado-soft); color:var(--cancelado);}
+  .quick-icon-btn{
+    flex:0 0 auto;
+    width:38px; height:38px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--surface);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--ink);
+    cursor:pointer;
+  }
+  .quick-icon-btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+  /* tarjetas de cotización y de directorio de clientes: mismo lenguaje
+     visual que stop-card, sin el círculo de orden de ruta */
+  .quote-total{
+    flex:0 0 auto; text-align:right; font-weight:800; font-size:.98rem;
+  }
+  .quote-total .draft{color:var(--ink-muted); font-weight:700; font-size:.78rem;}
+
+  /* tarjetas de ruta en el hub semanal */
+  .route-card{
+    display:flex; flex-direction:column; gap:10px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius-lg);
+    padding:14px 16px;
+    margin-bottom:10px;
+    cursor:pointer;
+    text-align:left;
+    font-family:inherit;
+    color:var(--ink);
+    width:100%;
+  }
+  .route-card:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .route-card-head{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .route-card-head .rname{font-weight:800; font-size:1.02rem;}
+  .route-card-stats{
+    display:flex; flex-wrap:wrap; gap:14px;
+    font-size:.8rem; color:var(--ink-muted);
+  }
+  .route-card-stats b{color:var(--ink); font-weight:800; font-variant-numeric:tabular-nums;}
+
+  /* map view */
+  .map-wrap{flex:1; position:relative; min-height:0;}
+  canvas#mapcanvas{width:100%; height:100%; display:block; background:var(--surface-2);}
+  .map-card{
+    position:absolute;
+    left:14px; right:14px; bottom:14px;
+    background:var(--surface);
+    border-radius:var(--radius-lg);
+    box-shadow:var(--shadow);
+    padding:14px 16px 16px;
+    border:1px solid var(--line);
+  }
+  .map-card .eyebrow{
+    font-size:.72rem;
+    font-weight:800;
+    color:var(--accent);
+    letter-spacing:.04em;
+    text-transform:uppercase;
+  }
+  .map-card .name{font-size:1.05rem; font-weight:800; margin-top:2px;}
+  .map-card .meta{color:var(--ink-muted); font-size:.82rem; margin-top:2px;}
+  .map-card .btn-row{display:flex; gap:8px; margin-top:12px;}
+
+  /* buttons */
+  .btn{
+    border:none;
+    border-radius:var(--radius-md);
+    font-weight:800;
+    font-size:.9rem;
+    padding:12px 14px;
+    cursor:pointer;
+    font-family:inherit;
+    display:flex; align-items:center; justify-content:center; gap:7px;
+  }
+  .btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .btn-primary{background:var(--accent); color:var(--accent-ink); flex:1;}
+  .btn-secondary{background:var(--surface-2); color:var(--ink); flex:1;}
+  .btn-lg{padding:16px; font-size:1rem; border-radius:var(--radius-lg);}
+  .btn-ghost{background:transparent; color:var(--ink-muted); border:1px solid var(--line);}
+
+  /* sheet */
+  .sheet-overlay{
+    position:absolute; inset:0;
+    background:rgba(20,10,15,.42);
+    opacity:0; pointer-events:none;
+    transition:opacity .2s ease;
+    z-index:5;
+  }
+  .sheet-overlay.open{opacity:1; pointer-events:auto;}
+  .sheet{
+    position:absolute; left:0; right:0; bottom:0;
+    background:var(--surface);
+    border-radius:24px 24px 0 0;
+    padding:10px 20px 22px;
+    transform:translateY(100%);
+    transition:transform .25s cubic-bezier(.32,.72,0,1);
+    max-height:82%;
+    overflow-y:auto;
+    box-shadow:0 -12px 30px -10px rgba(0,0,0,.3);
+  }
+  .sheet-overlay.open .sheet{transform:translateY(0);}
+  .sheet-handle{
+    width:36px; height:4px; border-radius:99px;
+    background:var(--line);
+    margin:6px auto 14px;
+  }
+  .sheet .name-btn{
+    border:none; background:transparent; padding:0; text-align:left; cursor:pointer;
+    display:flex; align-items:center; gap:7px; font-family:inherit; color:var(--ink);
+    max-width:100%;
+  }
+  .sheet .name-btn .name{font-size:1.25rem; font-weight:800;}
+  .sheet .name-btn .edit-hint{color:var(--ink-muted); flex:0 0 auto;}
+  .sheet .addr{color:var(--ink-muted); font-size:.88rem; margin-top:3px;}
+
+  /* estado: un solo botón compacto que despliega las opciones al tocarlo,
+     en vez de mostrar los 4 estados siempre expandidos */
+  .status-pill{
+    display:flex; align-items:center; gap:8px;
+    width:100%;
+    margin-top:16px;
+    border:1.5px solid var(--line);
+    background:var(--surface-2);
+    border-radius:999px;
+    padding:10px 14px;
+    font-weight:800;
+    font-size:.86rem;
+    cursor:pointer;
+    font-family:inherit;
+    color:var(--ink);
+  }
+  .status-pill .dot{width:10px; height:10px; border-radius:50%; flex:0 0 auto;}
+  .status-pill .lbl{flex:1; text-align:left;}
+  .status-pill .chev{color:var(--ink-muted); transition:transform .18s ease;}
+  .status-pill.open .chev{transform:rotate(180deg);}
+  .status-pill.st-pendiente .dot{background:var(--pendiente);}
+  .status-pill.st-completado .dot{background:var(--completado);}
+  .status-pill.st-no_quiso .dot{background:var(--noquiso);}
+  .status-pill.st-cancelado .dot{background:var(--cancelado);}
+
+  .status-options{
+    display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;
+  }
+  .status-options[hidden]{display:none;}
+  .status-chip{
+    border:1.5px solid var(--line);
+    background:var(--surface);
+    color:var(--ink-muted);
+    border-radius:999px;
+    padding:10px 4px;
+    font-weight:800;
+    font-size:.76rem;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .status-chip.sel-pendiente{background:var(--pendiente-soft); color:var(--pendiente); border-color:var(--pendiente);}
+  .status-chip.sel-completado{background:var(--completado-soft); color:var(--completado); border-color:var(--completado);}
+  .status-chip.sel-no_quiso{background:var(--noquiso-soft); color:var(--noquiso); border-color:var(--noquiso);}
+  .status-chip.sel-cancelado{background:var(--cancelado-soft); color:var(--cancelado); border-color:var(--cancelado);}
+
+  .obs-label{
+    display:block; margin-top:16px; font-size:.78rem; font-weight:800;
+    color:var(--ink-muted); text-transform:uppercase; letter-spacing:.03em;
+  }
+  .obs-input{
+    width:100%; margin-top:6px;
+    border:1.5px solid var(--line);
+    background:var(--surface);
+    color:var(--ink);
+    border-radius:var(--radius-md);
+    padding:10px 12px;
+    font-family:inherit;
+    font-size:.88rem;
+    resize:vertical;
+    min-height:56px;
+  }
+  .obs-input:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+
+  /* editar datos del cliente: modal chico centrado, distinto de la hoja
+     de visita -- mismo patrón que "click en el nombre para editar" que
+     ya existe en Odoo. */
+  .edit-overlay{
+    position:absolute; inset:0;
+    background:rgba(20,10,15,.5);
+    display:flex; align-items:center; justify-content:center;
+    padding:20px;
+    opacity:0; pointer-events:none;
+    transition:opacity .18s ease;
+    z-index:12;
+  }
+  .edit-overlay.open{opacity:1; pointer-events:auto;}
+  .edit-card{
+    width:100%; max-width:320px;
+    background:var(--surface);
+    border-radius:var(--radius-lg);
+    padding:20px;
+    box-shadow:var(--shadow);
+  }
+  .edit-card h3{font-size:1.05rem; font-weight:800;}
+  .edit-field{margin-top:14px;}
+  .edit-field label{
+    display:block; font-size:.74rem; font-weight:800; color:var(--ink-muted);
+    text-transform:uppercase; letter-spacing:.03em; margin-bottom:5px;
+  }
+  .edit-field input{
+    width:100%;
+    border:1.5px solid var(--line);
+    background:var(--bg);
+    color:var(--ink);
+    border-radius:var(--radius-sm);
+    padding:10px 12px;
+    font-family:inherit;
+    font-size:.9rem;
+  }
+  .edit-field input:focus-visible{outline:2px solid var(--accent); outline-offset:1px;}
+  .edit-actions{display:flex; gap:8px; margin-top:18px;}
+
+  .action-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-top:18px;
+  }
+  .action-tile{
+    border:1px solid var(--line);
+    background:var(--surface-2);
+    border-radius:var(--radius-md);
+    padding:14px 10px;
+    text-align:center;
+    cursor:pointer;
+    font-family:inherit;
+    color:var(--ink);
+  }
+  .action-tile svg{margin-bottom:6px;}
+  .action-tile .lbl{font-size:.8rem; font-weight:700; display:block;}
+  .cta-order{
+    width:100%;
+    margin-top:16px;
+    background:var(--accent);
+    color:var(--accent-ink);
+    border:none;
+    border-radius:var(--radius-lg);
+    padding:18px;
+    font-size:1.02rem;
+    font-weight:800;
+    cursor:pointer;
+    font-family:inherit;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+
+  /* order screen */
+  .order-screen{
+    position:absolute; inset:0;
+    background:var(--bg);
+    display:flex; flex-direction:column;
+    transform:translateX(100%);
+    transition:transform .25s cubic-bezier(.32,.72,0,1);
+    z-index:8;
+  }
+  .order-screen.open{transform:translateX(0);}
+  .order-head{
+    padding:14px 16px 10px;
+    display:flex; align-items:center; gap:10px;
+    flex:0 0 auto;
+    border-bottom:1px solid var(--line);
+  }
+  .icon-btn{
+    width:38px; height:38px; border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--surface);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; color:var(--ink);
+    flex:0 0 auto;
+  }
+  .order-head .who{flex:1; min-width:0;}
+  .order-head .who .name{font-weight:800; font-size:1rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .order-head .who .sub{color:var(--ink-muted); font-size:.76rem;}
+
+  .quote-pill-row{padding:0 16px 8px; flex:0 0 auto;}
+  .quote-pill-row[hidden]{display:none;}
+  .quote-pill-row .btn{width:100%; justify-content:center;}
+
+  .search-row{padding:10px 16px; flex:0 0 auto; display:flex; align-items:center; gap:8px;}
+  .search-row .search-box-live, .search-row .search-box{flex:1;}
+  .search-box{
+    display:flex; align-items:center; gap:8px;
+    background:var(--surface-2);
+    border-radius:999px;
+    padding:10px 14px;
+    color:var(--ink-muted);
+    font-size:.88rem;
+  }
+  .search-box-live{
+    display:flex; align-items:center; gap:8px;
+    background:var(--surface-2);
+    border-radius:999px;
+    padding:10px 14px;
+    color:var(--ink-muted);
+  }
+  .search-box-live .search-icon{flex:0 0 auto; display:flex;}
+  .search-box-live input{
+    flex:1; border:none; background:transparent; outline:none;
+    color:var(--ink); font-family:inherit; font-size:.88rem;
+  }
+  .search-box-live input::placeholder{color:var(--ink-muted);}
+
+  .chip-row{
+    display:flex; gap:8px; padding:0 16px 10px; flex:0 0 auto;
+    overflow-x:auto;
+  }
+  .filter-chip{
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink-muted);
+    border-radius:999px;
+    padding:7px 14px;
+    font-size:.8rem;
+    font-weight:700;
+    white-space:nowrap;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .filter-chip.active{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+  .chip-row[hidden]{display:none;}
+
+  /* agrupar por, estilo Odoo: un botón tipo filtro debajo de la búsqueda
+     que despliega opciones de agrupamiento (semana / mes / sin agrupar) */
+  .groupby-row{padding:0 16px 10px; flex:0 0 auto; position:relative;}
+  .groupby-btn{
+    display:inline-flex; align-items:center; gap:6px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink);
+    border-radius:999px;
+    padding:7px 12px;
+    font-size:.8rem;
+    font-weight:700;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .groupby-btn .chev{color:var(--ink-muted);}
+  .groupby-menu{
+    position:absolute; left:16px; top:calc(100% - 2px);
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius-md);
+    box-shadow:var(--shadow);
+    padding:6px;
+    z-index:6;
+    display:flex; flex-direction:column; min-width:160px;
+  }
+  .groupby-menu[hidden]{display:none;}
+  .groupby-menu button{
+    border:none; background:transparent; text-align:left;
+    padding:9px 10px; border-radius:8px;
+    font-size:.86rem; font-weight:600; color:var(--ink);
+    cursor:pointer; font-family:inherit;
+  }
+  .groupby-menu button.active{background:var(--accent-soft); color:var(--accent); font-weight:800;}
+
+  .period-header{
+    padding:2px 4px 14px;
+    font-size:1.05rem; font-weight:800; color:var(--info);
+    display:flex; flex-direction:column; gap:1px;
+  }
+  .period-header .range{
+    font-size:.8rem; font-weight:700; color:var(--ink-muted);
+  }
+
+  .product-grid{
+    flex:1; min-height:0; overflow-y:auto;
+    padding:4px 16px 130px;
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));
+    gap:10px;
+  }
+  .product-card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius-md);
+    padding:12px;
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .swatch{
+    width:100%; aspect-ratio:1.6/1;
+    border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:1.3rem; color:#fff;
+  }
+  .product-card .pname{font-weight:700; font-size:.86rem; line-height:1.25;}
+  .product-card .pprice{color:var(--ink-muted); font-size:.8rem; font-weight:700;}
+  .stock-warn{
+    color:var(--pendiente); background:var(--pendiente-soft);
+    font-size:.72rem; font-weight:800; padding:3px 8px; border-radius:999px;
+    align-self:flex-start;
+  }
+  .stepper{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--surface-2);
+    border-radius:999px;
+    padding:4px;
+  }
+  .stepper button{
+    width:34px; height:34px; border-radius:50%;
+    border:none; background:var(--surface);
+    color:var(--ink); font-size:1.1rem; font-weight:800;
+    cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .stepper button:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .stepper button.plus{background:var(--accent); color:var(--accent-ink);}
+  .stepper .qty{font-weight:800; font-size:1rem; min-width:22px; text-align:center;}
+
+  .cart-bar{
+    position:absolute; left:0; right:0; bottom:0;
+    background:var(--surface);
+    border-top:1px solid var(--line);
+    padding:12px 16px 16px;
+    display:flex; align-items:center; gap:12px;
+    box-shadow:0 -8px 20px -14px rgba(0,0,0,.4);
+  }
+  .cart-bar .totals{flex:1;}
+  .cart-bar .totals .n{font-size:.72rem; color:var(--ink-muted); font-weight:700;}
+  .cart-bar .totals .v{font-size:1.15rem; font-weight:800;}
+
+  .bottomnav{
+    flex:0 0 auto;
+    display:flex;
+    border-top:1px solid var(--line);
+    background:var(--surface);
+  }
+  .bottomnav button{
+    flex:1; border:none; background:transparent;
+    padding:10px 0 12px;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    color:var(--ink-muted); font-size:.68rem; font-weight:700;
+    cursor:pointer; font-family:inherit;
+  }
+  .bottomnav button.active{color:var(--accent);}
+
+  .toast{
+    position:absolute; left:50%; bottom:78px;
+    transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:var(--bg);
+    padding:10px 18px; border-radius:999px;
+    font-size:.82rem; font-weight:700;
+    opacity:0; pointer-events:none;
+    transition:opacity .2s ease, transform .2s ease;
+    z-index:20;
+    white-space:nowrap;
+  }
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important; animation:none !important;}
+  }
+</style>
+
+<div class="lab">
+  <h1>Ruta Shalom &mdash; prototipo de pantallas</h1>
+  <p>Toca los elementos: alterná Lista/Mapa, abrí una parada, cambiá su estado y probá "Tomar pedido". No hay botón de tablet/celular: angostá o ensanchá esta ventana y la pantalla se acomoda sola, igual que en un dispositivo real.</p>
+  <div class="hint">↔️ Probá cambiar el ancho de la ventana</div>
+</div>
+
+<div id="device">
+  <div class="statusbar"><span>9:41</span><span>Shalom Panamá</span></div>
+
+  <div class="app">
+    <div class="screen" id="screen-rutas">
+      <div class="topbar">
+        <div class="route-name">Rutas</div>
+        <div class="route-sub"><span>Las que te asignaron</span></div>
+      </div>
+      <div class="search-row">
+        <div class="search-box-live">
+          <span class="search-icon"></span>
+          <input type="text" id="route-search" placeholder="Buscar ruta por nombre…" autocomplete="off" />
+        </div>
+      </div>
+      <div class="groupby-row">
+        <button class="groupby-btn" id="groupby-toggle">
+          <span>Periodo: <b id="groupby-current">Semana 1 · Sep</b></span>
+          <span class="chev">▾</span>
+        </button>
+        <div class="groupby-menu" id="groupby-menu" hidden></div>
+      </div>
+      <div class="view" id="view-rutas"></div>
+    </div>
+
+    <div class="screen" id="screen-ruta" hidden>
+      <div class="topbar">
+        <div class="topbar-row">
+          <button class="icon-btn" id="ruta-back"></button>
+          <div>
+            <div class="route-name" id="route-detail-name">Ruta Zona Este</div>
+            <div class="route-sub">
+              <span id="route-detail-jornada">Jornada 3</span>
+              <span class="progress-pill" id="progress-pill">2/7 completadas</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="segmented">
+        <button id="tab-lista" class="active" data-tab="lista">☰ Lista de clientes</button>
+        <button id="tab-mapa" data-tab="mapa">🧭 Mapa</button>
+      </div>
+
+      <div class="view" id="view-lista"></div>
+
+      <div class="map-wrap" id="view-mapa" style="display:none;">
+        <canvas id="mapcanvas"></canvas>
+        <div class="map-card" id="map-card"></div>
+      </div>
+    </div>
+
+    <div class="screen" id="screen-cotizaciones" hidden>
+      <div class="topbar">
+        <div class="route-name">Mis cotizaciones</div>
+        <div class="route-sub"><span>Todos tus clientes, no solo los de hoy</span></div>
+      </div>
+      <div class="search-row">
+        <div class="search-box-live">
+          <span class="search-icon"></span>
+          <input type="text" id="quote-search" placeholder="Buscar por cliente o número…" autocomplete="off" />
+        </div>
+      </div>
+      <div class="chip-row" id="quote-chip-row"></div>
+      <div class="view" id="view-cotizaciones"></div>
+    </div>
+
+    <div class="screen" id="screen-clientes" hidden>
+      <div class="topbar">
+        <div class="route-name">Clientes</div>
+        <div class="route-sub"><span>Solo los clientes que te asignaron a ti</span></div>
+      </div>
+      <div class="search-row">
+        <div class="search-box-live">
+          <span class="search-icon"></span>
+          <input type="text" id="client-search" placeholder="Buscar cliente por nombre…" autocomplete="off" />
+        </div>
+        <button class="icon-btn" id="new-client-btn" title="Nuevo cliente"></button>
+      </div>
+      <div class="view" id="view-clientes"></div>
+    </div>
+
+    <div class="bottomnav">
+      <button class="active" id="nav-rutas"><span>🗂️</span>Rutas</button>
+      <button id="nav-cotizaciones"><span>🧾</span>Cotizaciones</button>
+      <button id="nav-clientes"><span>👤</span>Clientes</button>
+    </div>
+
+    <div class="sheet-overlay" id="sheet-overlay">
+      <div class="sheet" id="sheet"></div>
+    </div>
+
+    <div class="edit-overlay" id="edit-overlay">
+      <div class="edit-card" id="edit-card"></div>
+    </div>
+
+    <div class="order-screen" id="order-screen"></div>
+    <div class="toast" id="toast"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const ICONS = {
+    call:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+    pin:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+    cart:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>',
+    history:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>',
+    gps:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>',
+    back:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>',
+    search:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>',
+    skip:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 4 10 8-10 8V4z"/><path d="M19 5v14"/></svg>',
+    nav:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>',
+    pencil:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+    plus:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
+    scan:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="4" y1="12" x2="20" y2="12"/></svg>',
+  };
+
+  // x,y expresados como fracción de las líneas de la cuadrícula del mapa
+  // (i/6 vertical, j/7 horizontal) para que las paradas caigan sobre una
+  // "calle" y el trazado pueda seguir esas líneas en vez de ir en diagonal.
+  let stops = [
+    {id:1, name:'Cosméticos La Bella', addr:'Calle 50, San Francisco', phone:'6612-3344', status:'completado', x:1/6, y:2/7, dist:'0.0 km', last:'Compró hace 12 días', obs:''},
+    {id:2, name:'Perfumería Aroma', addr:'Vía Israel, Marbella', phone:'6720-9981', status:'completado', x:2/6, y:1/7, dist:'1.2 km', last:'Compró hace 6 días', obs:''},
+    {id:3, name:'Boutique Glamour', addr:'Av. Ricardo J. Alfaro, Betania', phone:'6455-2210', status:'pendiente', x:3/6, y:3/7, dist:'2.4 km', last:'Compró hace 19 días', obs:'Prefiere que lleguen después de las 2pm.'},
+    {id:4, name:'Belleza Total', addr:'Av. José A. Arango, San Miguelito', phone:'6890-1123', status:'pendiente', x:4/6, y:5/7, dist:'4.1 km', last:'Compró hace 8 días', obs:''},
+    {id:5, name:'Distribuidora Sol', addr:'Calle Primera, Parque Lefevre', phone:'6244-7789', status:'cancelado', x:2/6, y:5/7, dist:'3.0 km', last:'Canceló — no quiere más pedidos', obs:'Dijo que ya no va a recibir mercancía nuestra.'},
+    {id:6, name:'Estética Luna', addr:'Calle 12, Río Abajo', phone:'6931-4456', status:'pendiente', x:4/6, y:6/7, dist:'5.3 km', last:'Compró hace 30 días', obs:''},
+    {id:7, name:'Salón Divas', addr:'Vía España, Bella Vista', phone:'6177-8820', status:'no_quiso', x:1/6, y:4/7, dist:'1.8 km', last:'Tenía stock, no compró esta vez', obs:''},
+  ];
+
+  const products = [
+    {id:1, name:'Shampoo L’Oréal 400ml', price:3.50, cat:'Cabello', color:'#b1245a', barcode:'7501001112330', stock:24},
+    {id:2, name:'Acondicionador Pantene 375ml', price:3.20, cat:'Cabello', color:'#8c3a63', barcode:'7501001112347', stock:18},
+    {id:3, name:'Gel Fijador Got2b', price:4.50, cat:'Cabello', color:'#6a3b76', barcode:'7501001112354', stock:4},
+    {id:4, name:'Tinte Excellence Castaño', price:7.20, cat:'Cabello', color:'#7a2d4a', barcode:'7501001112361', stock:11},
+    {id:5, name:'Crema Nivea Soft 200ml', price:4.10, cat:'Piel', color:'#2c7a56', barcode:'7501001112378', stock:30},
+    {id:6, name:'Jabón Dove Original', price:1.35, cat:'Piel', color:'#3d8a63', barcode:'7501001112385', stock:2},
+    {id:7, name:'Protector Solar 60ml', price:6.10, cat:'Piel', color:'#2d6f7a', barcode:'7501001112392', stock:15},
+    {id:8, name:'Desodorante Roll-on', price:2.90, cat:'Piel', color:'#3a7d8a', barcode:'7501001112408', stock:22},
+    {id:9, name:'Esmalte Rojo Clásico', price:6.80, cat:'Maquillaje', color:'#a3183f', barcode:'7501001112415', stock:3},
+    {id:10, name:'Máscara de Pestañas', price:5.40, cat:'Maquillaje', color:'#7a1f45', barcode:'7501001112422', stock:9},
+    {id:11, name:'Base Líquida Natural', price:8.90, cat:'Maquillaje', color:'#9c2a4f', barcode:'7501001112439', stock:12},
+    {id:12, name:'Splash Floral Fresh 200ml', price:5.90, cat:'Fragancias', color:'#c1791d', barcode:'7501001112446', stock:20},
+  ];
+  const STOCK_BAJO = 5;
+
+  // Cotizaciones del vendedor -- de TODOS sus clientes, no solo los de la
+  // ruta de hoy (equivalente a lo que hoy ve action_ver_historial_cotizaciones
+  // pero centralizado en una sola pantalla).
+  const quotes = [
+    {num:'S00233', cliente:'Boutique Glamour', fecha:'15 ago', total:0, estado:'borrador'},
+    {num:'S00234', cliente:'Estética Luna', fecha:'15 ago', total:0, estado:'borrador'},
+    {num:'S00231', cliente:'Cosméticos La Bella', fecha:'12 ago', total:86.40, estado:'confirmada'},
+    {num:'S00229', cliente:'Perfumería Aroma', fecha:'9 ago', total:54.10, estado:'confirmada'},
+    {num:'S00225', cliente:'Salón Bonita', fecha:'2 ago', total:132.75, estado:'confirmada'},
+    {num:'S00219', cliente:'Perfil de Belleza JM', fecha:'28 jul', total:41.20, estado:'confirmada'},
+  ];
+
+  // Directorio completo de clientes -- incluye los de la ruta de hoy más
+  // clientes fuera de la ruta programada (para buscar a cualquiera).
+  const directoryClients = [
+    ...stops.map(s=>({name:s.name, addr:s.addr, phone:s.phone, last:s.last})),
+    {name:'Salón Bonita', addr:'Calle 16 Este, El Cangrejo', phone:'6321-4470', last:'Compró hace 40 días'},
+    {name:'Perfil de Belleza JM', addr:'Av. Domingo Díaz, Pedregal', phone:'6789-2233', last:'Compró hace 3 días'},
+    {name:'Casa de Belleza Rossy', addr:'Calle 5ta, Juan Díaz', phone:'6455-9012', last:'Cliente nuevo, sin compras aún'},
+  ];
+
+  // Planificación de rutas: la arma la oficina (tiempo estimado y capacidad
+  // de venta esperada de TODA la ruta, según la suma de últimas facturas de
+  // sus clientes) -- el vendedor solo ve las rutas YA asignadas a él, para
+  // todo el mes, organizables por semana o de un vistazo mensual completo.
+  const mesActual = 'Septiembre 2026';
+  const weeks = [
+    {id:'w1', label:'Semana 1 · Sep', range:'1–5 sep'},
+    {id:'w2', label:'Semana 2 · Sep', range:'8–12 sep'},
+  ];
+  const routesByWeek = {
+    w1: [
+      {id:'zona-este', name:'Ruta Zona Este', clientes:7, avgTime:'4h 30 min', capacidad:436.10, estado:'en_curso', hasDatos:true},
+      {id:'zona-oeste', name:'Ruta Zona Oeste', clientes:9, avgTime:'5h 15 min', capacidad:486.90, estado:'por_iniciar', hasDatos:false},
+    ],
+    w2: [
+      {id:'centro', name:'Ruta Centro', clientes:5, avgTime:'2h 50 min', capacidad:359.00, estado:'por_iniciar', hasDatos:false},
+      {id:'norte', name:'Ruta Norte', clientes:6, avgTime:'3h 10 min', capacidad:291.60, estado:'por_iniciar', hasDatos:false},
+      {id:'sur', name:'Ruta Sur', clientes:4, avgTime:'2h 20 min', capacidad:159.60, estado:'por_iniciar', hasDatos:false},
+      {id:'costa', name:'Ruta Costa', clientes:5, avgTime:'3h 00 min', capacidad:287.00, estado:'por_iniciar', hasDatos:false},
+    ],
+  };
+
+  let activeStopId = null;
+  let cart = {};
+  let activeFilter = 'Todos';
+  let statusPanelOpen = false;
+
+  // El vendedor elige a qué cliente navegar (tocando su pin en el mapa,
+  // el ícono 🧭 de la lista, o "Cómo llegar" en la tarjeta) -- no está
+  // forzado a seguir el orden de la ruta uno por uno.
+  let targetId = null;
+
+  const $ = sel => document.querySelector(sel);
+  const el = html => { const t=document.createElement('template'); t.innerHTML=html.trim(); return t.content.firstChild; };
+
+  const STATUS_LABEL = {pendiente:'Pendiente', completado:'Completada', no_quiso:'No quiso', cancelado:'Cancelado'};
+
+  function currentTarget(){
+    return stops.find(s => s.id === targetId) || null;
+  }
+
+  function setTarget(id){
+    const s = stops.find(x=>x.id===id);
+    if(!s) return;
+    if(s.status!=='pendiente' && s.status!=='no_quiso'){
+      showToast(`${s.name} ya fue atendido hoy`);
+      return;
+    }
+    targetId = id;
+    renderMapCard();
+    drawMap();
+  }
+
+  // Si el objetivo actual se resuelve (completado/cancelado), pasa
+  // automáticamente al siguiente pendiente -- pero solo si el vendedor
+  // no había elegido ya otro cliente distinto a mano.
+  function autoAdvanceTargetIfNeeded(resolvedId){
+    if(targetId !== resolvedId) return;
+    const next = stops.find(s => s.status === 'pendiente');
+    targetId = next ? next.id : null;
+  }
+
+  function showToast(msg){
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(showToast._h);
+    showToast._h = setTimeout(()=>t.classList.remove('show'), 1600);
+  }
+
+  function updateProgress(){
+    const done = stops.filter(s=>s.status!=='pendiente').length;
+    $('#progress-pill').textContent = `${done}/${stops.length} resueltas`;
+  }
+
+  // ---------- LIST ----------
+  function renderList(){
+    const wrap = $('#view-lista');
+    wrap.innerHTML = '';
+    stops.forEach(s=>{
+      const puedeNavegar = s.status==='pendiente' || s.status==='no_quiso';
+      const card = el(`
+        <button class="stop-card st-${s.status}">
+          <div class="stop-num">${s.id}</div>
+          <div class="stop-info">
+            <div class="name">${s.name}${s.id===targetId?' 🧭':''}</div>
+            <div class="addr">${s.addr} · ${s.dist}</div>
+          </div>
+          <div class="stop-badge">${STATUS_LABEL[s.status]}</div>
+          ${puedeNavegar ? `<span class="quick-icon-btn" data-nav="${s.id}" role="button" tabindex="0" title="Ir a este cliente">${ICONS.nav}</span>` : ''}
+        </button>
+      `);
+      card.addEventListener('click', ()=>openSheet(s.id));
+      const navBtn = card.querySelector('[data-nav]');
+      if(navBtn){
+        navBtn.addEventListener('click', e=>{
+          e.stopPropagation();
+          setTarget(s.id);
+          showToast(`Navegando hacia ${s.name}`);
+          switchTab('mapa');
+        });
+      }
+      wrap.appendChild(card);
+    });
+  }
+
+  // ---------- MAP ----------
+  function drawMap(){
+    const canvas = $('#mapcanvas');
+    const wrap = canvas.parentElement;
+    const dpr = window.devicePixelRatio || 1;
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    canvas.width = w*dpr; canvas.height = h*dpr;
+    canvas.style.width = w+'px'; canvas.style.height = h+'px';
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,w,h);
+
+    const css = getComputedStyle(document.documentElement);
+    const line = css.getPropertyValue('--line').trim();
+    const surface = css.getPropertyValue('--surface').trim();
+    const ink = css.getPropertyValue('--ink').trim();
+    const accent = css.getPropertyValue('--accent').trim();
+
+    // schematic street grid
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 10;
+    for(let i=1;i<6;i++){
+      const x = (w/6)*i;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
+    }
+    for(let i=1;i<7;i++){
+      const y = (h/7)*i;
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+    }
+    ctx.strokeStyle = surface;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([2,10]);
+    for(let i=1;i<6;i++){
+      const x = (w/6)*i;
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke();
+    }
+    for(let i=1;i<7;i++){
+      const y = (h/7)*i;
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Trazado de referencia (tenue) por TODAS las paradas en orden de ruta
+    // -- solo para contexto, no es hacia dónde navegar.
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 3;
+    ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.setLineDash([1,8]);
+    stops.forEach((s,i)=>{
+      if(i===0) return;
+      drawManhattanSegment(ctx, stops[i-1], s, w, h, i);
+    });
+    ctx.setLineDash([]);
+
+    const target = currentTarget();
+
+    // "Estás aquí" -- origen real de la navegación. Mismo azul que el
+    // filtro de periodo en Rutas: --info se usa en todo el prototipo para
+    // "dónde estás / qué estás viendo ahora".
+    const info = css.getPropertyValue('--info').trim();
+    const start = {x: stops[0].x*w - 34, y: stops[0].y*h - 14};
+    ctx.beginPath();
+    ctx.arc(start.x, start.y, 9, 0, Math.PI*2);
+    ctx.fillStyle = info;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(start.x, start.y, 15, 0, Math.PI*2);
+    ctx.strokeStyle = info + '66';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+
+    // Ruta PRINCIPAL: directo desde "estás aquí" hasta el cliente elegido
+    // como objetivo, siguiendo las calles de la cuadrícula -- esto es lo
+    // que realmente guía al vendedor, sin importar el orden de la lista.
+    if(target){
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 5;
+      ctx.setLineDash([1,9]);
+      drawManhattanSegment(ctx, {x:start.x/w, y:start.y/h}, target, w, h, 1);
+      ctx.setLineDash([]);
+    }
+
+    // pins
+    const colors = {
+      pendiente: css.getPropertyValue('--pendiente').trim(),
+      completado: css.getPropertyValue('--completado').trim(),
+      no_quiso: css.getPropertyValue('--noquiso').trim(),
+      cancelado: css.getPropertyValue('--cancelado').trim(),
+    };
+    stops.forEach(s=>{
+      const px=s.x*w, py=s.y*h;
+      const isTarget = target && s.id===target.id;
+      const r = isTarget ? 17 : 13;
+      ctx.beginPath();
+      ctx.arc(px,py,r,0,Math.PI*2);
+      ctx.fillStyle = colors[s.status];
+      ctx.fill();
+      ctx.lineWidth = isTarget ? 3 : 2;
+      ctx.strokeStyle = surface;
+      ctx.stroke();
+      ctx.fillStyle = surface;
+      ctx.font = `800 ${isTarget?13:11}px -apple-system, "Segoe UI", sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(String(s.id), px, py+1);
+    });
+  }
+
+  // Traza un tramo horizontal+vertical (o vertical+horizontal, alternando)
+  // entre dos puntos expresados como fracción del ancho/alto -- simula
+  // "seguir las calles" de la cuadrícula esquemática en vez de ir en
+  // diagonal directa.
+  function drawManhattanSegment(ctx, a, b, w, h, i){
+    const ax=a.x*w, ay=a.y*h, bx=b.x*w, by=b.y*h;
+    ctx.beginPath();
+    ctx.moveTo(ax,ay);
+    if(i%2===0){
+      ctx.lineTo(bx,ay); ctx.lineTo(bx,by);
+    } else {
+      ctx.lineTo(ax,by); ctx.lineTo(bx,by);
+    }
+    ctx.stroke();
+  }
+
+  // Tocar un pin en el mapa lo convierte en el objetivo de navegación.
+  function onMapClick(evt){
+    const canvas = $('#mapcanvas');
+    const rect = canvas.getBoundingClientRect();
+    const clickX = evt.clientX - rect.left;
+    const clickY = evt.clientY - rect.top;
+    let hit = null, hitDist = Infinity;
+    stops.forEach(s=>{
+      const px = s.x*rect.width, py = s.y*rect.height;
+      const d = Math.hypot(px-clickX, py-clickY);
+      if(d < 26 && d < hitDist){ hit = s; hitDist = d; }
+    });
+    if(hit) setTarget(hit.id);
+  }
+
+  function renderMapCard(){
+    const target = currentTarget();
+    const card = $('#map-card');
+    if(!target){
+      card.innerHTML = `<div class="eyebrow">Ruta completa</div><div class="name">¡Todas las paradas resueltas!</div>`;
+      return;
+    }
+    card.innerHTML = `
+      <div class="eyebrow">Navegando hacia · ${target.dist}</div>
+      <div class="name">${target.name}</div>
+      <div class="meta">${target.addr}</div>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="map-nav-btn">${ICONS.nav} Ver visita</button>
+        <button class="btn btn-secondary" id="map-skip-btn">${ICONS.skip} Saltar</button>
+      </div>
+    `;
+    $('#map-nav-btn').addEventListener('click', ()=>openSheet(target.id));
+    $('#map-skip-btn').addEventListener('click', ()=>{
+      const idx = stops.findIndex(s=>s.id===target.id);
+      const [s] = stops.splice(idx,1);
+      stops.push(s);
+      autoAdvanceTargetIfNeeded(s.id);
+      showToast(`${s.name} saltado — sigue pendiente`);
+      renderAll();
+    });
+  }
+
+  // ---------- SHEET ----------
+  // openPersonSheet es genérica: la usa tanto una parada de la ruta de hoy
+  // (opts.isVisit=true -- tiene estado/observaciones/orden de ruta) como
+  // un cliente del directorio general (opts.isVisit=false -- solo datos +
+  // acciones rápidas + nueva cotización).
+  function openPersonSheet(person, opts){
+    statusPanelOpen = false;
+    const sheet = $('#sheet');
+    const subline = opts.isVisit
+      ? `Orden de ruta: ${person.id} · ${person.last}`
+      : person.last;
+    sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <button class="name-btn" id="open-edit" title="Editar datos del cliente">
+        <span class="name">${person.name}</span>
+        <span class="edit-hint">${ICONS.pencil}</span>
+      </button>
+      <div class="addr">${person.addr}</div>
+      <div class="addr">${subline}</div>
+
+      ${opts.isVisit ? `
+        <button class="status-pill st-${person.status}" id="status-toggle">
+          <span class="dot"></span>
+          <span class="lbl">${STATUS_LABEL[person.status]}</span>
+          <span class="chev">▾</span>
+        </button>
+        <div class="status-options" id="status-options" hidden>
+          <button class="status-chip ${person.status==='pendiente'?'sel-pendiente':''}" data-st="pendiente">Pendiente</button>
+          <button class="status-chip ${person.status==='completado'?'sel-completado':''}" data-st="completado">Completada</button>
+          <button class="status-chip ${person.status==='no_quiso'?'sel-no_quiso':''}" data-st="no_quiso">No quiso</button>
+          <button class="status-chip ${person.status==='cancelado'?'sel-cancelado':''}" data-st="cancelado">Cancelado</button>
+        </div>
+        <label class="obs-label" for="obs-input">Observaciones de esta visita</label>
+        <textarea class="obs-input" id="obs-input" placeholder="Ej: pedir que dejen la entrada libre, prefiere visitas por la mañana…">${person.obs||''}</textarea>
+      ` : ''}
+
+      <div class="action-grid">
+        <button class="action-tile" id="act-call">${ICONS.call}<span class="lbl">Llamar</span></button>
+        <button class="action-tile" id="act-maps">${ICONS.pin}<span class="lbl">Ir con Maps</span></button>
+        ${opts.isVisit ? `<button class="action-tile" id="act-gps">${ICONS.gps}<span class="lbl">Capturar GPS</span></button>` : ''}
+        <button class="action-tile" id="act-hist">${ICONS.history}<span class="lbl">Historial</span></button>
+      </div>
+      <button class="cta-order" id="act-order">${ICONS.cart} ${opts.isVisit ? 'Tomar pedido' : 'Nueva cotización'}</button>
+    `;
+
+    if(opts.isVisit){
+      const statusToggle = $('#status-toggle');
+      const statusOptions = $('#status-options');
+      statusToggle.addEventListener('click', ()=>{
+        statusPanelOpen = !statusPanelOpen;
+        statusToggle.classList.toggle('open', statusPanelOpen);
+        statusOptions.hidden = !statusPanelOpen;
+      });
+      statusOptions.querySelectorAll('.status-chip').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          person.status = btn.dataset.st;
+          autoAdvanceTargetIfNeeded(person.id);
+          showToast(`${person.name}: ${STATUS_LABEL[person.status]}`);
+          opts.refresh();
+          renderAll();
+        });
+      });
+      $('#obs-input').addEventListener('change', e=>{
+        person.obs = e.target.value;
+        showToast('Nota guardada');
+      });
+      $('#act-gps').addEventListener('click', ()=>showToast('Ubicación capturada'));
+    }
+
+    $('#open-edit').addEventListener('click', ()=>openEditModal(person, opts));
+    $('#act-call').addEventListener('click', ()=>showToast('Llamando a '+person.phone+'…'));
+    $('#act-maps').addEventListener('click', ()=>showToast('Abriendo Google Maps…'));
+    $('#act-hist').addEventListener('click', ()=>showToast('Abriendo historial de cotizaciones…'));
+    $('#act-order').addEventListener('click', ()=>openOrder(person, opts));
+    $('#sheet-overlay').classList.add('open');
+  }
+  function openSheet(id){
+    activeStopId = id;
+    const s = stops.find(x=>x.id===id);
+    openPersonSheet(s, {isVisit:true, refresh:()=>openSheet(id)});
+  }
+  function openClientSheet(client){
+    openPersonSheet(client, {isVisit:false, refresh:()=>openClientSheet(client)});
+  }
+  function closeSheet(){ $('#sheet-overlay').classList.remove('open'); }
+  $('#sheet-overlay').addEventListener('click', e=>{ if(e.target.id==='sheet-overlay') closeSheet(); });
+
+  // ---------- EDITAR DATOS DEL CLIENTE ----------
+  // Mismo patrón que ya existe en Odoo: tocar el nombre de un registro
+  // abre un formulario chico para editar sus datos básicos. Sirve para
+  // una parada de hoy o un cliente del directorio por igual.
+  function openEditModal(person, opts){
+    const cardEl = $('#edit-card');
+    cardEl.innerHTML = `
+      <h3>Editar cliente</h3>
+      <div class="edit-field">
+        <label for="ed-name">Nombre comercial</label>
+        <input id="ed-name" type="text" value="${person.name}" />
+      </div>
+      <div class="edit-field">
+        <label for="ed-phone">Teléfono</label>
+        <input id="ed-phone" type="text" value="${person.phone}" />
+      </div>
+      <div class="edit-field">
+        <label for="ed-addr">Dirección</label>
+        <input id="ed-addr" type="text" value="${person.addr}" />
+      </div>
+      <div class="edit-actions">
+        <button class="btn btn-ghost" id="ed-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="ed-save">Guardar</button>
+      </div>
+    `;
+    $('#ed-cancel').addEventListener('click', closeEditModal);
+    $('#ed-save').addEventListener('click', ()=>{
+      person.name = $('#ed-name').value.trim() || person.name;
+      person.phone = $('#ed-phone').value.trim() || person.phone;
+      person.addr = $('#ed-addr').value.trim() || person.addr;
+      closeEditModal();
+      showToast('Datos del cliente actualizados');
+      opts.refresh();
+      renderAll();
+    });
+    $('#edit-overlay').classList.add('open');
+  }
+  function closeEditModal(){ $('#edit-overlay').classList.remove('open'); }
+  $('#edit-overlay').addEventListener('click', e=>{ if(e.target.id==='edit-overlay') closeEditModal(); });
+
+  // ---------- ORDER SCREEN ----------
+  function cartCount(){ return Object.values(cart).reduce((a,b)=>a+b,0); }
+  function cartTotal(){
+    return Object.entries(cart).reduce((sum,[id,qty])=>{
+      const p = products.find(pp=>pp.id==id);
+      return sum + p.price*qty;
+    },0);
+  }
+
+  // Número de cotización se asigna SOLO cuando se agrega el primer producto
+  // -- abrir y hojear el catálogo no compromete nada. Si el vendedor vacía
+  // el carrito de nuevo, se descarta (no queda una cotización vacía dando
+  // vueltas por haber "solo mostrado" el catálogo).
+  let activeQuoteNum = null;
+
+  function openOrder(person, opts){
+    closeSheet();
+    activeQuoteNum = null;
+    cart = {};
+    const scr = $('#order-screen');
+    scr.innerHTML = `
+      <div class="order-head">
+        <button class="icon-btn" id="order-back">${ICONS.back}</button>
+        <div class="who">
+          <div class="name">${person.name}</div>
+          <div class="sub" id="order-sub">Viendo catálogo — sin compromiso</div>
+        </div>
+      </div>
+      <div class="quote-pill-row" id="quote-pill-row" hidden>
+        <button class="btn btn-secondary" id="go-to-quote"></button>
+      </div>
+      <div class="search-row">
+        <div class="search-box">${ICONS.search} Buscar producto…</div>
+        <button class="icon-btn" id="scan-btn" title="Escanear código de barras"></button>
+      </div>
+      <div class="chip-row" id="chip-row"></div>
+      <div class="product-grid" id="product-grid"></div>
+      <div class="cart-bar">
+        <div class="totals">
+          <div class="n" id="cart-n">0 productos</div>
+          <div class="v" id="cart-v">$0.00</div>
+        </div>
+        <button class="btn btn-primary btn-lg" id="confirm-order">Confirmar pedido</button>
+      </div>
+    `;
+    const cats = ['Todos', ...new Set(products.map(p=>p.cat))];
+    const chipRow = $('#chip-row');
+    chipRow.innerHTML = cats.map(c=>`<button class="filter-chip ${c===activeFilter?'active':''}" data-cat="${c}">${c}</button>`).join('');
+    chipRow.querySelectorAll('.filter-chip').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ activeFilter=btn.dataset.cat; renderProducts(); chipRow.querySelectorAll('.filter-chip').forEach(b=>b.classList.toggle('active', b===btn)); });
+    });
+
+    renderProducts();
+    updateCartBar();
+
+    $('#scan-btn').innerHTML = ICONS.scan;
+    $('#scan-btn').addEventListener('click', ()=>{
+      // Simulación: en producción esto abre la cámara del dispositivo
+      // (Barcode Detection API / lector nativo) sin salir de este catálogo,
+      // para chequear rápido un producto de pocas unidades que el cliente
+      // pregunta en el momento.
+      const encontrado = products[Math.floor(Math.random()*products.length)];
+      const avisoStock = encontrado.stock <= STOCK_BAJO ? ` — quedan solo ${encontrado.stock}` : ` — quedan ${encontrado.stock}`;
+      showToast(`Código escaneado: ${encontrado.name}${avisoStock}`);
+    });
+
+    $('#go-to-quote').addEventListener('click', ()=>{
+      showToast(`Abriendo cotización ${activeQuoteNum} completa para notas, descuentos o cambios…`);
+    });
+
+    $('#order-back').addEventListener('click', ()=>{ scr.classList.remove('open'); opts.refresh(); });
+    $('#confirm-order').addEventListener('click', ()=>{
+      if(cartCount()===0){ showToast('Agregá al menos un producto'); return; }
+      if(opts.isVisit){
+        person.status = 'completado';
+        autoAdvanceTargetIfNeeded(person.id);
+      }
+      showToast(`Cotización ${activeQuoteNum} guardada — ${cartCount()} productos`);
+      cart = {};
+      activeQuoteNum = null;
+      scr.classList.remove('open');
+      renderAll();
+    });
+
+    requestAnimationFrame(()=>scr.classList.add('open'));
+  }
+
+  function updateQuotePill(){
+    const row = $('#quote-pill-row');
+    const sub = $('#order-sub');
+    if(cartCount()>0 && !activeQuoteNum){
+      activeQuoteNum = 'S' + (300 + Math.floor(Math.random()*90));
+    }
+    if(cartCount()===0){
+      activeQuoteNum = null;
+    }
+    row.hidden = !activeQuoteNum;
+    if(activeQuoteNum){
+      $('#go-to-quote').textContent = `🧾 ${activeQuoteNum} · Ver cotización completa`;
+      sub.textContent = `Armando cotización ${activeQuoteNum}`;
+    } else {
+      sub.textContent = 'Viendo catálogo — sin compromiso';
+    }
+  }
+
+  function renderProducts(){
+    const grid = $('#product-grid');
+    const list = activeFilter==='Todos' ? products : products.filter(p=>p.cat===activeFilter);
+    grid.innerHTML = list.map(p=>`
+      <div class="product-card">
+        <div class="swatch" style="background:${p.color}">${p.name[0]}</div>
+        <div class="pname">${p.name}</div>
+        <div class="pprice">$${p.price.toFixed(2)}</div>
+        ${p.stock<=STOCK_BAJO ? `<div class="stock-warn">⚠️ Quedan ${p.stock}</div>` : ''}
+        <div class="stepper">
+          <button data-act="minus" data-id="${p.id}">−</button>
+          <span class="qty" id="qty-${p.id}">${cart[p.id]||0}</span>
+          <button class="plus" data-act="plus" data-id="${p.id}">+</button>
+        </div>
+      </div>
+    `).join('');
+    grid.querySelectorAll('button[data-act]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const id = btn.dataset.id;
+        const cur = cart[id]||0;
+        const next = btn.dataset.act==='plus' ? cur+1 : Math.max(0,cur-1);
+        if(next===0) delete cart[id]; else cart[id]=next;
+        $('#qty-'+id).textContent = next;
+        updateCartBar();
+        updateQuotePill();
+      });
+    });
+  }
+
+  function updateCartBar(){
+    $('#cart-n').textContent = cartCount()+' producto'+(cartCount()===1?'':'s');
+    $('#cart-v').textContent = '$'+cartTotal().toFixed(2);
+  }
+
+  // ---------- COTIZACIONES ----------
+  let quoteFilter = 'Todas';
+  let quoteSearch = '';
+  function renderQuoteChips(){
+    const cats = ['Todas', 'Borrador', 'Confirmada'];
+    const row = $('#quote-chip-row');
+    row.innerHTML = cats.map(c=>`<button class="filter-chip ${c===quoteFilter?'active':''}" data-c="${c}">${c}</button>`).join('');
+    row.querySelectorAll('.filter-chip').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ quoteFilter = btn.dataset.c; renderQuoteChips(); renderQuotes(); });
+    });
+  }
+  function renderQuotes(){
+    const wrap = $('#view-cotizaciones');
+    const q2 = quoteSearch.trim().toLowerCase();
+    const list = quotes.filter(q=>{
+      if(quoteFilter==='Borrador' && q.estado!=='borrador') return false;
+      if(quoteFilter==='Confirmada' && q.estado!=='confirmada') return false;
+      if(q2 && !q.cliente.toLowerCase().includes(q2) && !q.num.toLowerCase().includes(q2)) return false;
+      return true;
+    });
+    wrap.innerHTML = '';
+    if(list.length===0){
+      wrap.appendChild(el(`<div class="addr" style="padding:20px 4px;">No hay cotizaciones en este filtro.</div>`));
+      return;
+    }
+    list.forEach(q=>{
+      const st = q.estado==='confirmada' ? 'completado' : 'pendiente';
+      const card = el(`
+        <button class="stop-card st-${st}">
+          <div class="stop-info">
+            <div class="name">${q.cliente}</div>
+            <div class="addr">${q.num} · ${q.fecha}</div>
+          </div>
+          <div class="quote-total">
+            ${q.estado==='confirmada' ? '$'+q.total.toFixed(2) : '<span class="draft">Sin confirmar</span>'}
+            <div class="stop-badge">${q.estado==='confirmada'?'Confirmada':'Borrador'}</div>
+          </div>
+        </button>
+      `);
+      card.addEventListener('click', ()=>showToast(`Abriendo ${q.num}…`));
+      wrap.appendChild(card);
+    });
+  }
+
+  // ---------- CLIENTES ----------
+  let clientSearch = '';
+  function renderClientesList(){
+    const wrap = $('#view-clientes');
+    const q = clientSearch.trim().toLowerCase();
+    const list = q ? directoryClients.filter(c=>c.name.toLowerCase().includes(q)) : directoryClients;
+    wrap.innerHTML = '';
+    if(list.length===0){
+      wrap.appendChild(el(`<div class="addr" style="padding:20px 4px;">Ningún cliente coincide con "${clientSearch}".</div>`));
+      return;
+    }
+    list.forEach(c=>{
+      const card = el(`
+        <button class="stop-card">
+          <div class="stop-info">
+            <div class="name">${c.name}</div>
+            <div class="addr">${c.addr} · ${c.last}</div>
+          </div>
+        </button>
+      `);
+      card.addEventListener('click', ()=>openClientSheet(c));
+      wrap.appendChild(card);
+    });
+  }
+
+  // ---------- RUTAS (búsqueda + filtro de periodo) ----------
+  // "Periodo" es un FILTRO (acota qué rutas se listan), no una
+  // agrupación con encabezados repetidos -- una sola semana o el mes
+  // completo a la vez, con el periodo elegido resaltado en azul arriba
+  // de la lista.
+  let routeSearch = '';
+  let periodFilter = 'w1'; // id de semana, o 'mes' para todo el mes
+
+  function allRoutesFlat(){
+    return weeks.flatMap(w => (routesByWeek[w.id]||[]).map(r => ({
+      ...r, weekId:w.id, weekLabel:w.label, weekRange:w.range,
+    })));
+  }
+
+  function periodOptionLabel(id){
+    if(id==='mes') return `Todo el mes · ${mesActual}`;
+    const w = weeks.find(x=>x.id===id);
+    return `${w.label} · ${w.range}`;
+  }
+  function renderPeriodMenu(){
+    const menu = $('#groupby-menu');
+    const opciones = [...weeks.map(w=>w.id), 'mes'];
+    menu.innerHTML = opciones.map(id=>`<button class="${id===periodFilter?'active':''}" data-p="${id}">${periodOptionLabel(id)}</button>`).join('');
+    menu.querySelectorAll('button').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        periodFilter = btn.dataset.p;
+        $('#groupby-current').textContent = periodFilter==='mes' ? 'Todo el mes' : weeks.find(w=>w.id===periodFilter).label;
+        menu.hidden = true;
+        renderRutasHub();
+      });
+    });
+  }
+  $('#groupby-toggle').addEventListener('click', ()=>{
+    renderPeriodMenu();
+    $('#groupby-menu').hidden = !$('#groupby-menu').hidden;
+  });
+  document.addEventListener('click', e=>{
+    if(!e.target.closest('.groupby-row')) $('#groupby-menu').hidden = true;
+  });
+
+  $('#route-search').addEventListener('input', e=>{
+    routeSearch = e.target.value;
+    renderRutasHub();
+  });
+
+  const ROUTE_STATE_LABEL = {por_iniciar:'Por iniciar', en_curso:'En curso', completada:'Completada'};
+  const ROUTE_STATE_CLASS = {por_iniciar:'cancelado', en_curso:'pendiente', completada:'completado'};
+
+  function buildRouteCard(r){
+    const progreso = r.id==='zona-este'
+      ? `${stops.filter(s=>s.status!=='pendiente').length}/${stops.length} completadas`
+      : `${r.clientes} clientes`;
+    const card = el(`
+      <button class="route-card">
+        <div class="route-card-head">
+          <span class="rname">${r.name}</span>
+          <span class="stop-badge">${ROUTE_STATE_LABEL[r.estado]}</span>
+        </div>
+        <div class="route-card-stats">
+          <span>👥 <b>${r.clientes}</b> clientes</span>
+          <span>⏱ <b>${r.avgTime}</b> promedio</span>
+          <span>💵 <b>$${r.capacidad.toFixed(2)}</b> capacidad de la ruta</span>
+        </div>
+        <div class="addr">${progreso}</div>
+      </button>
+    `);
+    // el badge de estado toma color de las variables --pendiente/--completado/--cancelado
+    const badge = card.querySelector('.stop-badge');
+    badge.style.background = `var(--${ROUTE_STATE_CLASS[r.estado]}-soft)`;
+    badge.style.color = `var(--${ROUTE_STATE_CLASS[r.estado]})`;
+    card.addEventListener('click', ()=>openRouteDetail(r));
+    return card;
+  }
+
+  function renderRutasHub(){
+    const wrap = $('#view-rutas');
+    wrap.innerHTML = '';
+
+    const porPeriodo = periodFilter==='mes'
+      ? allRoutesFlat()
+      : allRoutesFlat().filter(r => r.weekId===periodFilter);
+
+    const q = routeSearch.trim().toLowerCase();
+    const filtered = porPeriodo.filter(r => !q || r.name.toLowerCase().includes(q));
+
+    const headerTitle = periodFilter==='mes' ? `Todo el mes` : weeks.find(w=>w.id===periodFilter).label;
+    const headerRange = periodFilter==='mes' ? mesActual : `del ${weeks.find(w=>w.id===periodFilter).range}`;
+    wrap.appendChild(el(`
+      <div class="period-header">
+        <span>${headerTitle}</span>
+        <span class="range">${headerRange} · ${filtered.length} ruta${filtered.length===1?'':'s'}</span>
+      </div>
+    `));
+
+    if(filtered.length===0){
+      wrap.appendChild(el(`<div class="addr" style="padding:0 4px 20px;">Ninguna ruta coincide con "${routeSearch}".</div>`));
+      return;
+    }
+    filtered.forEach(r=> wrap.appendChild(buildRouteCard(r)));
+  }
+  function openRouteDetail(route){
+    if(!route.hasDatos){
+      showToast(`"${route.name}" todavía no tiene datos de ejemplo en este prototipo`);
+      return;
+    }
+    $('#route-detail-name').textContent = route.name;
+    switchScreen('ruta-detalle');
+  }
+
+  // ---------- NAVEGACIÓN INFERIOR (Rutas / Cotizaciones / Clientes) ----------
+  let currentScreen = 'rutas';
+  function switchScreen(name){
+    currentScreen = name;
+    $('#screen-rutas').hidden = name!=='rutas';
+    $('#screen-ruta').hidden = name!=='ruta-detalle';
+    $('#screen-cotizaciones').hidden = name!=='cotizaciones';
+    $('#screen-clientes').hidden = name!=='clientes';
+    // "ruta-detalle" cuelga de la pestaña Rutas -- se llega tocando una
+    // ruta del hub, no tiene ítem propio en la barra inferior.
+    $('#nav-rutas').classList.toggle('active', name==='rutas' || name==='ruta-detalle');
+    $('#nav-cotizaciones').classList.toggle('active', name==='cotizaciones');
+    $('#nav-clientes').classList.toggle('active', name==='clientes');
+    if(name==='ruta-detalle' && $('#view-mapa').style.display!=='none') requestAnimationFrame(drawMap);
+  }
+  $('#nav-rutas').addEventListener('click', ()=>switchScreen('rutas'));
+  $('#nav-cotizaciones').addEventListener('click', ()=>switchScreen('cotizaciones'));
+  $('#nav-clientes').addEventListener('click', ()=>switchScreen('clientes'));
+  $('#ruta-back').addEventListener('click', ()=>switchScreen('rutas'));
+
+  // ---------- tabs (Lista/Mapa dentro del detalle de ruta) ----------
+  $('#tab-lista').addEventListener('click', ()=>switchTab('lista'));
+  $('#tab-mapa').addEventListener('click', ()=>switchTab('mapa'));
+  function switchTab(tab){
+    $('#tab-lista').classList.toggle('active', tab==='lista');
+    $('#tab-mapa').classList.toggle('active', tab==='mapa');
+    $('#view-lista').style.display = tab==='lista' ? 'block' : 'none';
+    $('#view-mapa').style.display = tab==='mapa' ? 'block' : 'none';
+    if(tab==='mapa') requestAnimationFrame(drawMap);
+  }
+
+  // ---------- NUEVO CLIENTE ----------
+  // Caso ocasional (onboardear un cliente nuevo desde la calle), no el
+  // flujo principal -- por eso es un botón chico junto al buscador, no
+  // algo que domine la pantalla de Clientes.
+  function openNewClientModal(){
+    const cardEl = $('#edit-card');
+    cardEl.innerHTML = `
+      <h3>Nuevo cliente</h3>
+      <div class="edit-field">
+        <label for="nc-name">Nombre comercial</label>
+        <input id="nc-name" type="text" placeholder="Ej: Belleza Express" />
+      </div>
+      <div class="edit-field">
+        <label for="nc-phone">Teléfono</label>
+        <input id="nc-phone" type="text" placeholder="6000-0000" />
+      </div>
+      <div class="edit-field">
+        <label for="nc-addr">Dirección</label>
+        <input id="nc-addr" type="text" placeholder="Calle, sector" />
+      </div>
+      <div class="edit-actions">
+        <button class="btn btn-ghost" id="nc-cancel">Cancelar</button>
+        <button class="btn btn-primary" id="nc-save">Crear</button>
+      </div>
+    `;
+    $('#nc-cancel').addEventListener('click', closeEditModal);
+    $('#nc-save').addEventListener('click', ()=>{
+      const name = $('#nc-name').value.trim();
+      if(!name){ showToast('El nombre comercial es obligatorio'); return; }
+      const nuevo = {
+        name,
+        phone: $('#nc-phone').value.trim() || 'Sin teléfono',
+        addr: $('#nc-addr').value.trim() || 'Sin dirección',
+        last: 'Cliente nuevo, sin compras aún',
+      };
+      directoryClients.unshift(nuevo);
+      closeEditModal();
+      showToast(`${name} creado`);
+      clientSearch = '';
+      $('#client-search').value = '';
+      renderClientesList();
+    });
+    $('#edit-overlay').classList.add('open');
+  }
+
+  function renderAll(){
+    renderList();
+    renderMapCard();
+    drawMap();
+    updateProgress();
+    renderQuotes();
+    renderClientesList();
+    renderRutasHub();
+  }
+
+  $('#mapcanvas').addEventListener('click', onMapClick);
+  window.addEventListener('resize', ()=>{ if($('#view-mapa').style.display!=='none') drawMap(); });
+  document.querySelectorAll('.search-icon').forEach(ic=> ic.innerHTML = ICONS.search);
+  $('#client-search').addEventListener('input', e=>{ clientSearch = e.target.value; renderClientesList(); });
+  $('#quote-search').addEventListener('input', e=>{ quoteSearch = e.target.value; renderQuotes(); });
+  $('#ruta-back').innerHTML = ICONS.back;
+  $('#new-client-btn').innerHTML = ICONS.plus;
+  $('#new-client-btn').addEventListener('click', openNewClientModal);
+
+  renderQuoteChips();
+  const primerPendiente = stops.find(s=>s.status==='pendiente');
+  targetId = primerPendiente ? primerPendiente.id : null;
+  renderAll();
+})();
+</script>
