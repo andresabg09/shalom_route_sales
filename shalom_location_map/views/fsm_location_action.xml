@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Extiende la acción de ventana "Service Locations" (Ubicaciones de Servicio)
+        para incluir la vista de mapa (geoengine) que provee fieldservice_geoengine,
+        junto a las vistas de lista y formulario que ya tenía.
+    -->
+    <record id="fieldservice.action_fsm_location" model="ir.actions.act_window">
+        <field name="view_mode">list,form,geoengine</field>
+    </record>
+</odoo>

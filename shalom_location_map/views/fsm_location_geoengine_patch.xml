@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Parche sobre la vista geoengine de fsm.location (fieldservice_geoengine).
+        La plantilla original evalúa record.city.value, record.state_id.value, etc.
+        Si esos campos no están presentes en el registro (no solo vacíos, sino
+        ausentes), Owl lanza un TypeError al intentar leer '.value' de undefined.
+        Este parche agrega una verificación de existencia antes de leer '.value',
+        para que la vista no se rompa con contactos que aún no tienen
+        ciudad/provincia/país cargados.
+
+        Nota tecnica: al heredar una vista de tipo <geoengine>, el nodo raiz del
+        arch debe ser <geoengine>, no <xpath>. Position "replace" sobre el propio
+        tag reemplaza ese nodo (y sus hijos) por el contenido indicado aqui.
+    -->
+    <record id="fieldservice_geoengine.ir_ui_view_fsm_location_map" model="ir.ui.view">
+        <field name="arch" type="xml">
+            <geoengine position="replace">
+                <geoengine>
+                    <field name="display_name" />
+                    <field name="name" />
+                    <field name="phone" />
+                    <field name="mobile" />
+                    <field name="street" />
+                    <field name="street2" />
+                    <field name="city" />
+                    <field name="state_id" />
+                    <field name="country_id" />
+                    <field name="zip" />
+                    <field name="stage_name" />
+                    <field name="shape" />
+                    <field name="custom_color" />
+                    <templates>
+                        <t t-name="info_box">
+                            <b>
+                              Name: <field name="name" widget="badge" />
+                            </b>
+                            <ul>
+                                <t t-if="record.phone and record.phone.value">
+                                    <li>Phone: <field name="phone" />
+                                    </li>
+                                </t>
+                                <t t-if="record.mobile and record.mobile.value">
+                                    <li>Mobile: <field name="mobile" />
+                                    </li>
+                                </t>
+                                <t t-if="record.street and record.street.value">
+                                    <li>Street: <field name="street" />
+                                    </li>
+                                </t>
+                                <t t-if="record.street2 and record.street2.value">
+                                    <li>Street 2: <field name="street2" />
+                                    </li>
+                                </t>
+                                <t t-if="record.city and record.city.value">
+                                    <li>City: <field name="city" />
+                                    </li>
+                                </t>
+                                <t t-if="record.state_id and record.state_id.value">
+                                    <li>State: <field name="state_id" />
+                                    </li>
+                                </t>
+                                <t t-if="record.country_id and record.country_id.value">
+                                    <li>Country: <field name="country_id" />
+                                    </li>
+                                </t>
+                                <t t-if="record.zip and record.zip.value">
+                                    <li>ZIP: <field name="zip" />
+                                    </li>
+                                </t>
+                            </ul>
+                        </t>
+                    </templates>
+                </geoengine>
+            </geoengine>
+        </field>
+    </record>
+</odoo>

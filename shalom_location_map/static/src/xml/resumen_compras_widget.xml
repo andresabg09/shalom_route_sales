@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.ResumenComprasWidget">
+        <div class="shalom-resumen-compras">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0" t-esc="state.vista === 'grafico' ? 'Historial de compras (últimos 12 meses)' : 'Productos que dejó de comprar'"/>
+                <button
+                    type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    t-on-click="toggleVista"
+                >
+                    <t t-esc="state.vista === 'grafico' ? 'Ver olvidados' : 'Ver gráfico'"/>
+                </button>
+            </div>
+
+            <div t-if="state.cargando" class="text-muted small">
+                Cargando historial de compras...
+            </div>
+
+            <div t-elif="!state.datos or !state.datos.series.length" class="text-muted small">
+                Este cliente todavía no tiene cotizaciones confirmadas en su historial.
+            </div>
+
+            <t t-else="">
+                <div t-if="state.vista === 'grafico'" style="position: relative; height: 260px;">
+                    <canvas t-ref="canvas"
+                        role="img"
+                        aria-label="Línea de tiempo de compras por producto, últimos 12 meses">
+                    </canvas>
+                </div>
+
+                <div t-else="" class="shalom-olvidados-list">
+                    <div t-if="!state.datos.olvidados.length" class="text-muted small">
+                        No hay productos que el cliente haya dejado de comprar.
+                    </div>
+                    <table t-else="" class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Producto</th>
+                                <th>Última compra</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="state.datos.olvidados" t-as="item" t-key="item.producto">
+                                <td t-esc="item.producto"/>
+                                <td t-esc="item.ultima_compra"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </t>
+        </div>
+    </t>
+</templates>

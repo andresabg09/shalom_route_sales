@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Extiende la vista Kanban nativa de fsm.order para que:
+          - Agrupe por defecto por Ruta (una columna por ruta) en vez de
+            por Etapa, ya que con muchas rutas la vista por etapa mezclaba
+            todos los clientes de todas las rutas en una sola columna
+            "Nuevo" gigante.
+          - Cada tarjeta se pinte de fondo según su etapa: gris =
+            pendiente, verde = completada, rojo = cancelada.
+          - Muestre el nombre del cliente (location_id) de forma más
+            prominente en la tarjeta.
+    -->
+    <record id="fsm_order_kanban_shalom_ruta" model="ir.ui.view">
+        <field name="name">fsm.order.kanban.shalom.ruta</field>
+        <field name="model">fsm.order</field>
+        <field name="inherit_id" ref="fieldservice.fsm_order_kanban_view" />
+        <field name="arch" type="xml">
+            <xpath expr="//kanban" position="attributes">
+                <attribute name="default_group_by">fsm_route_id</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='location_id']" position="after">
+                <field name="x_cliente_lat" invisible="1" />
+                <field name="x_cliente_lng" invisible="1" />
+                <field name="x_cliente_orden_ruta" invisible="1" />
+            </xpath>
+
+            <xpath expr="//t[@t-name='card']/div" position="attributes">
+                <attribute name="t-attf-class">
+                    #{kanban_color(record.color.raw_value)} oe_kanban_global_click shalom-stage-#{record.stage_id.raw_value}
+                </attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='location_id']" position="before">
+                <div style="font-weight: 600; font-size: 1.05em;">
+                    <field name="location_id" options="{'no_open': True}" />
+                </div>
+                <div style="font-size: 0.9em; color: #6B7280;">
+                    Orden de Ruta: <field name="x_cliente_orden_ruta" />
+                </div>
+            </xpath>
+
+            <xpath expr="//div[hasclass('oe_kanban_bottom_left')]" position="inside">
+                <a
+                    t-attf-href="https://www.google.com/maps/dir/?api=1&amp;destination=#{record.x_cliente_lat.raw_value},#{record.x_cliente_lng.raw_value}"
+                    target="_blank"
+                    role="button"
+                    class="btn btn-sm btn-outline-primary ms-2 oe_kanban_action"
+                >📍 Ir con Maps</a>
+            </xpath>
+        </field>
+    </record>
+</odoo>

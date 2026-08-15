@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Crea la capa de fondo "Mapbox" (geoengine.raster.layer) usada
+        por el parche mapbox_background_layer.js para reemplazar el
+        mapa base de OpenStreetMap por tiles de Mapbox.
+
+        Convención usada por el parche JS: se detecta esta capa por
+        raster_type='wmts' + server_type='mapbox' (Mapbox no encaja en
+        ninguno de los tipos nativos del selection, así que se reusa
+        'wmts' solo como contenedor de configuración, el JS nunca lo
+        trata realmente como WMTS).
+
+        El campo "url" contiene el ID de estilo de Mapbox a usar
+        (ver https://docs.mapbox.com/api/maps/styles/ para otras
+        opciones, ej. mapbox/satellite-streets-v12).
+
+        Se crea un registro para cada vista geoengine existente
+        (Ubicaciones y Órdenes), ambas usando el mismo estilo.
+    -->
+    <record id="shalom_geoengine_mapbox_layer_location" model="geoengine.raster.layer">
+        <field name="name">Mapbox</field>
+        <field name="raster_type">wmts</field>
+        <field name="server_type">mapbox</field>
+        <field name="url">mapbox/streets-v12</field>
+        <field name="opacity">1.0</field>
+        <field name="overlay" eval="False" />
+        <field name="sequence">1</field>
+        <field name="view_id" eval="ref('fieldservice_geoengine.ir_ui_view_fsm_location_map')" />
+    </record>
+
+    <record id="shalom_geoengine_mapbox_layer_order" model="geoengine.raster.layer">
+        <field name="name">Mapbox</field>
+        <field name="raster_type">wmts</field>
+        <field name="server_type">mapbox</field>
+        <field name="url">mapbox/streets-v12</field>
+        <field name="opacity">1.0</field>
+        <field name="overlay" eval="False" />
+        <field name="sequence">1</field>
+        <field name="view_id" eval="ref('fieldservice_geoengine.ir_ui_view_fsm_order_map')" />
+    </record>
+</odoo>

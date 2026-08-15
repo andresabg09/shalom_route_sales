@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Parche sobre la vista geoengine de fsm.order (fieldservice_geoengine).
+        Mismo problema que ya se resolvió para fsm.location:
+
+          1. La plantilla original evalúa record.campo.value directamente,
+             sin verificar que el campo exista en el registro primero. Si
+             el campo está ausente (no solo vacío), Owl lanza un TypeError
+             al leer '.value' de undefined: rompe toda la vista de mapa.
+
+          2. Además, el template usaba "record.mobile.value" en un t-if,
+             pero el campo "mobile" nunca estaba declarado en la lista de
+             field de la vista: error garantizado apenas se abre el
+             mapa. Se agrega ese campo a la declaración.
+
+        Este parche agrega una verificación de existencia (record.campo
+        and record.campo.value) antes de leer '.value' en cada t-if, para
+        que la vista no se rompa con órdenes que aún no tienen esos datos
+        cargados en su Ubicación/Cliente asociado.
+
+        Nota tecnica: al heredar una vista de tipo <geoengine>, el nodo
+        raiz del arch debe ser <geoengine>, no <xpath>. Position "replace"
+        sobre el propio tag reemplaza ese nodo (y sus hijos) por el
+        contenido indicado aqui.
+    -->
+    <record id="fieldservice_geoengine.ir_ui_view_fsm_order_map" model="ir.ui.view">
+        <field name="arch" type="xml">
+            <geoengine position="replace">
+                <geoengine editable="1">
+                    <field name="display_name" />
+                    <field name="name" />
+                    <field name="phone" />
+                    <field name="mobile" />
+                    <field name="street" />
+                    <field name="street2" />
+                    <field name="city" />
+                    <field name="state_name" />
+                    <field name="zip" />
+                    <field name="country_name" />
+                    <field name="stage_name" />
+                    <field name="shape" />
+                    <field name="custom_color" />
+                    <templates>
+                        <t t-name="info_box">
+                            <b>
+                              Name: <field name="name" />
+                            </b>
+                            <ul>
+                                <t t-if="record.phone and record.phone.value">
+                                    <li>Phone: <field name="phone" />
+                                    </li>
+                                </t>
+                                <t t-if="record.mobile and record.mobile.value">
+                                    <li>Mobile: <field name="mobile" />
+                                    </li>
+                                </t>
+                                <t t-if="record.street and record.street.value">
+                                    <li>Street: <field name="street" />
+                                    </li>
+                                </t>
+                                <t t-if="record.street2 and record.street2.value">
+                                    <li>Street 2: <field name="street2" />
+                                    </li>
+                                </t>
+                                <t t-if="record.city and record.city.value">
+                                    <li>City: <field name="city" />
+                                    </li>
+                                </t>
+                                <t t-if="record.state_name and record.state_name.value">
+                                    <li>State: <field name="state_name" />
+                                    </li>
+                                </t>
+                                <t t-if="record.zip and record.zip.value">
+                                    <li>ZIP: <field name="zip" />
+                                    </li>
+                                </t>
+                                <t t-if="record.country_name and record.country_name.value">
+                                    <li>Country: <field name="country_name" />
+                                    </li>
+                                </t>
+                            </ul>
+                        </t>
+                    </templates>
+                </geoengine>
+            </geoengine>
+        </field>
+    </record>
+</odoo>

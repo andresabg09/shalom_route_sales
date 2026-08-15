@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Extiende el formulario de fsm.route (Ruta) para agregar el botón
+        "Generar visitas de esta ruta", que crea una fsm.order por cada
+        Ubicación de Servicio de la ruta (respetando el orden ya guardado
+        en las notas de cada Ubicación) sin duplicar visitas ya abiertas.
+    -->
+    <record id="fsm_route_form_shalom_generar_visitas" model="ir.ui.view">
+        <field name="name">fsm.route.form.shalom.generar.visitas</field>
+        <field name="model">fsm.route</field>
+        <field name="inherit_id" ref="fieldservice_route.fsm_route_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('oe_title')]" position="before">
+                <div class="oe_button_box" name="button_box">
+                    <button
+                        name="action_generar_visitas_ruta"
+                        type="object"
+                        string="Generar visitas de esta ruta"
+                        class="btn-primary"
+                        help="Crea una Orden de Servicio (visita) por cada cliente de esta ruta que todavía no tenga una visita abierta."
+                    />
+                    <button
+                        name="action_archivar_visitas_cerradas"
+                        type="object"
+                        string="Archivar visitas cerradas"
+                        class="btn-secondary"
+                        help="Archiva las visitas ya completadas o canceladas de esta ruta, para poder generar el ciclo del mes siguiente sin perder el historial."
+                    />
+                    <button
+                        name="action_calcular_trazado_ruta"
+                        type="object"
+                        string="Calcular trazado de ruta"
+                        class="btn-secondary"
+                        help="Calcula el trazado real (siguiendo calles) de la ruta con Mapbox, uniendo los clientes en el orden de su Orden de Ruta. Requiere hasta 25 clientes con coordenadas GPS cargadas."
+                    />
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

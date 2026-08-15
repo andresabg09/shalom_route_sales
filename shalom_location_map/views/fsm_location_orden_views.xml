@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Agrega el campo x_orden_ruta (Orden de Ruta) a las vistas de
+        lista y formulario de fsm.location, para que sea editable
+        directamente sin tener que ir a las notas de texto.
+    -->
+    <record id="fsm_location_list_shalom_orden" model="ir.ui.view">
+        <field name="name">fsm.location.list.shalom.orden</field>
+        <field name="model">fsm.location</field>
+        <field name="inherit_id" ref="fieldservice.fsm_location_list_view" />
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='stage_id']" position="after">
+                <field name="x_orden_ruta" />
+            </xpath>
+        </field>
+    </record>
+
+    <record id="fsm_location_form_shalom_orden" model="ir.ui.view">
+        <field name="name">fsm.location.form.shalom.orden</field>
+        <field name="model">fsm.location</field>
+        <field name="inherit_id" ref="fieldservice.fsm_location_form_view" />
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='ref']" position="after">
+                <field name="x_orden_ruta" />
+            </xpath>
+            <xpath expr="//div[hasclass('oe_button_box')]" position="inside">
+                <button
+                    type="object"
+                    name="action_abrir_maps"
+                    class="oe_stat_button"
+                    icon="fa-map-marker"
+                    string="Ir con Maps"
+                />
+            </xpath>
+        </field>
+    </record>
+</odoo>

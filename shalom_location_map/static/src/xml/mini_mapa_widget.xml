@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.MiniMapaWidget">
+        <div class="shalom-mini-mapa">
+            <h6 class="mb-2">Cómo llegar desde donde estás</h6>
+
+            <div t-if="state.cargando" class="text-muted small">
+                Obteniendo tu ubicación...
+            </div>
+
+            <div t-elif="state.sinPermiso" class="text-muted small">
+                Activá el permiso de ubicación en tu navegador para ver
+                el trazado hacia este cliente.
+            </div>
+
+            <div t-elif="state.error" class="text-muted small" t-esc="state.error"/>
+
+            <div t-else="" t-ref="mapa" style="width: 100%; height: 260px; border-radius: 8px;"/>
+        </div>
+    </t>
+</templates>

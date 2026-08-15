@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Extiende el formulario de fsm.order (la visita/tarea a un cliente)
+        para agregar:
+          - Botón "Capturar mi ubicación GPS" (separado del flujo de
+            completar la visita, con confirmación explícita antes de
+            sobreescribir la ubicación real del cliente).
+          - Campos "Orden de Visita" y "Jornada", editables a mano aunque
+            se calculan automáticamente al completar la visita.
+    -->
+    <record id="fsm_order_form_shalom_gps_orden" model="ir.ui.view">
+        <field name="name">fsm.order.form.shalom.gps.orden</field>
+        <field name="model">fsm.order</field>
+        <field name="inherit_id" ref="fieldservice.fsm_order_form" />
+        <field name="arch" type="xml">
+            <!-- Botones de captura GPS y crear cotización en el header, junto a los demás botones de acción -->
+            <xpath expr="//header" position="inside">
+                <button
+                    name="shalom_abrir_captura_gps"
+                    type="object"
+                    string="📍 Capturar mi ubicación GPS"
+                    class="btn-secondary"
+                    help="Captura la ubicación real de este cliente usando el GPS del dispositivo. Pide confirmación antes de guardar, ya que sobreescribe la ubicación existente."
+                />
+                <button
+                    name="action_crear_cotizacion"
+                    type="object"
+                    string="💰 Crear cotización"
+                    class="btn-secondary"
+                    help="Crea (o abre, si ya existe) una cotización de venta para el cliente de esta visita."
+                />
+                <button
+                    name="action_abrir_maps"
+                    type="object"
+                    string="📍 Ir con Maps"
+                    class="btn-secondary"
+                    help="Abre Google Maps con la ruta hacia este cliente."
+                />
+                <button
+                    name="action_ver_historial_cotizaciones"
+                    type="object"
+                    string="🧾 Historial de cotizaciones"
+                    class="btn-secondary"
+                    help="Ver todas las cotizaciones confirmadas anteriores de este cliente."
+                />
+            </xpath>
+
+            <!-- Contador de cotizaciones confirmadas, como stat button -->
+            <xpath expr="//div[hasclass('oe_button_box')]" position="inside">
+                <button
+                    type="object"
+                    name="action_ver_historial_cotizaciones"
+                    class="oe_stat_button"
+                    icon="fa-usd"
+                >
+                    <field name="x_cantidad_cotizaciones" widget="statinfo" string="Cotizaciones" />
+                </button>
+            </xpath>
+
+            <!-- Jornada y Orden de Ruta, junto a los datos de la ruta.
+                 x_cliente_orden_ruta es el mismo dato que en la ficha
+                 del cliente (fsm.location.x_orden_ruta): editable desde
+                 acá o desde ahí, sincronizado en ambos lados. -->
+            <xpath expr="//field[@name='fsm_route_id']" position="after">
+                <field name="x_jornada" />
+                <field name="x_cliente_orden_ruta" />
+            </xpath>
+
+            <!-- Datos del último GPS capturado en esta visita, y el GPS ya
+                 guardado en la ficha del cliente (para confirmar que
+                 quedó aplicado, sin tener que salir a Ubicaciones). -->
+            <xpath expr="//field[@name='location_id']" position="after">
+                <field
+                    name="x_gps_capturado_lat"
+                    readonly="1"
+                    invisible="not x_gps_capturado_fecha"
+                    string="GPS de esta visita - Latitud"
+                />
+                <field
+                    name="x_gps_capturado_lng"
+                    readonly="1"
+                    invisible="not x_gps_capturado_fecha"
+                    string="GPS de esta visita - Longitud"
+                />
+                <field
+                    name="x_gps_capturado_fecha"
+                    readonly="1"
+                    invisible="not x_gps_capturado_fecha"
+                    string="GPS de esta visita - Fecha/hora"
+                />
+                <field
+                    name="x_cliente_lat"
+                    readonly="1"
+                />
+                <field
+                    name="x_cliente_lng"
+                    readonly="1"
+                />
+            </xpath>
+
+            <!-- Nueva página en el notebook con el gráfico embebido de
+                 historial de compras (línea de tiempo por producto). -->
+            <xpath expr="//notebook" position="inside">
+                <page string="Historial de Compras" name="shalom_historial_compras">
+                    <widget name="shalom_resumen_compras" />
+                </page>
+                <page string="Cómo Llegar" name="shalom_mini_mapa">
+                    <widget name="shalom_mini_mapa" />
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

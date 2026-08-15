@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo noupdate="0">
+    <!--
+        Recrea la etapa "New" (Nuevo) de tipo 'order', que en algún punto
+        del historial de esta base se perdió (el registro con xml_id
+        fieldservice.fsm_stage_new ya no existía). Sin esta etapa, las
+        fsm.order nuevas quedaban con stage_id vacío en vez de "Nuevo",
+        lo cual rompía cualquier lógica que dependiera de identificar la
+        etapa de inicio (como el botón "Generar visitas de esta ruta").
+
+        Se declara con un id propio del módulo (no se reutiliza el xml_id
+        de fieldservice, que ya no apunta a ningún registro real) para
+        evitar conflictos si el módulo fieldservice llegara a recrear el
+        suyo en el futuro.
+    -->
+    <record id="shalom_fsm_stage_order_new" model="fsm.stage">
+        <field name="name">New</field>
+        <field name="stage_type">order</field>
+        <field name="sequence">1</field>
+        <field name="is_default">True</field>
+        <field name="is_closed">False</field>
+        <field name="custom_color">#E5E7EB</field>
+    </record>
+
+    <!--
+        Reconfigura el color de las etapas de fsm.order (Completado/
+        Cancelado) para que la vista Kanban agrupada por ruta pinte cada
+        tarjeta de un vistazo: verde = completada, rojo = cancelada.
+        noupdate="0" es necesario para que SÍ se apliquen estos cambios
+        sobre los registros ya creados por el módulo fieldservice base.
+    -->
+    <record id="fieldservice.fsm_stage_completed" model="fsm.stage">
+        <field name="custom_color">#22C55E</field>
+    </record>
+    <record id="fieldservice.fsm_stage_cancelled" model="fsm.stage">
+        <field name="custom_color">#EF4444</field>
+    </record>
+</odoo>

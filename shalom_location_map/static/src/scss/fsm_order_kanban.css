@@ -1,0 +1,15 @@
+/* Colores de fondo de las tarjetas Kanban de fsm.order según su etapa.
+   Los ids son fijos en la instalación estándar de OCA fieldservice:
+   1 = New (gris), 2 = Completed (verde), 3 = Cancelled (rojo). */
+
+.shalom-stage-1 {
+    background-color: #F3F4F6 !important;
+}
+
+.shalom-stage-2 {
+    background-color: #DCFCE7 !important;
+}
+
+.shalom-stage-3 {
+    background-color: #FEE2E2 !important;
+}

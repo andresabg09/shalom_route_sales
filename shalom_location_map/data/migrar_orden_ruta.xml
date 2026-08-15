@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo noupdate="1">
+    <!--
+        Ejecuta UNA SOLA VEZ (noupdate="1" a nivel de todo este archivo,
+        no se repite en updates posteriores del módulo) la migración del
+        "Orden de ruta original" desde el texto libre de las notes hacia
+        el campo numérico real x_orden_ruta, recién creado.
+    -->
+    <function model="fsm.location" name="action_migrar_orden_ruta_desde_notas">
+        <value eval="[]" />
+    </function>
+</odoo>
