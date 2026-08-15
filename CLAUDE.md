@@ -2,17 +2,89 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## What this is
+## Who this is for
 
-An Odoo 18 addon module, `shalom_location_map`, that layers mapping, GPS
-capture and route-tracing onto the OCA **Field Service** app. It carries
-production code pulled from the `traspastras2-east` server
-(`/root/odoo-addons/shalom_location_map`) — see `README.md` for the full
-architecture writeup and the OCA dependency chain it sits on.
+Shalom Panamá, a beauty-products distributor. The user is the sole
+technical admin of the whole stack: a self-hosted Odoo 18 Community on
+Google Cloud (GCP project `nomadic-freedom-476621-p4`), running in Docker
+Swarm via EasyPanel, on VM `traspastras2-east` (zone `us-east1-b`, static
+IP `104.196.114.160`).
+
+## What this repo is (and isn't)
+
+This repo is named `shalom_route_sales` on GitHub (public:
+https://github.com/andresabg09/shalom_route_sales), but **that name is
+just the repo's** — it is not an installable Odoo module and has no
+relation to the module name. The repo is the version-controlled working
+copy for editing the **already-existing, already-in-production** module
+`shalom_location_map`. Before this repo existed, edits were made by
+uploading loose folders over SSH with no version control, which left
+stray backup/temp folders on the server (`shalom_location_map_temp3`,
+`shalom_location_map_temp4`, `geoengine_temp`,
+`clientes_geolocalizados` — already cleaned up;
+`shalom_location_map_backup_20260710_020735` and
+`shalom_location_map_v19.tar.gz` are still pending deletion, only once
+it's 100% confirmed this repo has the full real code).
+
+An initial exploratory module also named `shalom_route_sales` (own
+models, own everything) was built before the real goal was clarified.
+It was discarded — gone from the working tree, kept only in git history.
+
+`shalom_location_map` exists in two places, same code: this repo (source
+of truth, with history) and the server at
+`/root/odoo-addons/shalom_location_map/` (where it actually runs).
 
 Also present: `docker-compose.yml` + `config/odoo.conf`, a local
-Odoo 18 + PostgreSQL stack for testing this module before touching
-production (see README for the run commands).
+Odoo 18 + PostgreSQL stack for testing without touching production. It
+does **not** include the OCA Field Service stack, so installing
+`shalom_location_map` there directly will fail on missing dependencies.
+
+## Infrastructure (for correct SSH/docker commands)
+
+- VM: `traspastras2-east`, GCP, IP `104.196.114.160`.
+- Odoo container: `crm_odoo` — has a rotating suffix, **always get the
+  current name with `docker ps`, never assume it**.
+- Postgres container: `crm_odoo-db`.
+- Addons live at `/root/odoo-addons/` on the host, owned by `root`; the
+  user's normal account needs `sudo` to read/write there.
+- Module update flow: `sudo chown -R 101:101` + `sudo chmod -R 755` on
+  the host → `docker exec -u root [CONTAINER] chown -R odoo:odoo` inside
+  the container → update with `--stop-after-init` →
+  `docker service update --force crm_odoo`.
+
+Other custom modules on the same server, **unrelated to this project —
+do not touch unless explicitly asked**: `digifact_fe_panama`,
+`l10n_pa_digifact_secure` (Panama DGI e-invoicing), and
+`stock_picking_sale_buttons`, `product_multiple_barcodes`.
+
+## Deployment workflow (mandatory order, no exceptions)
+
+Changes are deployed straight to production (no separate staging in
+active use), during low-traffic hours. For **any** change headed to
+production, this exact order:
+
+1. Give the user the exact code to paste over SSH.
+2. Give verification commands to confirm the change applied correctly.
+3. **Only if verification passes**, proceed with permissions
+   (`chown`/`chmod`) and module update.
+
+Never skip a step or assume a step worked without verifying it
+explicitly with the user. Upload replaces the `shalom_location_map`
+folder in place, same name — never uninstall first. If something breaks,
+uninstall over SSH if needed (no GUI required). Before the **first**
+test of a significant change, remind the user to snapshot the GCP data
+disk as a safety net.
+
+## Project goal
+
+Redesign `shalom_location_map`'s UX for zero-friction street sales: a
+salesperson sees their route for the day → visits a customer → takes the
+order → moves to the next stop. The invoice is generated **later**, back
+at the office — not at the moment of the visit. Onboarding a new
+customer from the street is an occasional case, not the main flow to
+optimize for. Paid alternatives (VanGo, VanBiz Pro, FieldOpt) were
+evaluated and rejected (thousands of USD) — building on the existing
+in-house base instead.
 
 ## Running / testing
 
@@ -78,3 +150,18 @@ the short version:
   strings) which is written in Spanish throughout.
 - Never hardcode the Mapbox token — always read it from the
   `MAPBOX_ACCESS_TOKEN` environment variable on the server.
+
+## Working rules (no exceptions)
+
+- **Surgical changes**: prefer minimal, targeted diffs over rewriting
+  whole files.
+- **Git commits**: the user reviews and confirms every commit manually —
+  never commit automatically. Show `git status`/`git diff` before
+  proposing a commit and wait for explicit confirmation. If `git commit`
+  itself is blocked in this environment, give the exact command for the
+  user to run in their own terminal.
+- **Production risk**: flag it explicitly before proceeding whenever a
+  change carries real production risk, even if it seems obvious and even
+  if the user didn't ask.
+- **Product/UX decisions** (as opposed to technical ones): ask the user
+  directly instead of assuming.
