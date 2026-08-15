@@ -1,9 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_shalom_route_route_user,shalom.route.route.user,model_shalom_route_route,group_route_sales_user,1,1,1,0
-access_shalom_route_route_manager,shalom.route.route.manager,model_shalom_route_route,group_route_sales_manager,1,1,1,1
-access_shalom_route_line_user,shalom.route.line.user,model_shalom_route_line,group_route_sales_user,1,1,1,0
-access_shalom_route_line_manager,shalom.route.line.manager,model_shalom_route_line,group_route_sales_manager,1,1,1,1
-access_shalom_route_visit_user,shalom.route.visit.user,model_shalom_route_visit,group_route_sales_user,1,1,1,0
-access_shalom_route_visit_manager,shalom.route.visit.manager,model_shalom_route_visit,group_route_sales_manager,1,1,1,1
-access_shalom_route_visit_line_user,shalom.route.visit.line.user,model_shalom_route_visit_line,group_route_sales_user,1,1,1,0
-access_shalom_route_visit_line_manager,shalom.route.visit.line.manager,model_shalom_route_visit_line,group_route_sales_manager,1,1,1,1

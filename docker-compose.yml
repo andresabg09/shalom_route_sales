@@ -28,7 +28,7 @@ services:
       PASSWORD: odoo
     volumes:
       - odoo-web-data:/var/lib/odoo
-      - ./shalom_route_sales:/mnt/extra-addons/shalom_route_sales
+      - ./shalom_location_map:/mnt/extra-addons/shalom_location_map
       - ./config/odoo.conf:/etc/odoo/odoo.conf
 
 volumes:
