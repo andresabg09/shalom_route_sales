@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_route_sales_root" name="Route Sales"/>
+
+    <menuitem id="menu_route_visit" name="Visits" parent="menu_route_sales_root"
+              action="action_route_visit" sequence="10"/>
+
+    <menuitem id="menu_route_route" name="Routes" parent="menu_route_sales_root"
+              action="action_route_route" sequence="20"/>
+
+    <menuitem id="menu_route_sales_config" name="Configuration" parent="menu_route_sales_root" sequence="90"/>
+</odoo>
