@@ -65,6 +65,13 @@
             <xpath expr="//field[@name='fsm_route_id']" position="after">
                 <field name="x_jornada" />
                 <field name="x_cliente_orden_ruta" />
+                <field name="x_route_schedule_id" />
+            </xpath>
+
+            <!-- Observaciones cargadas por el vendedor durante la visita
+                 (app del vendedor), junto a los demás datos de la Ubicación. -->
+            <xpath expr="//field[@name='location_id']" position="after">
+                <field name="x_observaciones_visita" />
             </xpath>
 
             <!-- Datos del último GPS capturado en esta visita, y el GPS ya

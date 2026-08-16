@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo noupdate="0">
+    <!--
+        Nueva etapa "No quiso": visita realizada, cliente no compró
+        esta vez (pero sigue siendo cliente activo, distinto de
+        "Cancelado", que en el diseño de la app del vendedor significa
+        que el cliente dijo que ya no quiere más pedidos). Cerrada
+        (is_closed=True) igual que Completado/Cancelado, para que el
+        ciclo siguiente de "Generar visitas de esta ruta" sí le vuelva
+        a crear una visita nueva.
+
+        Secuencia 3: en producción las etapas 'order' existentes son
+        Cancelado=0, New=1, Completado=2; esta queda justo después,
+        sin pisar ninguna.
+    -->
+    <record id="shalom_fsm_stage_no_quiso" model="fsm.stage">
+        <field name="name">No quiso</field>
+        <field name="stage_type">order</field>
+        <field name="sequence">3</field>
+        <field name="is_default">False</field>
+        <field name="is_closed">True</field>
+        <field name="custom_color">#8C5060</field>
+    </record>
+</odoo>

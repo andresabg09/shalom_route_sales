@@ -38,6 +38,15 @@ Extiende fsm.order (la tarea/orden de visita a un cliente) con:
    de esta visita. Si el navegador no tiene el permiso de ubicación
    concedido, no lo solicita de forma insistente: muestra un aviso.
 
+7. x_route_schedule_id: vincula la visita a la ocurrencia semanal
+   (fsm.route.schedule) que la generó, cuando corresponde.
+
+8. shalom_confirmar_pedido(): llamado desde la app del vendedor con el
+   carrito ya armado -- crea/reusa la cotización, carga sus líneas, la
+   CONFIRMA (venta real, reserva stock) y cierra la visita, todo en una
+   sola llamada. Es el equivalente "todo en uno" de action_crear_cotizacion
+   pensado para el flujo de catálogo + carrito de la app.
+
 Nota: "Orden de Ruta" (x_cliente_orden_ruta) es un campo related con
 store=True hacia fsm.location.x_orden_ruta -- es literalmente el mismo
 dato en ambos lados: editar el valor desde la tarjeta de visita o desde
@@ -48,6 +57,14 @@ El cálculo automático de Jornada SOLO se dispara cuando:
     "completado" (is_closed=True y no es la etapa de Cancelado), Y
   - El usuario no proporcionó ya un valor manual para x_jornada en
     la misma escritura (así se respeta la edición manual sin pisarla).
+
+Corrección: la etapa de Cancelado se identifica por su xml_id
+(fieldservice.fsm_stage_cancelled) en vez de por su nombre visible.
+Antes se comparaba contra el string "Cancelled" (inglés), pero el
+nombre real de la etapa en producción es "Cancelado" (español) -- esa
+comparación nunca coincidía, así que una visita cancelada estaba
+contando como completada para el correlativo de Jornada. Bug
+preexistente, corregido junto con esta tanda de cambios.
 """
 import logging
 from datetime import timedelta
@@ -62,9 +79,6 @@ _logger = logging.getLogger(__name__)
 # Umbral de inactividad para considerar que empezó una nueva jornada.
 HORAS_INACTIVIDAD_NUEVA_JORNADA = 6
 
-# Nombre de la etapa que consideramos "cancelada" (no cuenta para el
-# correlativo de orden/jornada aunque tenga is_closed=True).
-NOMBRE_ETAPA_CANCELADA = "Cancelled"
 
 # Estados de sale.order que cuentan como "venta real" para el
 # historial de cotizaciones (se excluyen borradores/cancelados).
@@ -137,6 +151,21 @@ class FSMOrder(models.Model):
         help="Cantidad de cotizaciones CONFIRMADAS (ventas reales, no "
         "borradores) que tiene el cliente de esta visita en su "
         "historial completo.",
+    )
+    x_route_schedule_id = fields.Many2one(
+        "fsm.route.schedule",
+        string="Programación de Ruta",
+        help="Ocurrencia semanal de la ruta (fsm.route.schedule) que "
+        "generó esta visita, si se creó desde ahí. Vacío para visitas "
+        "generadas directamente desde el botón nativo de la Ruta (sin "
+        "pasar por una ocurrencia programada).",
+    )
+    x_observaciones_visita = fields.Text(
+        string="Observaciones de esta visita",
+        help="Notas cargadas por el vendedor durante la visita (ej: "
+        "mejor horario, pedir que dejen la entrada libre). Campo "
+        "propio de la app del vendedor, independiente de otros campos "
+        "de notas nativos del pedido.",
     )
 
     @api.depends("location_id.partner_id")
@@ -256,13 +285,107 @@ class FSMOrder(models.Model):
             "target": "current",
         }
 
+    def shalom_confirmar_pedido(self, lineas):
+        """Llamado desde la app del vendedor al tocar "Confirmar
+        pedido": crea o reutiliza la cotización vinculada a esta visita
+        (mismo criterio anti-duplicado que action_crear_cotizacion),
+        reemplaza sus líneas por las del carrito recibido, la CONFIRMA
+        (action_confirm -- pasa a venta real y reserva stock) y cierra
+        la visita moviéndola a la etapa Completada. La factura se
+        genera después, aparte, en oficina -- este método no toca
+        facturación.
+
+        lineas: lista de dicts {"product_id": int, "qty": float}, uno
+        por producto agregado al carrito.
+
+        A diferencia de action_crear_cotizacion (que abre el formulario
+        completo de sale.order para cargar productos ahí), acá los
+        productos ya vienen elegidos del catálogo de la app: este
+        método hace todo el trabajo (crear/reusar cotización, cargar
+        líneas, confirmar, cerrar visita) en una sola llamada.
+        """
+        self.ensure_one()
+        if not lineas:
+            raise UserError(_("El pedido no tiene productos."))
+        if not self.location_id or not self.location_id.partner_id:
+            raise UserError(
+                _("Esta visita no tiene un cliente asociado (Ubicación "
+                  "sin contacto). No se puede confirmar el pedido.")
+            )
+
+        # Mismo patrón anti-duplicado que action_crear_cotizacion: leer
+        # sale_id directo de la base antes de decidir si crear una
+        # cotización nueva o reusar la existente.
+        self.env.cr.execute(
+            "SELECT sale_id FROM fsm_order WHERE id = %s", (self.id,)
+        )
+        sale_id_en_bd = self.env.cr.fetchone()[0]
+        if sale_id_en_bd:
+            sale_order = self.env["sale.order"].browse(sale_id_en_bd)
+        else:
+            sale_order = self.env["sale.order"].create(
+                {"partner_id": self.location_id.partner_id.id}
+            )
+            self.write({"sale_id": sale_order.id})
+
+        sale_order.order_line.unlink()
+        for linea in lineas:
+            self.env["sale.order.line"].create(
+                {
+                    "order_id": sale_order.id,
+                    "product_id": linea["product_id"],
+                    "product_uom_qty": linea.get("qty") or 1,
+                }
+            )
+        sale_order.action_confirm()
+
+        etapa_completada = self.env.ref(
+            "fieldservice.fsm_stage_completed", raise_if_not_found=False
+        )
+        if etapa_completada:
+            self.write({"stage_id": etapa_completada.id})
+
+        self.message_post(
+            body=_(
+                "Pedido confirmado desde la app del vendedor: cotización "
+                "%(numero)s (%(total)s).",
+                numero=sale_order.name,
+                total=sale_order.amount_total,
+            )
+        )
+        _logger.info(
+            "Pedido confirmado desde app para fsm.order id=%s: "
+            "sale.order id=%s (%s), total=%s",
+            self.id, sale_order.id, sale_order.name, sale_order.amount_total,
+        )
+
+        return {
+            "sale_order_id": sale_order.id,
+            "sale_order_name": sale_order.name,
+            "total": sale_order.amount_total,
+        }
+
+    def _id_etapa_cancelada(self):
+        """id de la etapa "Cancelado" (fieldservice.fsm_stage_cancelled),
+        buscada por xml_id en vez de por nombre. Antes se comparaba
+        contra el string "Cancelled" (inglés), pero el nombre real de
+        la etapa en producción es "Cancelado" (español) -- esa
+        comparación nunca coincidía, y una visita cancelada terminaba
+        contando como completada para el correlativo de Jornada.
+        Buscar por xml_id no depende del nombre visible (que puede
+        estar traducido o editado a mano)."""
+        etapa = self.env.ref(
+            "fieldservice.fsm_stage_cancelled", raise_if_not_found=False
+        )
+        return etapa.id if etapa else False
+
     def _es_transicion_a_completado(self, vals):
         """True si esta escritura mueve el stage_id hacia una etapa
         cerrada que NO sea la de cancelado."""
         if "stage_id" not in vals or not vals["stage_id"]:
             return False
         stage = self.env["fsm.stage"].browse(vals["stage_id"])
-        return bool(stage.is_closed) and stage.name != NOMBRE_ETAPA_CANCELADA
+        return bool(stage.is_closed) and stage.id != self._id_etapa_cancelada()
 
     def _calcular_jornada(self):
         """Calcula el número de jornada para esta orden, comparando con
@@ -271,17 +394,14 @@ class FSMOrder(models.Model):
         if not self.fsm_route_id:
             return 1
 
-        etapa_cancelada = self.env["fsm.stage"].search(
-            [("name", "=", NOMBRE_ETAPA_CANCELADA), ("stage_type", "=", "order")],
-            limit=1,
-        )
+        id_etapa_cancelada = self._id_etapa_cancelada()
         dominio = [
             ("fsm_route_id", "=", self.fsm_route_id.id),
             ("id", "!=", self.id),
             ("stage_id.is_closed", "=", True),
         ]
-        if etapa_cancelada:
-            dominio.append(("stage_id", "!=", etapa_cancelada.id))
+        if id_etapa_cancelada:
+            dominio.append(("stage_id", "!=", id_etapa_cancelada))
 
         ultima = self.env["fsm.order"].search(
             dominio, order="write_date desc", limit=1

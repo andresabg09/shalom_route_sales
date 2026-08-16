@@ -8,7 +8,9 @@ Agrega a fsm.route:
    fsm.order para reflejar ese orden en las vistas nativas de Field
    Service. No duplica visitas: si una fsm.location de la ruta ya
    tiene una fsm.order abierta (no cancelada, no completada), no se
-   crea una nueva para ella.
+   crea una nueva para ella. Acepta un fsm.route.schedule opcional
+   (ver ese modelo) para taggear las visitas creadas con la ocurrencia
+   semanal que las generó.
 
 2. La acción "Archivar visitas cerradas": archiva (active=False) las
    fsm.order ya completadas/canceladas de la ruta, para poder generar
@@ -50,9 +52,17 @@ class FSMRoute(models.Model):
         "trazado de ruta'.",
     )
 
-    def action_generar_visitas_ruta(self):
+    def action_generar_visitas_ruta(self, schedule=None):
         """Botón: crea una fsm.order por cada fsm.location activa de
-        esta ruta que todavía no tenga una orden abierta (no cerrada)."""
+        esta ruta que todavía no tenga una orden abierta (no cerrada).
+
+        schedule: fsm.route.schedule opcional (una ocurrencia semanal
+        programada) -- si se pasa, cada fsm.order creada queda
+        vinculada a esa ocurrencia via x_route_schedule_id, para que la
+        app del vendedor sepa qué visitas corresponden a qué semana.
+        Llamado desde fsm.route.schedule.action_generar_visitas(); el
+        botón nativo del formulario de Ruta sigue llamando a este mismo
+        método sin schedule, igual que siempre."""
         self.ensure_one()
 
         locations = self.env["fsm.location"].search(
@@ -99,15 +109,16 @@ class FSMRoute(models.Model):
                 saltadas += 1
                 continue
 
-            self.env["fsm.order"].create(
-                {
-                    "name": f"{self.name} - {location.name}",
-                    "location_id": location.id,
-                    "fsm_route_id": self.id,
-                    "stage_id": stage_nueva.id,
-                    "sequence": idx,
-                }
-            )
+            vals = {
+                "name": f"{self.name} - {location.name}",
+                "location_id": location.id,
+                "fsm_route_id": self.id,
+                "stage_id": stage_nueva.id,
+                "sequence": idx,
+            }
+            if schedule:
+                vals["x_route_schedule_id"] = schedule.id
+            self.env["fsm.order"].create(vals)
             creadas += 1
 
         mensaje = _(
@@ -133,7 +144,7 @@ class FSMRoute(models.Model):
 
     def action_archivar_visitas_cerradas(self):
         """Botón: archiva (active=False) las fsm.order de esta ruta que
-        ya están cerradas (Completed o Cancelled), para poder volver a
+        ya están cerradas (Completado, No quiso o Cancelado), para poder volver a
         generar visitas nuevas del ciclo siguiente sin perder el
         historial (las archivadas siguen consultables, solo salen de
         la vista/kanban activo)."""

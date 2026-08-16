@@ -16,7 +16,7 @@ servicio esté disponible.
 import logging
 import re
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -85,3 +85,38 @@ class FSMLocation(models.Model):
             "url": url,
             "target": "new",
         }
+
+    @api.model
+    def shalom_crear_cliente_rapido(self, name, phone=False, address=False):
+        """Llamado desde la pestaña Clientes de la app del vendedor:
+        crea un cliente mínimo (res.partner + fsm.location) para el
+        caso ocasional de onboardear a alguien nuevo directo desde la
+        calle. NO lo asigna a ninguna ruta ni le carga x_orden_ruta --
+        eso lo hace oficina después, a mano, como corresponde al flujo
+        principal del proyecto (onboarding desde la calle es la
+        excepción, no la regla)."""
+        if not name or not name.strip():
+            raise UserError(_("El nombre comercial es obligatorio."))
+
+        partner = self.env["res.partner"].create(
+            {
+                "name": name.strip(),
+                "phone": phone or False,
+                "street": address or False,
+                "company_type": "company",
+            }
+        )
+        location = self.create(
+            {
+                "name": name.strip(),
+                "partner_id": partner.id,
+                "phone": phone or False,
+                "street": address or False,
+            }
+        )
+        _logger.info(
+            "Cliente rápido creado desde la app del vendedor: "
+            "fsm.location id=%s (partner id=%s) - %s",
+            location.id, partner.id, name,
+        )
+        return {"id": location.id, "partner_id": partner.id}
