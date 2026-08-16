@@ -122,3 +122,137 @@ Los módulos OCA viven únicamente en el servidor y no se copian a este repo:
 son dependencia de terceros, se actualizan por su cuenta (upstream OCA) y no
 por cambios de este equipo. Solo se versiona aquí el código propio
 (`shalom_*`).
+
+## Estado del proyecto
+
+Fases 0, 1 y 2 completas, probadas de punta a punta en producción y
+commiteadas. Faltan Fases 3 (catálogo + carrito + escaneo de código de
+barras + `shalom_confirmar_pedido`) y 4 (pestañas Cotizaciones y
+Clientes). Detalle completo de qué incluye cada fase, decisiones de
+producto ya confirmadas, y datos técnicos del servidor ya verificados:
+ver `docs/plan_fase_1_a_4.md`.
+
+## Cómo desplegar cambios a producción
+
+Este es el único flujo válido para llevar un cambio de este repo al
+servidor. **Nunca saltar pasos ni asumir que uno funcionó sin
+verificarlo explícitamente.** Antes de la primera prueba de cada
+cambio grande, recordar el snapshot del disco de datos en GCP como red
+de seguridad.
+
+### 0. Datos fijos del servidor
+
+- VM `traspastras2-east` (GCP, IP `104.196.114.160`), acceso por SSH
+  como `andresabg09` (no hay login directo de `root`; usar `sudo` para
+  todo lo que necesita permisos de root).
+- Addons en `/root/odoo-addons/`, owned por `root` — **cualquier
+  lectura/verificación desde la VM necesita `sudo`**, incluso un `ls`
+  o `find` simple. Un "Permission denied" en un comando sin `sudo` NO
+  significa que el archivo no exista.
+- Contenedor Odoo: el nombre rota en cada `docker service update
+  --force` (formato `crm_odoo.1.<sufijo random>`). Conseguirlo con:
+  ```bash
+  docker ps --format '{{.Names}}' | grep -E '^crm_odoo\.'
+  ```
+  El `^crm_odoo\.` (con el punto) es obligatorio: un `grep crm_odoo`
+  sin anclar también matchea el contenedor de la base de datos
+  (`crm_odoo-db.1...`), y eso rompe silenciosamente cualquier comando
+  que use `$CONTAINER` después (falla con "page not found" sin
+  explicación clara).
+- Base de datos: `shalom`. Siempre anteponer `/entrypoint.sh` antes de
+  `odoo` dentro del contenedor (la conexión a la DB llega por
+  variables de entorno del contenedor, no por `/etc/odoo/odoo.conf`).
+
+### 1. Escribir el/los archivo(s) en el servidor
+
+- **1-2 archivos chicos** (hasta ~300 líneas en total): pegar directo
+  por SSH con `sudo tee <ruta> > /dev/null <<'EOF' ... EOF`.
+- **Varios archivos o algo grande**: armar un script bash local que
+  escriba todos los archivos con `sudo tee` (uno por archivo, cada uno
+  con su propio heredoc), mandárselo al usuario como archivo
+  descargable (no pegado en el chat), y que lo suba por `scp` +
+  ejecute por SSH. Bloques enormes pegados directo en la terminal
+  pueden colgar o desconectar algunos clientes SSH.
+  - **El `scp` (y el `ssh` que lo sigue) se corren desde la
+    computadora del usuario, nunca desde una sesión que ya está
+    conectada adentro del servidor.** Confundir esto es el error más
+    común: intentar `scp archivo.sh usuario@servidor:/tmp/` estando ya
+    logueado en `servidor` falla (`Permission denied (publickey)` o
+    similar) porque el archivo no existe ahí.
+  - `ssh usuario@servidor` y el comando que lo sigue (`bash
+    /tmp/script.sh`) hay que correrlos como **pasos separados**, no
+    pegados juntos de una: si se pegan en el mismo bloque, el segundo
+    comando puede perderse en medio del banner de bienvenida de SSH y
+    nunca ejecutarse (sin ningún error visible).
+- Filebrowser (subida por navegador) es una alternativa, pero puede
+  fallar en silencio si intenta sobrescribir archivos que ya son de
+  otro dueño sin `chown`/`chmod` previo sobre la carpeta destino — en
+  la práctica, `scp` + `sudo tee` fue más confiable en este proyecto.
+
+### 2. Verificar que llegó íntegro
+
+```bash
+sudo sha256sum <ruta completa de cada archivo escrito>
+```
+
+Comparar contra el hash calculado localmente del mismo archivo antes
+de darlo por bueno. Para XML, validar sintaxis:
+
+```bash
+sudo python3 -c "import xml.dom.minidom as m; m.parse('<ruta>')"
+```
+
+No seguir al paso 3 hasta que esto esté confirmado.
+
+### 3. Permisos, actualizar el módulo y reiniciar
+
+```bash
+sudo chown -R 101:101 /root/odoo-addons/shalom_location_map
+sudo find /root/odoo-addons/shalom_location_map -type d -exec chmod 755 {} \;
+sudo find /root/odoo-addons/shalom_location_map -type f -exec chmod 644 {} \;
+
+CONTAINER=$(docker ps --format '{{.Names}}' | grep -E '^crm_odoo\.')
+docker exec -u root "$CONTAINER" chown -R odoo:odoo /mnt/extra-addons/shalom_location_map
+
+docker exec -i "$CONTAINER" /entrypoint.sh odoo -c /etc/odoo/odoo.conf \
+  -d shalom -u shalom_location_map --stop-after-init --no-http
+```
+
+Revisar esa salida **entera** (no solo el final) por `Traceback`,
+`ERROR` o `CRITICAL`. Recién si está limpia:
+
+```bash
+docker service update --force crm_odoo
+docker ps --format '{{.Names}}' | grep -E '^crm_odoo\.'
+```
+
+(el nombre del contenedor tiene que cambiar respecto al anterior).
+Verificación final: recargar fuerte el navegador y probar el cambio
+real ahí, no solo confirmar que el reinicio "salió bien" — un
+reinicio limpio no garantiza que la funcionalidad ande.
+
+### Bugs nativos ya encontrados (para no volver a pisarlos)
+
+- **`fieldservice` bloquea escribir `stage_id` directo a la etapa
+  "Completado"** salvo que el contexto de la llamada tenga
+  `bypass_order_completed_stage=True` (pensado para que nadie la
+  mueva ahí arrastrando una tarjeta en el Kanban nativo sin pasar por
+  un flujo controlado). Aplica tanto a escrituras desde Python
+  (`self.with_context(bypass_order_completed_stage=True).write(...)`)
+  como desde JS (`orm.write(model, ids, vals, {context:
+  {bypass_order_completed_stage: true}}))`).
+- **Un dict de acción devuelto por un método Python** (ej.
+  `{"type": "ir.actions.act_window", "view_mode": "list,form", ...}`)
+  necesita el campo `views` ya armado como lista de `[false, tipo]`
+  antes de pasarlo a `action.doAction()` desde JS. Cuando la acción la
+  dispara un botón nativo del formulario, Odoo completa ese campo
+  solo; en una llamada directa vía `orm.call` + `doAction()` hay que
+  armarlo a mano o revienta con `Cannot read properties of undefined
+  (reading 'map')`.
+- **`fsm.person.user_id` existe en el modelo** (sin restricción de
+  grupos) **pero no está en la vista de formulario nativa**
+  (`fieldservice.fsm_person_form`) — por eso oficina no podía vincular
+  una Persona con su cuenta de login de Odoo desde la pantalla. Se
+  expone vía `views/fsm_person_views.xml` (heredando esa vista),
+  reetiquetado "Usuario de Odoo (login)" para no confundirlo con el
+  campo "Vendedor" que ya existe en otro lado.

@@ -34,11 +34,12 @@
                         Pedile a oficina que las genere desde "Programación de
                         Rutas".
                     </div>
-                    <div
+                    <button
                         t-foreach="state.visitas"
                         t-as="visita"
                         t-key="visita.id"
                         t-attf-class="stop-card st-{{visita.estado}}"
+                        t-on-click="() => this.abrirVisita(visita)"
                     >
                         <div class="stop-num" t-esc="visita.orden"/>
                         <div class="stop-info">
@@ -49,15 +50,22 @@
                         <span
                             class="quick-icon-btn"
                             title="Ir con Maps"
-                            t-on-click="() => this.abrirMaps(visita)"
+                            t-on-click.stop="() => this.abrirMaps(visita)"
                         >🧭</span>
-                    </div>
+                    </button>
                 </div>
 
                 <div class="map-wrap" t-if="state.tab === 'mapa'">
                     <div class="shalom-mapa" t-ref="mapa"/>
                 </div>
             </t>
+
+            <VisitSheet
+                t-if="state.visitaAbiertaId"
+                orderId="state.visitaAbiertaId"
+                onCerrar.bind="cerrarVisita"
+                onCambio.bind="recargarVisitas"
+            />
         </div>
     </t>
 </templates>

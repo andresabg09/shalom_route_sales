@@ -179,13 +179,45 @@ con `orm.searchRead` sobre `product.product` desde el frontend.
 
 ## Orden de implementación (sin cambios respecto al plan original)
 
-1. **Fase 1**: shell de la app (nav inferior) + pestaña Rutas (hub con
-   filtro semana/mes) + detalle de ruta (Lista + Mapa real).
-2. **Fase 2**: hoja de visita (estado, observaciones, acciones
-   rápidas, editar cliente).
-3. **Fase 3**: catálogo + carrito + `shalom_confirmar_pedido` +
-   escaneo de código de barras.
-4. **Fase 4**: pestañas Cotizaciones y Clientes (con alta rápida).
+1. **Fase 1** ✅ COMPLETA: shell de la app (nav inferior) + pestaña
+   Rutas (hub con filtro semana/mes) + detalle de ruta (Lista + Mapa
+   real con Mapbox GL). La raíz del menú "Servicio de Campo"
+   (`fieldservice.root`) redirige directo a Ruta Shalom para
+   cualquier rol (decisión de producto: reemplaza el tablero nativo
+   como punto de entrada de la app entera, no solo para vendedores).
+2. **Fase 2** ✅ COMPLETA: hoja de visita (estado, observaciones,
+   acciones rápidas: llamar/Maps/GPS/historial, editar cliente).
+3. **Fase 3** ⬜ PENDIENTE: catálogo + carrito + `shalom_confirmar_pedido` +
+   escaneo de código de barras. Es la más grande y la más riesgosa
+   (confirma ventas reales y reserva stock) — probarla sola antes de
+   sumarle Fase 4 encima.
+4. **Fase 4** ⬜ PENDIENTE: pestañas Cotizaciones y Clientes (con alta
+   rápida vía `shalom_crear_cliente_rapido`).
 
-Cada fase se entrega, se prueba en producción siguiendo el flujo de
-arriba, y se commitea/pushea por separado — igual que Fase 0.
+Cada fase se entrega, se prueba en producción siguiendo el flujo
+documentado en `README.md` ("Cómo desplegar cambios a producción"), y
+se commitea/pushea por separado — igual que Fase 0.
+
+## Archivos ya creados (Fases 1 y 2)
+
+- `views/ruta_shalom_action.xml` — `ir.actions.client` +
+  `menuitem` + override de la acción de `fieldservice.root`.
+- `views/fsm_person_views.xml` — expone `fsm.person.user_id`
+  ("Usuario de Odoo (login)") en el formulario de Persona; existía en
+  el modelo pero no en la vista nativa (bug nativo encontrado
+  durante Fase 1, ver `README.md`).
+- `models/fsm_order.py` — `shalom_confirmar_pedido()` ajustado con
+  `bypass_order_completed_stage=True` (bug nativo de `fieldservice`,
+  ver `README.md`).
+- `static/src/js/ruta_shalom/`: `app.js` (shell), `rutas_hub.js`,
+  `ruta_detalle.js`, `visit_sheet.js` (hoja de visita, Fase 2),
+  `stage_utils.js` (resuelve etapas por nombre, compartido),
+  `mapbox_utils.js` (token + parseo de WKT, compartido).
+- `static/src/xml/ruta_shalom/`: `app.xml`, `rutas_hub.xml`,
+  `ruta_detalle.xml`, `visit_sheet.xml`.
+- `static/src/scss/ruta_shalom.scss` — todos los estilos de la app,
+  escopeados bajo `.o_shalom_ruta_app`.
+
+Pendientes para Fase 3: `order_screen.js`/`.xml` (catálogo + carrito +
+`BarcodeDetector`), conectar el botón "Tomar pedido" de la hoja de
+visita (hoy solo muestra un aviso "en construcción").

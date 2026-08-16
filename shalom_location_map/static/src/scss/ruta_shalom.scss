@@ -285,6 +285,11 @@
         border-radius: var(--shalom-radius-lg);
         padding: 12px 14px;
         margin-bottom: 10px;
+        width: 100%;
+        text-align: left;
+        cursor: pointer;
+        font-family: inherit;
+        color: inherit;
     }
     .stop-card.st-cancelado {
         opacity: 0.72;
@@ -444,5 +449,273 @@
     }
     .bottomnav button span {
         font-size: 1.1rem;
+    }
+
+    // hoja de visita (Fase 2)
+    .sheet-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(20, 10, 15, 0.42);
+        z-index: 50;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+    }
+    .sheet {
+        width: 100%;
+        max-width: 520px;
+        max-height: 86vh;
+        overflow-y: auto;
+        background: var(--shalom-surface);
+        border-radius: 24px 24px 0 0;
+        padding: 10px 20px 26px;
+        box-shadow: 0 -12px 30px -10px rgba(0, 0, 0, 0.3);
+    }
+    .sheet-handle {
+        width: 36px;
+        height: 4px;
+        border-radius: 99px;
+        background: var(--shalom-line);
+        margin: 6px auto 14px;
+    }
+    .name-btn {
+        border: none;
+        background: transparent;
+        padding: 0;
+        text-align: left;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-family: inherit;
+        color: var(--shalom-ink);
+        max-width: 100%;
+    }
+    .name-btn .name {
+        font-size: 1.25rem;
+        font-weight: 800;
+    }
+    .name-btn .edit-hint {
+        color: var(--shalom-ink-muted);
+        flex: 0 0 auto;
+    }
+
+    .status-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        margin-top: 16px;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-surface-2);
+        border-radius: 999px;
+        padding: 10px 14px;
+        font-weight: 800;
+        font-size: 0.86rem;
+        cursor: pointer;
+        font-family: inherit;
+        color: var(--shalom-ink);
+    }
+    .status-pill .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex: 0 0 auto;
+    }
+    .status-pill .lbl {
+        flex: 1;
+        text-align: left;
+    }
+    .status-pill .chev {
+        color: var(--shalom-ink-muted);
+        transition: transform 0.18s ease;
+    }
+    .status-pill.open .chev {
+        transform: rotate(180deg);
+    }
+    .status-pill.st-pendiente .dot {
+        background: var(--shalom-pendiente);
+    }
+    .status-pill.st-completado .dot {
+        background: var(--shalom-completado);
+    }
+    .status-pill.st-no_quiso .dot {
+        background: var(--shalom-no_quiso);
+    }
+    .status-pill.st-cancelado .dot {
+        background: var(--shalom-cancelado);
+    }
+
+    .status-options {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 8px;
+    }
+    .status-chip {
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink-muted);
+        border-radius: 999px;
+        padding: 10px 4px;
+        font-weight: 800;
+        font-size: 0.76rem;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .status-chip.sel-pendiente {
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-pendiente);
+        border-color: var(--shalom-pendiente);
+    }
+    .status-chip.sel-completado {
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+        border-color: var(--shalom-completado);
+    }
+    .status-chip.sel-no_quiso {
+        background: var(--shalom-no_quiso-soft);
+        color: var(--shalom-no_quiso);
+        border-color: var(--shalom-no_quiso);
+    }
+    .status-chip.sel-cancelado {
+        background: var(--shalom-cancelado-soft);
+        color: var(--shalom-cancelado);
+        border-color: var(--shalom-cancelado);
+    }
+
+    .obs-label {
+        display: block;
+        margin-top: 16px;
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: var(--shalom-ink-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .obs-input {
+        width: 100%;
+        margin-top: 6px;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        border-radius: var(--shalom-radius-md);
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 0.88rem;
+        resize: vertical;
+        min-height: 56px;
+    }
+
+    .action-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 18px;
+    }
+    .action-tile {
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface-2);
+        border-radius: var(--shalom-radius-md);
+        padding: 14px 10px;
+        text-align: center;
+        cursor: pointer;
+        font-family: inherit;
+        color: var(--shalom-ink);
+    }
+    .action-tile .lbl {
+        font-size: 0.8rem;
+        font-weight: 700;
+        display: block;
+    }
+    .cta-order {
+        width: 100%;
+        margin-top: 16px;
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        border: none;
+        border-radius: var(--shalom-radius-lg);
+        padding: 18px;
+        font-size: 1.02rem;
+        font-weight: 800;
+        cursor: pointer;
+        font-family: inherit;
+    }
+
+    // modal chico de editar cliente
+    .edit-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(20, 10, 15, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 60;
+    }
+    .edit-card {
+        width: 100%;
+        max-width: 320px;
+        background: var(--shalom-surface);
+        border-radius: var(--shalom-radius-lg);
+        padding: 20px;
+        box-shadow: var(--shalom-shadow);
+    }
+    .edit-card h3 {
+        font-size: 1.05rem;
+        font-weight: 800;
+        margin: 0;
+    }
+    .edit-field {
+        margin-top: 14px;
+    }
+    .edit-field label {
+        display: block;
+        font-size: 0.74rem;
+        font-weight: 800;
+        color: var(--shalom-ink-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 5px;
+    }
+    .edit-field input {
+        width: 100%;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-bg);
+        color: var(--shalom-ink);
+        border-radius: var(--shalom-radius-sm);
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 0.9rem;
+    }
+    .edit-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 18px;
+    }
+
+    // botones base (usados en el modal de editar cliente)
+    .btn {
+        border: none;
+        border-radius: var(--shalom-radius-md);
+        font-weight: 800;
+        font-size: 0.9rem;
+        padding: 12px 14px;
+        cursor: pointer;
+        font-family: inherit;
+        flex: 1;
+    }
+    .btn-primary {
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+    }
+    .btn-secondary {
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink);
+    }
+    .btn-ghost {
+        background: transparent;
+        color: var(--shalom-ink-muted);
+        border: 1px solid var(--shalom-line);
     }
 }

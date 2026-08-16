@@ -343,7 +343,14 @@ class FSMOrder(models.Model):
             "fieldservice.fsm_stage_completed", raise_if_not_found=False
         )
         if etapa_completada:
-            self.write({"stage_id": etapa_completada.id})
+            # fieldservice bloquea por defecto escribir stage_id directo a
+            # la etapa Completado (pensado para que solo se llegue ahí por
+            # un flujo controlado, no arrastrando una tarjeta en el
+            # Kanban) -- bypass_order_completed_stage es la salida oficial
+            # para escrituras programáticas legítimas como esta.
+            self.with_context(bypass_order_completed_stage=True).write(
+                {"stage_id": etapa_completada.id}
+            )
 
         self.message_post(
             body=_(

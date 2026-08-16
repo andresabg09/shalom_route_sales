@@ -3,31 +3,22 @@
 import {Component, onWillStart, onWillUnmount, useEffect, useRef, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {cargarMapboxGl, getMapboxToken, parseWktLineString} from "./mapbox_utils";
+import {ESTADO_ETIQUETA, estadoDesdeStageName} from "./stage_utils";
+import {VisitSheet} from "./visit_sheet";
 
 /**
  * Detalle de una ruta (una fsm.route.schedule): tabs Lista/Mapa.
  *
  * Lista: las fsm.order vinculadas a esta ocurrencia semanal
  * (x_route_schedule_id), en el mismo orden en que se generaron
- * (sequence, que ya refleja x_orden_ruta al momento de crearlas).
+ * (sequence, que ya refleja x_orden_ruta al momento de crearlas). Cada
+ * fila abre la hoja de visita (Fase 2, VisitSheet) al tocarla.
  *
  * Mapa: Mapbox GL real -- un marcador coloreado por estado por cada
  * cliente con coordenadas, y el trazado real de calles guardado en
  * fsm.route.x_ruta_trazado (si ya se calculó desde el formulario de
  * Ruta). Mismo patrón que static/src/js/mini_mapa_widget.js.
- *
- * El detalle de cada visita (hoja con estado, observaciones, "Tomar
- * pedido") es Fase 2 -- acá la lista es de solo lectura, salvo el
- * ícono rápido de "Ir con Maps" que ya reusa un flujo existente
- * (misma URL que fsm.order.action_abrir_maps).
  */
-
-const ETIQUETA_ESTADO_VISITA = {
-    pendiente: "Pendiente",
-    completado: "Completada",
-    no_quiso: "No quiso",
-    cancelado: "Cancelado",
-};
 
 const COLOR_MARCADOR = {
     pendiente: "#c1791d",
@@ -36,21 +27,9 @@ const COLOR_MARCADOR = {
     cancelado: "#5c6470",
 };
 
-function estadoDesdeStageName(stageName) {
-    if (stageName === "Completado") {
-        return "completado";
-    }
-    if (stageName === "Cancelado") {
-        return "cancelado";
-    }
-    if (stageName === "No quiso") {
-        return "no_quiso";
-    }
-    return "pendiente";
-}
-
 export class RutaDetalle extends Component {
     static template = "shalom_location_map.RutaDetalle";
+    static components = {VisitSheet};
     static props = {
         schedule: Object,
         onVolver: Function,
@@ -66,6 +45,7 @@ export class RutaDetalle extends Component {
             visitas: [],
             trazadoWkt: false,
             tab: "lista",
+            visitaAbiertaId: null,
         });
 
         onWillStart(() => this.cargar());
@@ -141,11 +121,29 @@ export class RutaDetalle extends Component {
     }
 
     etiquetaEstado(estado) {
-        return ETIQUETA_ESTADO_VISITA[estado] || estado;
+        return ESTADO_ETIQUETA[estado] || estado;
     }
 
     cambiarTab(tab) {
         this.state.tab = tab;
+    }
+
+    abrirVisita(visita) {
+        this.state.visitaAbiertaId = visita.id;
+    }
+
+    cerrarVisita() {
+        this.state.visitaAbiertaId = null;
+    }
+
+    /**
+     * La hoja de visita avisa con esto cuando cambió algo (estado,
+     * GPS, datos del cliente) -- recargamos la lista/mapa por debajo
+     * sin cerrar la hoja, para que el vendedor siga viendo el dato
+     * actualizado sin perder su lugar.
+     */
+    recargarVisitas() {
+        this.cargar();
     }
 
     abrirMaps(visita) {

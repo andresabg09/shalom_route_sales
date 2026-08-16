@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.VisitSheet">
+        <div class="sheet-overlay open" t-on-click.self="cerrar">
+            <div class="sheet">
+                <div class="sheet-handle"/>
+
+                <div t-if="state.cargando" class="shalom-vacio">Cargando…</div>
+
+                <t t-elif="state.visita">
+                    <button class="name-btn" t-on-click="abrirEdicion" title="Editar datos del cliente">
+                        <span class="name" t-esc="state.visita.nombre"/>
+                        <span class="edit-hint">✎</span>
+                    </button>
+                    <div class="addr" t-esc="state.visita.direccion"/>
+                    <div class="addr" t-esc="'Orden de ruta: ' + (state.visita.orden || '-')"/>
+
+                    <button
+                        t-attf-class="status-pill st-{{state.visita.estado}} {{state.panelEstadoAbierto ? 'open' : ''}}"
+                        t-on-click="toggleEstado"
+                    >
+                        <span class="dot"/>
+                        <span class="lbl" t-esc="etiquetaEstado(state.visita.estado)"/>
+                        <span class="chev">▾</span>
+                    </button>
+                    <div class="status-options" t-if="state.panelEstadoAbierto">
+                        <button
+                            t-attf-class="status-chip {{state.visita.estado === 'pendiente' ? 'sel-pendiente' : ''}}"
+                            t-on-click="() => this.elegirEstado('pendiente')"
+                        >Pendiente</button>
+                        <button
+                            t-attf-class="status-chip {{state.visita.estado === 'completado' ? 'sel-completado' : ''}}"
+                            t-on-click="() => this.elegirEstado('completado')"
+                        >Completada</button>
+                        <button
+                            t-attf-class="status-chip {{state.visita.estado === 'no_quiso' ? 'sel-no_quiso' : ''}}"
+                            t-on-click="() => this.elegirEstado('no_quiso')"
+                        >No quiso</button>
+                        <button
+                            t-attf-class="status-chip {{state.visita.estado === 'cancelado' ? 'sel-cancelado' : ''}}"
+                            t-on-click="() => this.elegirEstado('cancelado')"
+                        >Cancelado</button>
+                    </div>
+
+                    <label class="obs-label" for="shalom-obs-input">Observaciones de esta visita</label>
+                    <textarea
+                        id="shalom-obs-input"
+                        class="obs-input"
+                        t-on-change="guardarObservaciones"
+                        placeholder="Ej: pedir que dejen la entrada libre, prefiere visitas por la mañana…"
+                    ><t t-esc="state.visita.observaciones"/></textarea>
+
+                    <div class="action-grid">
+                        <button class="action-tile" t-on-click="llamar">
+                            <span class="lbl">📞 Llamar</span>
+                        </button>
+                        <button class="action-tile" t-on-click="irConMaps">
+                            <span class="lbl">📍 Ir con Maps</span>
+                        </button>
+                        <button class="action-tile" t-on-click="capturarGps">
+                            <span class="lbl">🎯 Capturar GPS</span>
+                        </button>
+                        <button class="action-tile" t-on-click="verHistorial">
+                            <span class="lbl">🕘 Historial</span>
+                        </button>
+                    </div>
+                    <button class="cta-order" t-on-click="tomarPedido">🛒 Tomar pedido</button>
+                </t>
+            </div>
+        </div>
+
+        <div class="edit-overlay open" t-if="state.editando">
+            <div class="edit-card">
+                <h3>Editar cliente</h3>
+                <div class="edit-field">
+                    <label for="shalom-edit-name">Nombre comercial</label>
+                    <input id="shalom-edit-name" type="text" t-model="state.edicion.name"/>
+                </div>
+                <div class="edit-field">
+                    <label for="shalom-edit-phone">Teléfono</label>
+                    <input id="shalom-edit-phone" type="text" t-model="state.edicion.phone"/>
+                </div>
+                <div class="edit-field">
+                    <label for="shalom-edit-street">Dirección</label>
+                    <input id="shalom-edit-street" type="text" t-model="state.edicion.street"/>
+                </div>
+                <div class="edit-actions">
+                    <button class="btn btn-ghost" t-on-click="cerrarEdicion">Cancelar</button>
+                    <button class="btn btn-primary" t-on-click="guardarEdicion">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>
