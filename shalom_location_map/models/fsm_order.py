@@ -285,6 +285,75 @@ class FSMOrder(models.Model):
             "target": "current",
         }
 
+    def shalom_guardar_borrador_pedido(self, lineas):
+        """Llamado desde el carrito de la app al tocar "Revisar
+        cotización": crea o reutiliza la cotización vinculada a esta
+        visita (mismo criterio anti-duplicado que shalom_confirmar_pedido)
+        y reemplaza sus líneas por las del carrito recibido, PERO sin
+        confirmarla ni cerrar la visita -- se deja en borrador para que
+        el vendedor la termine de ajustar (precios especiales,
+        promociones, descuentos) directo en el formulario nativo de
+        Ventas, que es donde ya existe esa funcionalidad y no tiene
+        sentido duplicarla en el carrito de la app.
+
+        A diferencia de shalom_confirmar_pedido, acá el pedido queda
+        como cotización de verdad en el módulo de Ventas (no
+        desaparece si el vendedor no confirma) -- por decisión de
+        producto explícita: es el mecanismo para que el vendedor pueda
+        pasar el resto del trabajo de precios al módulo nativo antes
+        de confirmar.
+
+        lineas: mismo formato que shalom_confirmar_pedido (lista de
+        dicts {"product_id": int, "qty": float}).
+
+        Devuelve la acción de ventana para abrir esa cotización.
+        """
+        self.ensure_one()
+        if not lineas:
+            raise UserError(_("El pedido no tiene productos."))
+        if not self.location_id or not self.location_id.partner_id:
+            raise UserError(
+                _("Esta visita no tiene un cliente asociado (Ubicación "
+                  "sin contacto). No se puede crear una cotización.")
+            )
+
+        self.env.cr.execute(
+            "SELECT sale_id FROM fsm_order WHERE id = %s", (self.id,)
+        )
+        sale_id_en_bd = self.env.cr.fetchone()[0]
+        if sale_id_en_bd:
+            sale_order = self.env["sale.order"].browse(sale_id_en_bd)
+        else:
+            sale_order = self.env["sale.order"].create(
+                {"partner_id": self.location_id.partner_id.id}
+            )
+            self.write({"sale_id": sale_order.id})
+            self.message_post(
+                body=_(
+                    "Cotización %(numero)s creada como borrador desde el "
+                    "carrito de la app del vendedor.",
+                    numero=sale_order.name,
+                )
+            )
+
+        sale_order.order_line.unlink()
+        for linea in lineas:
+            self.env["sale.order.line"].create(
+                {
+                    "order_id": sale_order.id,
+                    "product_id": linea["product_id"],
+                    "product_uom_qty": linea.get("qty") or 1,
+                }
+            )
+
+        return {
+            "type": "ir.actions.act_window",
+            "res_model": "sale.order",
+            "res_id": sale_order.id,
+            "view_mode": "form",
+            "target": "current",
+        }
+
     def shalom_confirmar_pedido(self, lineas):
         """Llamado desde la app del vendedor al tocar "Confirmar
         pedido": crea o reutiliza la cotización vinculada a esta visita

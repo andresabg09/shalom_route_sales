@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.OrderScreen">
+        <div class="order-overlay">
+            <div class="order-topbar">
+                <button class="icon-btn" t-on-click="atras" title="Atrás">←</button>
+                <div class="order-topbar-title">
+                    <div class="route-name" t-esc="state.pantalla === 'carrito' ? 'Carrito' : 'Tomar pedido'"/>
+                    <div class="route-sub" t-esc="props.clienteNombre"/>
+                </div>
+                <span class="icon-btn-spacer"/>
+            </div>
+
+            <div t-if="state.cargando" class="shalom-vacio">Cargando catálogo…</div>
+
+            <t t-elif="state.pantalla === 'catalogo'">
+                <div class="search-row">
+                    <div class="search-box-live">
+                        <span>🔎</span>
+                        <input
+                            type="text"
+                            placeholder="Buscar producto, código o barcode…"
+                            t-model="state.busqueda"
+                        />
+                    </div>
+                    <button class="icon-btn" t-on-click="iniciarEscaneo" title="Escanear código de barras">📷</button>
+                </div>
+
+                <div class="categ-bar">
+                    <div class="categ-selector-wrap">
+                        <button class="categ-selector-btn" t-on-click="toggleCategMenu">
+                            <span t-esc="etiquetaCategoriaActual"/>
+                            <span class="chev">▾</span>
+                        </button>
+                        <div class="categ-menu" t-if="state.categMenuAbierto">
+                            <input
+                                type="text"
+                                class="categ-menu-search"
+                                placeholder="Buscar categoría…"
+                                t-model="state.busquedaCategoria"
+                            />
+                            <div class="categ-menu-list">
+                                <button
+                                    t-att-class="state.categoriaSeleccionada === 'todas' ? 'categ-menu-item active' : 'categ-menu-item'"
+                                    t-on-click="() => this.elegirCategoria('todas')"
+                                >Todas las categorías</button>
+                                <button
+                                    t-foreach="categoriasFiltradas"
+                                    t-as="categoria"
+                                    t-key="categoria.id"
+                                    t-att-class="state.categoriaSeleccionada === categoria.id ? 'categ-menu-item active' : 'categ-menu-item'"
+                                    t-on-click="() => this.elegirCategoria(categoria.id)"
+                                ><t t-esc="categoria.nombre"/></button>
+                                <div t-if="!categoriasFiltradas.length" class="shalom-vacio">Sin resultados.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        class="stock-toggle-btn"
+                        t-att-class="state.soloConStock ? 'active' : ''"
+                        t-on-click="toggleSoloConStock"
+                    >Con stock</button>
+                </div>
+
+                <div class="view catalog-list">
+                    <div t-if="!productosFiltrados.length" class="shalom-vacio">
+                        No se encontraron productos.
+                    </div>
+                    <div
+                        t-foreach="productosFiltrados"
+                        t-as="producto"
+                        t-key="producto.id"
+                        class="product-card"
+                    >
+                        <div class="product-thumb-wrap">
+                            <img class="product-thumb" t-att-src="imagenUrl(producto)" alt="" t-on-error="onImagenError"/>
+                        </div>
+                        <div class="product-info">
+                            <div class="name" t-esc="producto.name"/>
+                            <div class="addr">
+                                <t t-esc="'$' + producto.list_price.toFixed(2)"/>
+                                <t t-if="etiquetaStock(producto)">
+                                    <span class="stock-badge" t-att-class="producto.qty_available &lt;= 0 ? 'stock-out' : 'stock-low'">
+                                        <t t-esc="etiquetaStock(producto)"/>
+                                    </span>
+                                </t>
+                            </div>
+                            <button
+                                t-if="!cantidadEnCarrito(producto.id)"
+                                class="qty-add-btn"
+                                t-on-click="() => this.agregarProducto(producto)"
+                            >+ Agregar</button>
+                            <div t-else="" class="qty-stepper">
+                                <button t-on-click="() => this.cambiarCantidad(producto.id, -1)">−</button>
+                                <span t-esc="cantidadEnCarrito(producto.id)"/>
+                                <button t-on-click="() => this.cambiarCantidad(producto.id, 1)">+</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cart-footer" t-if="cantidadItems" t-on-click="irACarrito">
+                    <span class="cart-footer-count" t-esc="cantidadItems + ' producto(s)'"/>
+                    <span class="cart-footer-total" t-esc="'$' + total.toFixed(2)"/>
+                    <span class="cart-footer-arrow">Ver carrito ▸</span>
+                </div>
+            </t>
+
+            <t t-elif="state.pantalla === 'carrito'">
+                <div class="view cart-list">
+                    <div t-if="!itemsCarrito.length" class="shalom-vacio">El carrito está vacío.</div>
+                    <div t-foreach="itemsCarrito" t-as="item" t-key="item.producto.id" class="cart-line">
+                        <div class="product-thumb-wrap">
+                            <img class="product-thumb" t-att-src="imagenUrl(item.producto)" alt="" t-on-error="onImagenError"/>
+                        </div>
+                        <div class="product-info">
+                            <div class="name" t-esc="item.producto.name"/>
+                            <div class="addr" t-esc="'$' + item.producto.list_price.toFixed(2) + ' c/u'"/>
+                            <div class="qty-stepper">
+                                <button t-on-click="() => this.cambiarCantidad(item.producto.id, -1)">−</button>
+                                <span t-esc="item.cantidad"/>
+                                <button t-on-click="() => this.cambiarCantidad(item.producto.id, 1)">+</button>
+                            </div>
+                            <div class="cart-line-bottom-row">
+                                <div class="cart-line-subtotal" t-esc="'$' + (item.cantidad * item.producto.list_price).toFixed(2)"/>
+                                <button class="icon-btn" t-on-click="() => this.quitarDelCarrito(item.producto.id)" title="Quitar">🗑</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="cart-total-row">
+                    <span>Total</span>
+                    <span t-esc="'$' + total.toFixed(2)"/>
+                </div>
+                <button
+                    class="cart-review-btn"
+                    t-on-click="revisarCotizacion"
+                    t-att-disabled="state.guardandoBorrador || state.confirmando || !itemsCarrito.length"
+                >
+                    <t t-if="state.guardandoBorrador">Guardando…</t>
+                    <t t-else="">📋 Revisar cotización (precios/promos en Ventas)</t>
+                </button>
+                <button
+                    class="cta-order"
+                    t-on-click="confirmarPedido"
+                    t-att-disabled="state.confirmando || state.guardandoBorrador || !itemsCarrito.length"
+                >
+                    <t t-if="state.confirmando">Confirmando…</t>
+                    <t t-else="">Confirmar pedido</t>
+                </button>
+            </t>
+
+            <div class="scan-overlay" t-if="state.escaneando">
+                <video t-ref="video" class="scan-video" autoplay="autoplay" playsinline="playsinline" muted="muted"/>
+                <div class="scan-frame"/>
+                <div class="scan-hint">Apuntá al código de barras del producto</div>
+                <button class="btn btn-ghost scan-cancel" t-on-click="detenerEscaneo">Cancelar</button>
+            </div>
+
+            <div class="confirm-overlay" t-if="state.confirmandoSalida">
+                <div class="confirm-card">
+                    <h3>¿Salir sin guardar?</h3>
+                    <p>
+                        Tenés <t t-esc="cantidadItems"/> producto(s) en el carrito que
+                        todavía no se guardaron como cotización. Si salís ahora, se
+                        pierden.
+                    </p>
+                    <div class="edit-actions">
+                        <button class="btn btn-ghost" t-on-click="cancelarSalir">Seguir armando</button>
+                        <button class="btn btn-primary" t-on-click="confirmarSalirSinGuardar">Salir y perder el carrito</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

@@ -115,6 +115,24 @@ Widgets Owl inyectados en `web.assets_backend`:
   Directions + Mapbox GL JS la ruta hasta el cliente.
 - `resumen_compras_widget.js`/`.xml` — gráfico de línea de tiempo de
   compras/productos olvidados sobre `get_datos_grafico_compras()`.
+- `ruta_shalom/` — la app del vendedor ("Ruta Shalom"): shell + nav
+  inferior (`app.js`), pestaña Rutas (`rutas_hub.js`), detalle de ruta
+  Lista/Mapa (`ruta_detalle.js`), hoja de visita (`visit_sheet.js`) y
+  catálogo + carrito + escaneo de código de barras (`order_screen.js`,
+  Fase 3). Este último pide el catálogo directo con `orm.searchRead`
+  sobre `product.product` (sin método de backend nuevo, incluye foto
+  vía `image_128` y categoría) y usa el `BarcodeDetector` nativo del
+  navegador para escanear -- sin librería externa. Del carrito hay dos
+  salidas: "Confirmar pedido" llama a
+  `fsm.order.shalom_confirmar_pedido()` (venta real, reserva stock,
+  cierra la visita); "Revisar cotización" llama a
+  `shalom_guardar_borrador_pedido()` (deja la cotización en borrador y
+  abre Ventas para que el vendedor ajuste precios/promociones ahí).
+  `nav_historial.js` (pila de niveles + `history.pushState`/`popstate`)
+  hace que el botón Atrás de Android cierre un nivel a la vez en vez de
+  saltar a la raíz de la app; `action_utils.js` normaliza las acciones
+  `ir.actions.act_window` que devuelven los métodos de Python para
+  `action.doAction()`.
 
 ## Convención
 
@@ -125,12 +143,15 @@ por cambios de este equipo. Solo se versiona aquí el código propio
 
 ## Estado del proyecto
 
-Fases 0, 1 y 2 completas, probadas de punta a punta en producción y
-commiteadas. Faltan Fases 3 (catálogo + carrito + escaneo de código de
-barras + `shalom_confirmar_pedido`) y 4 (pestañas Cotizaciones y
-Clientes). Detalle completo de qué incluye cada fase, decisiones de
-producto ya confirmadas, y datos técnicos del servidor ya verificados:
-ver `docs/plan_fase_1_a_4.md`.
+Fases 0, 1, 2 y 3 completas, desplegadas y probadas en producción.
+Fase 3 tuvo una ronda de ajustes de UX después de la primera prueba
+real del usuario (fotos/categorías en el catálogo, botón Atrás de
+Android, arrastrar para cerrar la hoja de visita, fix del escáner,
+"Revisar cotización" antes de confirmar) -- ver el detalle en
+`docs/plan_fase_1_a_4.md`, sección "Ronda de feedback post-Fase 3".
+Falta Fase 4 (pestañas Cotizaciones y Clientes). Detalle completo de
+qué incluye cada fase, decisiones de producto ya confirmadas, y datos
+técnicos del servidor ya verificados: ver `docs/plan_fase_1_a_4.md`.
 
 ## Cómo desplegar cambios a producción
 

@@ -1,8 +1,14 @@
 /** @odoo-module **/
 
-import {Component, onWillStart, useState} from "@odoo/owl";
+import {Component, onWillStart, onWillUnmount, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {ESTADO_ETIQUETA, estadoDesdeStageName, obtenerIdsEtapas} from "./stage_utils";
+import {normalizarAccionActWindow} from "./action_utils";
+import {OrderScreen} from "./order_screen";
+
+// Umbral de arrastre (px) para que soltar la barrita de arriba de la
+// hoja cuente como "cerrar" en vez de volver a su posición.
+const UMBRAL_ARRASTRE_CIERRE = 90;
 
 /**
  * Hoja de visita (Fase 2): se abre al tocar una parada en la Lista del
@@ -11,8 +17,21 @@ import {ESTADO_ETIQUETA, estadoDesdeStageName, obtenerIdsEtapas} from "./stage_u
  * Ir con Maps, capturar GPS, ver historial de cotizaciones) y editar
  * los datos del cliente.
  *
- * "Tomar pedido" (catálogo + carrito) es Fase 3: el botón ya está acá
- * porque es donde va a vivir, pero todavía solo muestra un aviso.
+ * "Tomar pedido" abre OrderScreen (catálogo + carrito, Fase 3) de
+ * pantalla completa por encima de esta hoja. Cuando el pedido se
+ * confirma, la visita queda cerrada del lado del servidor
+ * (shalom_confirmar_pedido mueve la etapa a Completada) -- por eso
+ * pedidoConfirmado() recarga esta tarjeta además de avisar al padre.
+ * Si ya hay una cotización vinculada (borrador guardado desde el
+ * carrito o confirmada), el botón cambia a "Examinar cotización" y
+ * abre directo esa sale.order en vez del catálogo (ver sale_id).
+ *
+ * El cierre (backdrop, arrastrar la barrita) es 100% estado interno,
+ * sin tocar el historial del navegador -- se probó con
+ * history.pushState/popstate (nav_historial) para que el botón Atrás
+ * de Android cerrara un nivel a la vez, pero eso chocaba con el
+ * router propio de Odoo 18 (ver el comentario grande en
+ * order_screen.js) y se sacó por completo.
  *
  * Carga sus propios datos a partir de orderId (no depende de que el
  * padre le pase el objeto completo) para poder abrirse también, más
@@ -21,6 +40,7 @@ import {ESTADO_ETIQUETA, estadoDesdeStageName, obtenerIdsEtapas} from "./stage_u
  */
 export class VisitSheet extends Component {
     static template = "shalom_location_map.VisitSheet";
+    static components = {OrderScreen};
     static props = {
         orderId: Number,
         onCerrar: Function,
@@ -37,8 +57,16 @@ export class VisitSheet extends Component {
             panelEstadoAbierto: false,
             editando: false,
             edicion: {name: "", phone: "", street: ""},
+            tomandoPedido: false,
+            arrastreY: 0,
+            arrastrando: false,
         });
+        this._onMoverArrastre = (ev) => this.moverArrastre(ev);
+        this._onSoltarArrastre = (ev) => this.soltarArrastre(ev);
+        this._cerrando = false;
+
         onWillStart(() => this.cargar());
+        onWillUnmount(() => this.detenerArrastre());
     }
 
     async cargar() {
@@ -54,6 +82,7 @@ export class VisitSheet extends Component {
                     "x_observaciones_visita",
                     "x_cliente_lat",
                     "x_cliente_lng",
+                    "sale_id",
                 ]
             );
             let locacion = null;
@@ -77,6 +106,7 @@ export class VisitSheet extends Component {
                 observaciones: orden.x_observaciones_visita || "",
                 lat: orden.x_cliente_lat,
                 lng: orden.x_cliente_lng,
+                saleId: orden.sale_id ? orden.sale_id[0] : false,
             };
         } catch (error) {
             this.notification.add("No se pudo cargar la visita.", {type: "danger"});
@@ -219,20 +249,7 @@ export class VisitSheet extends Component {
                 "action_ver_historial_cotizaciones",
                 [[this.props.orderId]]
             );
-            // action_ver_historial_cotizaciones() devuelve view_mode como
-            // string ("list,form") -- eso alcanza cuando la acción la
-            // dispara un botón nativo (Odoo la completa solo), pero
-            // action.doAction() llamado directo desde JS necesita el
-            // campo "views" ya armado como lista de [id, tipo], si no
-            // revienta con "Cannot read properties of undefined
-            // (reading 'map')".
-            const accion = {
-                ...resultado,
-                views: (resultado.view_mode || "list,form")
-                    .split(",")
-                    .map((modo) => [false, modo.trim()]),
-            };
-            this.action.doAction(accion);
+            this.action.doAction(normalizarAccionActWindow(resultado));
         } catch (error) {
             console.error("shalom: error al abrir historial de cotizaciones", error);
             this.notification.add("No se pudo abrir el historial.", {type: "danger"});
@@ -240,9 +257,55 @@ export class VisitSheet extends Component {
     }
 
     tomarPedido() {
-        this.notification.add("El carrito de pedidos está en construcción (Fase 3).", {
-            type: "info",
-        });
+        this.state.tomandoPedido = true;
+    }
+
+    cerrarPedido() {
+        this.state.tomandoPedido = false;
+    }
+
+    /**
+     * CTA cuando la visita YA tiene una cotización vinculada (sale_id):
+     * abre esa sale.order directo en vez del catálogo -- reusa
+     * action_crear_cotizacion, que ya sabe abrir la existente en vez
+     * de crear una nueva si sale_id ya está seteado.
+     */
+    async examinarCotizacion() {
+        try {
+            const resultado = await this.orm.call("fsm.order", "action_crear_cotizacion", [
+                [this.props.orderId],
+            ]);
+            this.action.doAction(normalizarAccionActWindow(resultado));
+        } catch (error) {
+            console.error("shalom: error al abrir la cotización", error);
+            this.notification.add("No se pudo abrir la cotización.", {type: "danger"});
+        }
+    }
+
+    /**
+     * OrderScreen avisa con esto cuando guardó el carrito como
+     * cotización en borrador (botón "Revisar cotización") -- no cierra
+     * nada acá (OrderScreen ya se cerró solo antes de navegar a la
+     * cotización): solo actualiza el botón de esta tarjeta de "Tomar
+     * pedido" a "Examinar cotización" para la próxima vez que se abra.
+     */
+    async pedidoRevisado() {
+        await this.cargar();
+        if (this.props.onCambio) {
+            this.props.onCambio();
+        }
+    }
+
+    async pedidoConfirmado() {
+        // shalom_confirmar_pedido() ya movió la visita a Completada del
+        // lado del servidor -- recargamos para reflejar el estado
+        // nuevo en esta misma tarjeta, y avisamos al padre para que
+        // refresque la lista/mapa de la ruta por debajo. OrderScreen ya
+        // se cerró solo antes de llamar a esto.
+        await this.cargar();
+        if (this.props.onCambio) {
+            this.props.onCambio();
+        }
     }
 
     abrirEdicion() {
@@ -283,7 +346,61 @@ export class VisitSheet extends Component {
         }
     }
 
+    // -- Arrastrar la barrita de arriba de la hoja para cerrarla --
+    // (reportado como "no se puede mover" -- la barrita era puramente
+    // decorativa, sin ningún listener detrás).
+
+    iniciarArrastre(ev) {
+        this._arrastreInicioY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+        this.state.arrastrando = true;
+        window.addEventListener("touchmove", this._onMoverArrastre, {passive: true});
+        window.addEventListener("touchend", this._onSoltarArrastre);
+    }
+
+    moverArrastre(ev) {
+        if (!this.state.arrastrando) {
+            return;
+        }
+        const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
+        const delta = y - this._arrastreInicioY;
+        this.state.arrastreY = Math.max(0, delta);
+    }
+
+    soltarArrastre(ev) {
+        if (!this.state.arrastrando) {
+            return;
+        }
+        this.state.arrastrando = false;
+        const cerrar = this.state.arrastreY > UMBRAL_ARRASTRE_CIERRE;
+        this.state.arrastreY = 0;
+        this.detenerArrastre();
+        if (cerrar) {
+            // Evita que el navegador dispare, además del touchend, un
+            // click "fantasma" sintético sobre lo que haya debajo del
+            // dedo (el backdrop, que también tiene t-on-click.self
+            // ="cerrar") -- sin esto, un solo gesto de arrastre podía
+            // terminar llamando a cerrar() dos veces y consumiendo dos
+            // niveles de historial de un solo toque (bug reportado: la
+            // hoja se cerraba Y además saltaba hasta el listado de
+            // rutas). El guard de idempotencia en cerrar() es el
+            // respaldo por si el navegador ignora este preventDefault.
+            if (ev && ev.cancelable) {
+                ev.preventDefault();
+            }
+            this.cerrar();
+        }
+    }
+
+    detenerArrastre() {
+        window.removeEventListener("touchmove", this._onMoverArrastre);
+        window.removeEventListener("touchend", this._onSoltarArrastre);
+    }
+
     cerrar() {
+        if (this._cerrando) {
+            return;
+        }
+        this._cerrando = true;
         this.props.onCerrar();
     }
 }

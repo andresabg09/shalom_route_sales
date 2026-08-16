@@ -2,8 +2,12 @@
 <templates xml:space="preserve">
     <t t-name="shalom_location_map.VisitSheet">
         <div class="sheet-overlay open" t-on-click.self="cerrar">
-            <div class="sheet">
-                <div class="sheet-handle"/>
+            <div
+                class="sheet"
+                t-att-class="state.arrastrando ? 'sin-transicion' : ''"
+                t-attf-style="transform: translateY({{state.arrastreY}}px);"
+            >
+                <div class="sheet-handle" t-on-touchstart="iniciarArrastre"/>
 
                 <div t-if="state.cargando" class="shalom-vacio">Cargando…</div>
 
@@ -64,7 +68,8 @@
                             <span class="lbl">🕘 Historial</span>
                         </button>
                     </div>
-                    <button class="cta-order" t-on-click="tomarPedido">🛒 Tomar pedido</button>
+                    <button t-if="!state.visita.saleId" class="cta-order" t-on-click="tomarPedido">🛒 Tomar pedido</button>
+                    <button t-else="" class="cta-order" t-on-click="examinarCotizacion">📋 Examinar cotización</button>
                 </t>
             </div>
         </div>
@@ -90,5 +95,14 @@
                 </div>
             </div>
         </div>
+
+        <OrderScreen
+            t-if="state.tomandoPedido"
+            orderId="props.orderId"
+            clienteNombre="state.visita.nombre"
+            onCerrar.bind="cerrarPedido"
+            onConfirmado.bind="pedidoConfirmado"
+            onRevisado.bind="pedidoRevisado"
+        />
     </t>
 </templates>
