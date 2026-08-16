@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.RutaDetalle">
+        <div class="shalom-screen">
+            <div class="topbar">
+                <div class="topbar-row">
+                    <button class="icon-btn" t-on-click="volver" title="Volver a Rutas">←</button>
+                    <div>
+                        <div class="route-name" t-esc="props.schedule.route_name"/>
+                        <div class="route-sub">
+                            <span class="progress-pill" t-if="!state.cargando" t-esc="resumen"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="segmented">
+                <button
+                    t-att-class="state.tab === 'lista' ? 'active' : ''"
+                    t-on-click="() => this.cambiarTab('lista')"
+                >☰ Lista de clientes</button>
+                <button
+                    t-att-class="state.tab === 'mapa' ? 'active' : ''"
+                    t-on-click="() => this.cambiarTab('mapa')"
+                >🧭 Mapa</button>
+            </div>
+
+            <div t-if="state.cargando" class="shalom-vacio">Cargando visitas…</div>
+
+            <t t-else="">
+                <div class="view" t-if="state.tab === 'lista'">
+                    <div t-if="state.visitas.length === 0" class="shalom-vacio">
+                        Todavía no se generaron las visitas de esta semana.
+                        Pedile a oficina que las genere desde "Programación de
+                        Rutas".
+                    </div>
+                    <div
+                        t-foreach="state.visitas"
+                        t-as="visita"
+                        t-key="visita.id"
+                        t-attf-class="stop-card st-{{visita.estado}}"
+                    >
+                        <div class="stop-num" t-esc="visita.orden"/>
+                        <div class="stop-info">
+                            <div class="name" t-esc="visita.nombre"/>
+                            <div class="addr" t-esc="visita.direccion"/>
+                        </div>
+                        <div class="stop-badge" t-esc="etiquetaEstado(visita.estado)"/>
+                        <span
+                            class="quick-icon-btn"
+                            title="Ir con Maps"
+                            t-on-click="() => this.abrirMaps(visita)"
+                        >🧭</span>
+                    </div>
+                </div>
+
+                <div class="map-wrap" t-if="state.tab === 'mapa'">
+                    <div class="shalom-mapa" t-ref="mapa"/>
+                </div>
+            </t>
+        </div>
+    </t>
+</templates>

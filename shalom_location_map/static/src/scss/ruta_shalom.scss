@@ -1,0 +1,448 @@
+// Estilos de la app del vendedor "Ruta Shalom". Todo queda anidado
+// bajo .o_shalom_ruta_app para no filtrar clases genéricas (.view,
+// .topbar, etc.) al resto del backend de Odoo.
+//
+// Paleta y lenguaje visual tomados del artifact de referencia ("Ruta
+// Shalom", ver docs/plan_fase_1_a_4.md) -- variables con prefijo
+// --shalom- para no chocar con las custom properties propias de Odoo.
+// Se deja el bloque de modo oscuro (prefers-color-scheme) aunque el
+// backend de Odoo Community no tiene un toggle propio, para que se
+// vea bien en un Android con "tema oscuro del sistema" activado.
+
+.o_shalom_ruta_app {
+    --shalom-bg: #faf6f4;
+    --shalom-surface: #ffffff;
+    --shalom-surface-2: #f2e8e4;
+    --shalom-ink: #271b22;
+    --shalom-ink-muted: #7a6169;
+    --shalom-line: #e9dad4;
+    --shalom-accent: #b1245a;
+    --shalom-accent-ink: #ffffff;
+    --shalom-accent-soft: #f7dde7;
+    --shalom-pendiente: #c1791d;
+    --shalom-pendiente-soft: #faeacc;
+    --shalom-completado: #2c7a56;
+    --shalom-completado-soft: #d9efe2;
+    --shalom-no_quiso: #8c5060;
+    --shalom-no_quiso-soft: #efe1e6;
+    --shalom-cancelado: #5c6470;
+    --shalom-cancelado-soft: #e3e5e9;
+    --shalom-info: #2461c7;
+    --shalom-info-soft: #dfe9fa;
+    --shalom-shadow: 0 10px 30px -12px rgba(60, 20, 35, 0.28);
+    --shalom-radius-lg: 22px;
+    --shalom-radius-md: 14px;
+    --shalom-radius-sm: 10px;
+
+    @media (prefers-color-scheme: dark) {
+        --shalom-bg: #180f14;
+        --shalom-surface: #241820;
+        --shalom-surface-2: #2e1e28;
+        --shalom-ink: #f5e9ee;
+        --shalom-ink-muted: #b79aa5;
+        --shalom-line: #3d2a34;
+        --shalom-accent: #ec5c92;
+        --shalom-accent-ink: #1a0a10;
+        --shalom-accent-soft: #3a1d2a;
+        --shalom-pendiente: #e3a04a;
+        --shalom-pendiente-soft: #3a2c17;
+        --shalom-completado: #5bc491;
+        --shalom-completado-soft: #153826;
+        --shalom-no_quiso: #c98ca0;
+        --shalom-no_quiso-soft: #33212a;
+        --shalom-cancelado: #9aa2ae;
+        --shalom-cancelado-soft: #2b2e34;
+        --shalom-info: #7aaaf5;
+        --shalom-info-soft: #1c2c47;
+        --shalom-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--shalom-bg);
+    color: var(--shalom-ink);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-variant-numeric: tabular-nums;
+
+    .shalom-body {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .shalom-screen {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .shalom-vacio {
+        color: var(--shalom-ink-muted);
+        font-size: 0.86rem;
+        padding: 20px 18px;
+        line-height: 1.5;
+    }
+
+    .topbar {
+        padding: 14px 18px 10px;
+        flex: 0 0 auto;
+    }
+    .topbar-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .route-name {
+        font-size: 1.15rem;
+        font-weight: 800;
+    }
+    .route-sub {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 3px;
+        color: var(--shalom-ink-muted);
+        font-size: 0.82rem;
+        min-height: 1.2em;
+    }
+    .progress-pill {
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+        font-weight: 800;
+        font-size: 0.76rem;
+        padding: 3px 10px;
+        border-radius: 999px;
+    }
+
+    .segmented {
+        display: flex;
+        background: var(--shalom-surface-2);
+        border-radius: 999px;
+        padding: 3px;
+        margin: 4px 18px 0;
+        flex: 0 0 auto;
+    }
+    .segmented button {
+        flex: 1;
+        border: none;
+        background: transparent;
+        color: var(--shalom-ink-muted);
+        font-weight: 700;
+        font-size: 0.86rem;
+        padding: 9px 0;
+        border-radius: 999px;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .segmented button.active {
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+    }
+
+    .view {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 14px 14px 24px;
+    }
+
+    .search-row {
+        padding: 10px 18px;
+        flex: 0 0 auto;
+        display: flex;
+        gap: 8px;
+    }
+    .search-box-live {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--shalom-surface-2);
+        border-radius: 999px;
+        padding: 10px 14px;
+        color: var(--shalom-ink-muted);
+    }
+    .search-box-live input {
+        flex: 1;
+        border: none;
+        background: transparent;
+        outline: none;
+        color: var(--shalom-ink);
+        font-family: inherit;
+        font-size: 0.88rem;
+    }
+    .search-box-live input::placeholder {
+        color: var(--shalom-ink-muted);
+    }
+
+    .groupby-row {
+        padding: 0 18px 10px;
+        flex: 0 0 auto;
+        position: relative;
+    }
+    .groupby-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        border-radius: 999px;
+        padding: 7px 12px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .groupby-btn .chev {
+        color: var(--shalom-ink-muted);
+    }
+    .groupby-menu {
+        position: absolute;
+        left: 18px;
+        top: calc(100% - 2px);
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        box-shadow: var(--shalom-shadow);
+        padding: 6px;
+        z-index: 6;
+        display: flex;
+        flex-direction: column;
+        min-width: 200px;
+    }
+    .groupby-menu button {
+        border: none;
+        background: transparent;
+        text-align: left;
+        padding: 9px 10px;
+        border-radius: 8px;
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: var(--shalom-ink);
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .groupby-menu button.active {
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+        font-weight: 800;
+    }
+
+    // tarjetas de ruta en el hub semanal
+    .route-card {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-lg);
+        padding: 14px 16px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        text-align: left;
+        font-family: inherit;
+        color: var(--shalom-ink);
+        width: 100%;
+    }
+    .route-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .route-card-head .rname {
+        font-weight: 800;
+        font-size: 1.02rem;
+    }
+    .route-card-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        font-size: 0.8rem;
+        color: var(--shalom-ink-muted);
+    }
+    .route-card-stats b {
+        color: var(--shalom-ink);
+        font-weight: 800;
+    }
+
+    // tarjetas de visita en la lista del detalle de ruta
+    .stop-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-lg);
+        padding: 12px 14px;
+        margin-bottom: 10px;
+    }
+    .stop-card.st-cancelado {
+        opacity: 0.72;
+    }
+    .stop-num {
+        flex: 0 0 auto;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 0.88rem;
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
+    }
+    .stop-card.st-pendiente .stop-num {
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-pendiente);
+    }
+    .stop-card.st-completado .stop-num {
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+    }
+    .stop-card.st-no_quiso .stop-num {
+        background: var(--shalom-no_quiso-soft);
+        color: var(--shalom-no_quiso);
+    }
+    .stop-card.st-cancelado .stop-num {
+        background: var(--shalom-cancelado-soft);
+        color: var(--shalom-cancelado);
+    }
+    .stop-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .stop-info .name {
+        font-weight: 700;
+        font-size: 0.98rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .stop-info .addr {
+        color: var(--shalom-ink-muted);
+        font-size: 0.8rem;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .stop-badge {
+        flex: 0 0 auto;
+        font-size: 0.72rem;
+        font-weight: 800;
+        padding: 4px 9px;
+        border-radius: 999px;
+    }
+    .stop-card.st-pendiente .stop-badge {
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-pendiente);
+    }
+    .stop-card.st-completado .stop-badge {
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+    }
+    .stop-card.st-no_quiso .stop-badge {
+        background: var(--shalom-no_quiso-soft);
+        color: var(--shalom-no_quiso);
+    }
+    .stop-card.st-cancelado .stop-badge {
+        background: var(--shalom-cancelado-soft);
+        color: var(--shalom-cancelado);
+    }
+    .quick-icon-btn {
+        flex: 0 0 auto;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--shalom-ink);
+        cursor: pointer;
+    }
+
+    .icon-btn {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--shalom-ink);
+        flex: 0 0 auto;
+    }
+
+    // mapa real (detalle de ruta)
+    .map-wrap {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+        padding: 0 14px 14px;
+    }
+    .shalom-mapa {
+        width: 100%;
+        height: 100%;
+        min-height: 320px;
+        border-radius: var(--shalom-radius-lg);
+        overflow: hidden;
+    }
+    .shalom-marker {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 2px solid var(--shalom-surface);
+        color: var(--shalom-surface);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 0.78rem;
+        box-shadow: var(--shalom-shadow);
+        cursor: pointer;
+    }
+
+    // nav inferior
+    .bottomnav {
+        flex: 0 0 auto;
+        display: flex;
+        border-top: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+    }
+    .bottomnav button {
+        flex: 1;
+        border: none;
+        background: transparent;
+        padding: 10px 0 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        color: var(--shalom-ink-muted);
+        font-size: 0.68rem;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .bottomnav button.active {
+        color: var(--shalom-accent);
+    }
+    .bottomnav button span {
+        font-size: 1.1rem;
+    }
+}
