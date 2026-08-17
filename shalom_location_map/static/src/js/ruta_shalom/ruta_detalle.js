@@ -68,11 +68,18 @@ export class RutaDetalle extends Component {
     async cargar() {
         this.state.cargando = true;
         try {
+            // Ordenado por x_cliente_orden_ruta (posición actual del
+            // cliente en la ruta), no por "sequence" -- sequence queda
+            // fijo desde que se generó la visita, así que si el
+            // vendedor reordenaba un cliente después (ClienteForm), la
+            // lista seguía mostrando el orden viejo. x_cliente_orden_ruta
+            // es un related con store=True a fsm.location.x_orden_ruta,
+            // así que siempre refleja la posición actual.
             const ordenes = await this.orm.searchRead(
                 "fsm.order",
                 [["x_route_schedule_id", "=", this.props.schedule.id]],
                 ["location_id", "x_cliente_orden_ruta", "stage_name", "x_cliente_lat", "x_cliente_lng"],
-                {order: "sequence asc"}
+                {order: "x_cliente_orden_ruta asc"}
             );
 
             const locationIds = ordenes

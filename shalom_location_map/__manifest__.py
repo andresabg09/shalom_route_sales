@@ -5,11 +5,21 @@
                "botón de GPS y orden/jornada de visita en las órdenes de servicio, "
                "generación de visitas por ruta, y la app de venta de ruta callejera "
                "del vendedor (Ruta Shalom).",
-    "version": "18.0.10.0.0",
+    "version": "18.0.17.0.0",
     "category": "Field Service",
     "author": "AutomatePTY",
     "license": "AGPL-3",
-    "depends": ["fieldservice", "fieldservice_geoengine", "fieldservice_route", "base_geoengine"],
+    "depends": [
+        "fieldservice",
+        "fieldservice_geoengine",
+        "fieldservice_route",
+        "base_geoengine",
+        # loyalty.program/loyalty.rule -- para shalom_estado_promociones_carrito()
+        # (estado de promos "comprar X llevar Y" en el carrito de la app).
+        # Ya está instalado en producción (confirmado por SSH); se declara
+        # como dependencia real en vez de asumirlo en silencio.
+        "loyalty",
+    ],
     "data": [
         "security/ir.model.access.csv",
         "data/fsm_stage_colors.xml",
@@ -39,15 +49,21 @@
             "shalom_location_map/static/src/js/ruta_shalom/mapbox_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/stage_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/action_utils.js",
+            "shalom_location_map/static/src/js/ruta_shalom/cliente_form.js",
             "shalom_location_map/static/src/js/ruta_shalom/order_screen.js",
             "shalom_location_map/static/src/js/ruta_shalom/visit_sheet.js",
             "shalom_location_map/static/src/js/ruta_shalom/rutas_hub.js",
             "shalom_location_map/static/src/js/ruta_shalom/ruta_detalle.js",
+            "shalom_location_map/static/src/js/ruta_shalom/cotizaciones.js",
+            "shalom_location_map/static/src/js/ruta_shalom/clientes.js",
             "shalom_location_map/static/src/js/ruta_shalom/app.js",
+            "shalom_location_map/static/src/xml/ruta_shalom/cliente_form.xml",
             "shalom_location_map/static/src/xml/ruta_shalom/order_screen.xml",
             "shalom_location_map/static/src/xml/ruta_shalom/visit_sheet.xml",
             "shalom_location_map/static/src/xml/ruta_shalom/rutas_hub.xml",
             "shalom_location_map/static/src/xml/ruta_shalom/ruta_detalle.xml",
+            "shalom_location_map/static/src/xml/ruta_shalom/cotizaciones.xml",
+            "shalom_location_map/static/src/xml/ruta_shalom/clientes.xml",
             "shalom_location_map/static/src/xml/ruta_shalom/app.xml",
         ],
     },

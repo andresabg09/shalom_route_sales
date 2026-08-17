@@ -194,8 +194,14 @@ con `orm.searchRead` sobre `product.product` desde el frontend.
    nuevo) + carrito + escaneo de código de barras con `BarcodeDetector`
    nativo + `shalom_confirmar_pedido`. Se abre de pantalla completa
    desde el botón "Tomar pedido" de la hoja de visita.
-4. **Fase 4** ⬜ PENDIENTE: pestañas Cotizaciones y Clientes (con alta
-   rápida vía `shalom_crear_cliente_rapido`).
+4. **Fase 4** ✅ COMPLETA (código commiteado, **todavía sin probar en
+   producción**): pestaña Cotizaciones (`fsm.person.shalom_mis_cotizaciones`,
+   todas las sale.order de los clientes asignados, no solo la ruta de
+   hoy; tocar una fila abre el formulario nativo de Ventas) y pestaña
+   Clientes (`fsm.person.shalom_mis_clientes`, directorio con
+   llamar/Maps, + botón flotante de alta rápida vía
+   `fsm.location.shalom_crear_cliente_rapido`). Archivos nuevos:
+   `cotizaciones.js`/`.xml`, `clientes.js`/`.xml`.
 
 Cada fase se entrega, se prueba en producción siguiendo el flujo
 documentado en `README.md` ("Cómo desplegar cambios a producción"), y
@@ -419,3 +425,154 @@ de la columna de texto a vivir DENTRO de ella, apilados debajo del
 nombre -- antes lo apretaban tanto que los nombres largos partían
 letra por letra ("sopa de letras", reportado). La foto del carrito
 ahora es 120x180px, igual que en el catálogo (antes era más chica).
+
+## Fase 4 probada en producción: ronda de feedback (ficha de cliente ampliada)
+
+El usuario probó Fase 4 (Cotizaciones + Clientes + alta rápida) y
+confirmó que funciona; pidió ampliar la ficha del cliente porque
+estaba "muy generalizada". Se agregó un componente nuevo,
+`cliente_form.js`/`.xml` (`ClienteForm`), reutilizado tanto por
+"Editar cliente" (hoja de visita, antes tenía su propio formulario
+mínimo inline) como por "Alta rápida" (pestaña Clientes) -- un solo
+lugar para toda la lógica de guardado.
+
+Campos nuevos en la ficha:
+- **RUC, celular, correo**: van al contacto (`res.partner`, campos
+  nativos `vat`/`mobile`/`email`) -- no se agregó ninguna columna
+  nueva al modelo para esto.
+- **Foto de la entrada del local**: campo de imagen nativo de
+  `res.partner` (`image_1920`), decisión explícita del usuario para no
+  tener que modificar el modelo. Se sube desde `<input type=file
+  accept=image/* capture=environment>` (cámara o galería), se
+  convierte a base64 en el navegador (`FileReader.readAsDataURL`) y se
+  escribe tal cual -- el field `Image` de Odoo ya se encarga de
+  validar/redimensionar del lado del servidor.
+- **"Registrar coordenadas"**: `fsm.location.shalom_actualizar_gps()`
+  (nuevo, backend), guarda el GPS del dispositivo directo en la
+  Ubicación sin depender de tener una visita (`fsm.order`) abierta --
+  distinto de `action_capturar_gps()` que ya existía en `fsm.order`.
+- **Ruta + "va después de"** (ambos OPCIONALES): el vendedor puede
+  tener más de una ruta asignada y ve TODOS sus clientes juntos en la
+  pestaña Clientes (no solo los de la ruta que está atendiendo), así
+  que hacía falta poder elegir a cuál pertenece cada uno. Selector de
+  ruta con buscador (reusa el patrón visual `categ-selector-btn`/
+  `categ-menu` ya construido para el filtro de categorías del
+  catálogo) + selector "va después de" (mismo patrón, buscador
+  también, dependiente de la ruta elegida). Si no se toca ninguno de
+  los dos, el cliente queda sin ruta -- se preserva el comportamiento
+  original de alta rápida ("lo asigna oficina después").
+  `fsm.location.shalom_asignar_ruta_y_orden()` (nuevo, backend) hace el
+  cálculo: si se eligió "va después de X", la nueva posición es
+  `X.x_orden_ruta + 1`, y se corre +1 el orden de todos los que ya
+  estaban en esa posición o después DENTRO DE LA MISMA RUTA, para que
+  el nuevo cliente entre sin pisar a nadie. Se llama solo si el
+  vendedor tocó esos selectores (`state.posicionEditada`), para no
+  reordenar sin querer al editar solo, por ejemplo, un teléfono.
+  `fsm.person.shalom_mis_rutas()` (nuevo) expone la lista de rutas del
+  vendedor para el selector; `shalom_mis_clientes()` ahora también
+  devuelve `fsm_route_id`/`fsm_route_name` (se ve como etiqueta en cada
+  tarjeta de la pestaña Clientes) y `vat`/`mobile`/`email`.
+  `shalom_crear_cliente_rapido()` ahora acepta estos campos como
+  parámetros opcionales adicionales (compatible con la firma vieja).
+
+Además, se amplió el gesto de "arrastrar para cerrar" de la hoja de
+visita: antes solo arrancaba tocando la barrita de 4px de arriba: ahora
+arranca desde cualquier parte en blanco de la hoja (útil manejando con
+una mano/en movimiento), ignorando el toque si cae sobre un control
+con función propia (botón, input, link) o si la hoja tiene scroll
+interno y no está en el tope (para no competir con el scroll).
+
+## Ronda de feedback post-Fase 4: ficha de cliente + promociones del catálogo
+
+Pedidos del usuario, ya implementados:
+
+- **Título "Editar cliente" casi ilegible**: `.edit-card h3` no tenía
+  color explícito (heredaba `--shalom-ink`, pero algo con más
+  especificidad lo apagaba) -- ahora está seteado directo.
+- **Flecha "←" arriba del formulario de cliente + confirmación si hay
+  cambios sin guardar**: `ClienteForm` ahora trackea `formModificado`
+  (marcado en cualquier input, en elegir ruta/cliente anterior, en
+  subir foto) y tanto la flecha como "Cancelar" preguntan antes de
+  salir si hay algo sin guardar (mismo patrón de aviso propio que
+  "Revisar cotización" en el carrito).
+- **Fotos que a veces no cargaban en el catálogo**: antes se rendían a
+  la primera falla de red y quedaban vacías el resto de la sesión.
+  Ahora `onImagenError` reintenta hasta 3 veces con espera creciente
+  (forzando una petición nueva, no la misma que ya falló) antes de
+  ocultar la imagen.
+- **"Revisar cotización" también cierra la visita**: antes solo
+  `shalom_confirmar_pedido` (venta confirmada) movía la etapa a
+  Completada; `shalom_guardar_borrador_pedido` (cotización en
+  borrador) no. Se extrajo `_cerrar_visita_completada()` compartido y
+  se llama desde los dos -- decisión de producto del usuario: armar la
+  cotización, aunque quede en borrador, ya prueba que se atendió al
+  cliente.
+- **Estado de promociones "comprar X llevar Y" en el carrito**: el
+  usuario ya tiene esto en el módulo de Ventas
+  (`stock_picking_sale_buttons`, ajeno a este proyecto,
+  `sale.order.line.custom_promo_status`, calculado contra
+  `loyalty.program`/`loyalty.rule` nativos de Odoo, `program_type =
+  'buy_x_get_y'`) pero solo se veía ahí, después de confirmar. Se
+  agregó `fsm.order.shalom_estado_promociones_carrito(lineas)`
+  (nuevo, `@api.model`) que reimplementa el mismo criterio (no importa
+  ese módulo -- la lógica se reescribió acá, ver el docstring del
+  método para el porqué) pero contra el carrito TODAVÍA en memoria de
+  la app, antes de que exista ninguna sale.order.line real. El
+  frontend (`order_screen.js`) lo recalcula cada vez que cambia el
+  carrito y muestra una etiqueta "✅ Tienes N promos completas..." /
+  "⏳ Faltan N unidades..." junto a cada producto, tanto en el catálogo
+  (para lo que ya está en el carrito) como en las líneas del carrito.
+  **Nueva dependencia declarada en el manifest**: `loyalty` (ya estaba
+  instalado en producción, confirmado por SSH antes de agregarla).
+
+## Ronda de feedback: paginación crítica + recompensas + orden de la lista de una ruta
+
+**Prioridad 1 -- ya causó una caída real de la base de datos**: el
+catálogo (+700 productos) renderizaba TODO de una, disparando cientos
+de pedidos de imagen simultáneos. Se agregó paginado client-side
+(`PRODUCTOS_POR_PAGINA = 80` en `order_screen.js`, `productosPaginados`)
+-- la búsqueda/filtro sigue trayendo todos los datos livianos de una
+sola vez (nombre/precio/stock/categoría, barato), pero solo se
+renderizan (y por lo tanto solo piden imagen) los 80 de la página
+actual. La página se resetea a 1 en cualquier cambio de búsqueda/
+categoría/stock.
+
+**Orden de la lista de clientes de una ruta específica**: distinto del
+fix anterior (que ordenaba la pestaña Clientes global) -- acá
+`ruta_detalle.js` ordenaba las visitas por `sequence` (fijo desde que
+se generó la visita) en vez de `x_cliente_orden_ruta` (related con
+store=True a `fsm.location.x_orden_ruta`, siempre al día). Corregido:
+ahora ordena por `x_cliente_orden_ruta asc`, así que reordenar un
+cliente desde `ClienteForm` sí se refleja en la lista de la ruta.
+
+**Título "¿Salir sin guardar?" ilegible**: mismo bug que "Editar
+cliente" (`.edit-card h3` ya se había arreglado, pero `.confirm-card
+h3` no) -- corregido igual, color explícito.
+
+**Recompensa de una promo completa**: nuevo botón "🎁 Recompensa
+disponible" en el carrito cuando hay al menos una promo "comprar X
+llevar Y" completa sin canjear. Misma lógica que el módulo de Ventas
+(ajeno a este proyecto): se canjea una promo a la vez -- si hay varias
+completas, se abre un selector para elegir cuál primero; el botón deja
+de aparecer cuando ya no queda ninguna sin canjear.
+`shalom_estado_promociones_carrito()` (backend) ahora devuelve
+`{"mensajes": {...}, "recompensas": [...]}` en vez de solo el dict de
+mensajes -- cada recompensa trae el producto de regalo
+(`loyalty.reward` con `reward_type='product'`) y cuántas veces se
+completó. La línea de regalo se manda al backend con `price_unit: 0`
+explícito (`_crear_lineas_pedido` ya soportaba ese override -- no se
+intenta usar el mecanismo nativo de `is_reward_line`/`coupon_id` de
+`loyalty`, es una línea normal a $0, más simple y menos frágil que
+integrar con el tracking interno del programa de lealtad).
+
+**Cantidad editable a mano + basura directa en el catálogo**: el
+`<span>` de cantidad pasó a `<input type="number">` (tanto en catálogo
+como en carrito) para pedidos grandes sin tocar "+" repetidas veces;
+se agregó un botón de basura al lado del stepper en el catálogo para
+sacar todo el producto del carrito de un toque (antes había que bajar
+hasta 0). En el carrito, el botón de basura ahora dice "Eliminar"
+además del ícono.
+
+**Resaltado de productos ya en el carrito**: `.product-card-en-carrito`
+-- fondo/borde con el color de acento para distinguir de un vistazo lo
+que el cliente ya pidió.

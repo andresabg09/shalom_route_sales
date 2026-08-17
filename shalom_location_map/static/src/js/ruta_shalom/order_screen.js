@@ -59,8 +59,20 @@ const FORMATOS_BARCODE = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"];
 // actual mientras el escáner está abierto.
 const INTERVALO_ESCANEO_MS = 350;
 
+// Reintentos automáticos cuando una foto de producto falla al cargar
+// (conexión inestable en la calle) antes de darse por vencido.
+const REINTENTOS_IMAGEN_MAX = 3;
+const RETRASO_REINTENTO_IMAGEN_MS = 700;
+
 // "Todas" como valor de categoría seleccionada (no es un id real).
 const CATEGORIA_TODAS = "todas";
+
+// Con +700 productos, renderizar el catálogo entero de una (con su
+// <img> cada uno) disparaba cientos de pedidos de imagen simultáneos
+// -- reportado como causa de una caída real de la base de datos.
+// Paginado: solo se renderizan (y por lo tanto solo piden imagen) los
+// productos de la página actual.
+const PRODUCTOS_POR_PAGINA = 80;
 
 export class OrderScreen extends Component {
     static template = "shalom_location_map.OrderScreen";
@@ -92,7 +104,11 @@ export class OrderScreen extends Component {
             categMenuAbierto: false,
             busquedaCategoria: "",
             soloConStock: false,
+            paginaActual: 1,
             carrito: {}, // {productId: {producto, cantidad}}
+            promoPorProducto: {}, // {productId: "✅ Tienes..." | "⏳ Faltan..."}
+            recompensasDisponibles: [], // [{regla_id, programa_nombre, reward_product_id, reward_product_name, reward_qty, disponibles}]
+            recompensaMenuAbierto: false,
             escaneando: false,
             confirmando: false,
             guardandoBorrador: false,
@@ -177,10 +193,16 @@ export class OrderScreen extends Component {
         this.state.categoriaSeleccionada = id;
         this.state.categMenuAbierto = false;
         this.state.busquedaCategoria = "";
+        this.resetPagina();
     }
 
     toggleSoloConStock() {
         this.state.soloConStock = !this.state.soloConStock;
+        this.resetPagina();
+    }
+
+    resetPagina() {
+        this.state.paginaActual = 1;
     }
 
     get productosFiltrados() {
@@ -206,6 +228,31 @@ export class OrderScreen extends Component {
         });
     }
 
+    get totalPaginas() {
+        return Math.max(1, Math.ceil(this.productosFiltrados.length / PRODUCTOS_POR_PAGINA));
+    }
+
+    get productosPaginados() {
+        const inicio = (this.state.paginaActual - 1) * PRODUCTOS_POR_PAGINA;
+        return this.productosFiltrados.slice(inicio, inicio + PRODUCTOS_POR_PAGINA);
+    }
+
+    paginaAnterior() {
+        if (this.state.paginaActual > 1) {
+            this.state.paginaActual -= 1;
+        }
+    }
+
+    paginaSiguiente() {
+        if (this.state.paginaActual < this.totalPaginas) {
+            this.state.paginaActual += 1;
+        }
+    }
+
+    onBusquedaInput() {
+        this.resetPagina();
+    }
+
     imagenUrl(producto) {
         // image_1024: un escalón por debajo del original (1920) --
         // buena resolución para agrandar un poco en el detalle, sin
@@ -218,15 +265,37 @@ export class OrderScreen extends Component {
     onImagenError(ev) {
         // La ruta /web/image/... ya devuelve el placeholder propio de
         // Odoo cuando el producto no tiene foto (mismo mecanismo que
-        // usa el catálogo nativo de Ventas) -- esto solo cubre una
-        // carga que falló de verdad (conexión mala en la calle): oculta
-        // el <img> roto en vez de mostrar el ícono roto del navegador,
-        // sin agregar ningún ícono propio encima (pedido explícito).
-        ev.target.style.display = "none";
+        // usa el catálogo nativo de Ventas) -- esto es para cuando SÍ
+        // tiene foto pero la carga falló de verdad (reportado: en una
+        // red de datos móviles/satelital en la calle, algunas fotos
+        // "a veces cargan, a veces no" y antes se rendían a la primera
+        // falla, dejando el hueco vacío para el resto de la sesión).
+        // Ahora reintenta un par de veces con una espera creciente
+        // antes de darse por vencido -- forzando una petición nueva
+        // (con un parámetro descartable en la URL) en vez de reusar la
+        // misma que ya falló.
+        const el = ev.target;
+        const intentos = Number(el.dataset.shalomReintentos || 0);
+        if (intentos < REINTENTOS_IMAGEN_MAX) {
+            el.dataset.shalomReintentos = String(intentos + 1);
+            const urlBase = el.src.split("?")[0];
+            setTimeout(() => {
+                el.src = `${urlBase}?_r=${Date.now()}`;
+            }, RETRASO_REINTENTO_IMAGEN_MS * (intentos + 1));
+            return;
+        }
+        el.style.display = "none";
     }
 
     get itemsCarrito() {
         return Object.values(this.state.carrito);
+    }
+
+    /** Solo los productos pagos (sin las líneas de recompensa) -- lo
+     * que se manda a calcular promociones, para que un regalo ya
+     * canjeado no cuente como unidad "válida" para ganar otro. */
+    get itemsCarritoPagos() {
+        return this.itemsCarrito.filter((item) => !item.esRecompensa);
     }
 
     get cantidadItems() {
@@ -234,10 +303,25 @@ export class OrderScreen extends Component {
     }
 
     get total() {
-        return this.itemsCarrito.reduce(
+        return this.itemsCarritoPagos.reduce(
             (total, item) => total + item.cantidad * item.producto.list_price,
             0
         );
+    }
+
+    /**
+     * Recompensas que el backend marcó como disponibles, descontando
+     * las que ya se canjearon en esta sesión del carrito (se guardan
+     * como una línea más de state.carrito, key "reward-<regla_id>").
+     */
+    get recompensasConDisponibilidad() {
+        return this.state.recompensasDisponibles
+            .map((r) => {
+                const item = this.state.carrito[`reward-${r.regla_id}`];
+                const vecesReclamadas = item ? Math.round(item.cantidad / r.reward_qty) : 0;
+                return {...r, restantes: r.disponibles - vecesReclamadas};
+            })
+            .filter((r) => r.restantes > 0);
     }
 
     cantidadEnCarrito(productoId) {
@@ -255,12 +339,21 @@ export class OrderScreen extends Component {
         return "";
     }
 
+    etiquetaPromo(productoId) {
+        return this.state.promoPorProducto[productoId] || "";
+    }
+
+    promoCompleta(productoId) {
+        return this.etiquetaPromo(productoId).includes("✅");
+    }
+
     agregarProducto(producto) {
         const actual = this.state.carrito[producto.id];
         this.state.carrito[producto.id] = {
             producto,
             cantidad: (actual ? actual.cantidad : 0) + 1,
         };
+        this.actualizarPromos();
     }
 
     cambiarCantidad(productoId, delta) {
@@ -274,10 +367,110 @@ export class OrderScreen extends Component {
         } else {
             item.cantidad = nueva;
         }
+        this.actualizarPromos();
     }
 
     quitarDelCarrito(productoId) {
         delete this.state.carrito[productoId];
+        this.actualizarPromos();
+    }
+
+    /**
+     * Cantidad escrita a mano con el teclado (en vez de tocar "+" una
+     * por una) -- pedido explícito para pedidos grandes (ej. 100
+     * unidades). Cualquier valor inválido o menor a 1 se trata como
+     * "quitar del carrito", igual que bajar el stepper hasta 0.
+     */
+    cambiarCantidadManual(productoId, ev) {
+        const item = this.state.carrito[productoId];
+        if (!item) {
+            return;
+        }
+        const nueva = parseInt(ev.target.value, 10);
+        if (!nueva || nueva <= 0) {
+            delete this.state.carrito[productoId];
+        } else {
+            item.cantidad = nueva;
+        }
+        this.actualizarPromos();
+    }
+
+    /**
+     * Estado de las promociones "comprar X llevar Y" (mismo criterio
+     * que ya muestra el módulo de Ventas en custom_promo_status) para
+     * lo que hay en el carrito -- se recalcula cada vez que cambia
+     * algo, así el vendedor ve en vivo si le faltan unidades o ya
+     * completó la promo, sin esperar a confirmar el pedido. Solo se
+     * manda itemsCarritoPagos (sin los regalos ya canjeados).
+     */
+    async actualizarPromos() {
+        const items = this.itemsCarritoPagos;
+        if (!items.length) {
+            this.state.promoPorProducto = {};
+            this.state.recompensasDisponibles = [];
+            return;
+        }
+        try {
+            const lineas = items.map((item) => ({
+                product_id: item.producto.id,
+                qty: item.cantidad,
+            }));
+            const resultado = await this.orm.call(
+                "fsm.order",
+                "shalom_estado_promociones_carrito",
+                [lineas]
+            );
+            this.state.promoPorProducto = resultado.mensajes;
+            this.state.recompensasDisponibles = resultado.recompensas;
+        } catch (error) {
+            console.error("shalom: error al calcular promociones", error);
+            // No es crítico para poder seguir armando el pedido -- se
+            // deja sin avisar al vendedor, la próxima actualización del
+            // carrito lo reintenta solo.
+        }
+    }
+
+    // -- Recompensa (producto gratis de una promo "comprar X llevar Y"
+    // ya completa) -- misma lógica que el módulo de Ventas: se canjea
+    // una promo a la vez; si hay más de una disponible, el vendedor
+    // elige cuál primero. El botón deja de mostrarse cuando ya no
+    // queda ninguna promo completa sin canjear. --
+
+    abrirRecompensas() {
+        const disponibles = this.recompensasConDisponibilidad;
+        if (!disponibles.length) {
+            return;
+        }
+        if (disponibles.length === 1) {
+            this.elegirRecompensa(disponibles[0]);
+            return;
+        }
+        this.state.recompensaMenuAbierto = true;
+    }
+
+    cerrarMenuRecompensas() {
+        this.state.recompensaMenuAbierto = false;
+    }
+
+    elegirRecompensa(recompensa) {
+        const key = `reward-${recompensa.regla_id}`;
+        const actual = this.state.carrito[key];
+        this.state.carrito[key] = {
+            producto: {
+                id: recompensa.reward_product_id,
+                name: recompensa.reward_product_name,
+                list_price: 0,
+                qty_available: 0,
+                categ_id: false,
+            },
+            cantidad: (actual ? actual.cantidad : 0) + recompensa.reward_qty,
+            esRecompensa: true,
+            reglaId: recompensa.regla_id,
+        };
+        this.state.recompensaMenuAbierto = false;
+        this.notification.add(`🎁 Recompensa agregada: ${recompensa.reward_product_name}`, {
+            type: "success",
+        });
     }
 
     irACatalogo() {
@@ -395,6 +588,20 @@ export class OrderScreen extends Component {
         this.detector = null;
     }
 
+    /**
+     * Arma las líneas en el formato que espera el backend
+     * (_crear_lineas_pedido) -- las de recompensa van con
+     * price_unit: 0 explícito (si no, Odoo les calcularía el precio de
+     * lista normal al crear la línea).
+     */
+    lineasParaBackend(items) {
+        return items.map((item) => ({
+            product_id: item.producto.id,
+            qty: item.cantidad,
+            price_unit: item.esRecompensa ? 0 : false,
+        }));
+    }
+
     // -- Confirmar pedido (venta real) --
 
     async confirmarPedido() {
@@ -414,10 +621,7 @@ export class OrderScreen extends Component {
         }
         this.state.confirmando = true;
         try {
-            const lineas = items.map((item) => ({
-                product_id: item.producto.id,
-                qty: item.cantidad,
-            }));
+            const lineas = this.lineasParaBackend(items);
             const resultado = await this.orm.call("fsm.order", "shalom_confirmar_pedido", [
                 [this.props.orderId],
                 lineas,
@@ -452,10 +656,7 @@ export class OrderScreen extends Component {
         }
         this.state.guardandoBorrador = true;
         try {
-            const lineas = items.map((item) => ({
-                product_id: item.producto.id,
-                qty: item.cantidad,
-            }));
+            const lineas = this.lineasParaBackend(items);
             const resultado = await this.orm.call(
                 "fsm.order",
                 "shalom_guardar_borrador_pedido",

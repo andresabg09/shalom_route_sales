@@ -4,6 +4,8 @@ import {Component, useState} from "@odoo/owl";
 import {registry} from "@web/core/registry";
 import {RutasHub} from "./rutas_hub";
 import {RutaDetalle} from "./ruta_detalle";
+import {Cotizaciones} from "./cotizaciones";
+import {Clientes} from "./clientes";
 
 /**
  * Shell de la app del vendedor "Ruta Shalom": nav inferior (Rutas /
@@ -17,12 +19,12 @@ import {RutaDetalle} from "./ruta_detalle";
  * "ruta-detalle" cuelga de la pestaña Rutas (se llega tocando una
  * ruta del hub), no tiene ítem propio en la barra inferior -- igual
  * que en el prototipo de referencia.
- * Cotizaciones y Clientes son Fase 4: por ahora muestran un aviso de
- * "disponible próximamente" en vez de quedar como ítems muertos.
+ * Fase 4: pestañas Cotizaciones (todas las sale.order de los clientes
+ * asignados) y Clientes (directorio + alta rápida desde la calle).
  */
 export class ShalomRutaApp extends Component {
     static template = "shalom_location_map.RutaShalomApp";
-    static components = {RutasHub, RutaDetalle};
+    static components = {RutasHub, RutaDetalle, Cotizaciones, Clientes};
     static props = ["*"];
 
     setup() {

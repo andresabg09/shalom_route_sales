@@ -9,18 +9,8 @@
                     schedule="state.scheduleActivo"
                     onVolver.bind="volverARutas"
                 />
-                <div class="shalom-screen" t-if="state.screen === 'cotizaciones'">
-                    <div class="topbar">
-                        <div class="route-name">Mis cotizaciones</div>
-                    </div>
-                    <div class="shalom-vacio">Disponible próximamente.</div>
-                </div>
-                <div class="shalom-screen" t-if="state.screen === 'clientes'">
-                    <div class="topbar">
-                        <div class="route-name">Clientes</div>
-                    </div>
-                    <div class="shalom-vacio">Disponible próximamente.</div>
-                </div>
+                <Cotizaciones t-if="state.screen === 'cotizaciones'"/>
+                <Clientes t-if="state.screen === 'clientes'"/>
             </div>
 
             <div class="bottomnav">

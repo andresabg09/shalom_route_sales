@@ -47,6 +47,15 @@ Extiende fsm.order (la tarea/orden de visita a un cliente) con:
    sola llamada. Es el equivalente "todo en uno" de action_crear_cotizacion
    pensado para el flujo de catálogo + carrito de la app.
 
+9. shalom_estado_promociones_carrito(): calcula, para el carrito TODAVÍA
+   en memoria de la app (antes de que exista ninguna sale.order.line
+   real), el mismo estado de promociones "comprar X llevar Y" que ya
+   muestra el módulo de Ventas (stock_picking_sale_buttons,
+   sale.order.line.custom_promo_status) -- para que el vendedor lo vea
+   mientras arma el pedido, no recién después de confirmarlo. Reimplementa
+   el mismo criterio (no importa ese módulo, que es ajeno a este
+   proyecto) contra loyalty.program/loyalty.rule directo.
+
 Nota: "Orden de Ruta" (x_cliente_orden_ruta) es un campo related con
 store=True hacia fsm.location.x_orden_ruta -- es literalmente el mismo
 dato en ambos lados: editar el valor desde la tarjeta de visita o desde
@@ -90,6 +99,10 @@ MESES_SIN_COMPRA_PARA_ALERTA = 3
 
 # Cantidad de productos a mostrar en el gráfico de línea de tiempo.
 TOP_PRODUCTOS_GRAFICO_CANTIDAD = 6
+
+# Mismo umbral que stock_picking_sale_buttons: los "TINTE NNP" tienen
+# un precio mínimo especial para calificar a la promo.
+PRECIO_MINIMO_TINTE_NNP = 1.16
 
 
 class FSMOrder(models.Model):
@@ -289,12 +302,12 @@ class FSMOrder(models.Model):
         """Llamado desde el carrito de la app al tocar "Revisar
         cotización": crea o reutiliza la cotización vinculada a esta
         visita (mismo criterio anti-duplicado que shalom_confirmar_pedido)
-        y reemplaza sus líneas por las del carrito recibido, PERO sin
-        confirmarla ni cerrar la visita -- se deja en borrador para que
-        el vendedor la termine de ajustar (precios especiales,
-        promociones, descuentos) directo en el formulario nativo de
-        Ventas, que es donde ya existe esa funcionalidad y no tiene
-        sentido duplicarla en el carrito de la app.
+        y reemplaza sus líneas por las del carrito recibido, SIN
+        confirmarla -- se deja en borrador para que el vendedor la
+        termine de ajustar (precios especiales, promociones,
+        descuentos) directo en el formulario nativo de Ventas, que es
+        donde ya existe esa funcionalidad y no tiene sentido duplicarla
+        en el carrito de la app.
 
         A diferencia de shalom_confirmar_pedido, acá el pedido queda
         como cotización de verdad en el módulo de Ventas (no
@@ -302,6 +315,13 @@ class FSMOrder(models.Model):
         producto explícita: es el mecanismo para que el vendedor pueda
         pasar el resto del trabajo de precios al módulo nativo antes
         de confirmar.
+
+        SÍ cierra la visita (misma etapa Completada que
+        shalom_confirmar_pedido) aunque la cotización quede en
+        borrador: haber armado la cotización ya es prueba suficiente de
+        que se atendió al cliente -- concretarla a orden de venta queda
+        como responsabilidad del vendedor más adelante, no bloquea el
+        cierre de la visita.
 
         lineas: mismo formato que shalom_confirmar_pedido (lista de
         dicts {"product_id": int, "qty": float}).
@@ -337,14 +357,9 @@ class FSMOrder(models.Model):
             )
 
         sale_order.order_line.unlink()
-        for linea in lineas:
-            self.env["sale.order.line"].create(
-                {
-                    "order_id": sale_order.id,
-                    "product_id": linea["product_id"],
-                    "product_uom_qty": linea.get("qty") or 1,
-                }
-            )
+        self._crear_lineas_pedido(sale_order, lineas)
+
+        self._cerrar_visita_completada()
 
         return {
             "type": "ir.actions.act_window",
@@ -353,6 +368,24 @@ class FSMOrder(models.Model):
             "view_mode": "form",
             "target": "current",
         }
+
+    def _crear_lineas_pedido(self, sale_order, lineas):
+        """Crea las sale.order.line del carrito -- compartido entre
+        shalom_confirmar_pedido y shalom_guardar_borrador_pedido.
+
+        Cada línea puede traer opcionalmente "price_unit": si viene,
+        se fuerza ese precio (se usa para la línea de recompensa de una
+        promo completa, que va a $0 -- sin esto, Odoo le calcularía el
+        precio de lista normal al crear la línea)."""
+        for linea in lineas:
+            vals = {
+                "order_id": sale_order.id,
+                "product_id": linea["product_id"],
+                "product_uom_qty": linea.get("qty") or 1,
+            }
+            if "price_unit" in linea and linea["price_unit"] is not False:
+                vals["price_unit"] = linea["price_unit"]
+            self.env["sale.order.line"].create(vals)
 
     def shalom_confirmar_pedido(self, lineas):
         """Llamado desde la app del vendedor al tocar "Confirmar
@@ -398,28 +431,9 @@ class FSMOrder(models.Model):
             self.write({"sale_id": sale_order.id})
 
         sale_order.order_line.unlink()
-        for linea in lineas:
-            self.env["sale.order.line"].create(
-                {
-                    "order_id": sale_order.id,
-                    "product_id": linea["product_id"],
-                    "product_uom_qty": linea.get("qty") or 1,
-                }
-            )
+        self._crear_lineas_pedido(sale_order, lineas)
         sale_order.action_confirm()
-
-        etapa_completada = self.env.ref(
-            "fieldservice.fsm_stage_completed", raise_if_not_found=False
-        )
-        if etapa_completada:
-            # fieldservice bloquea por defecto escribir stage_id directo a
-            # la etapa Completado (pensado para que solo se llegue ahí por
-            # un flujo controlado, no arrastrando una tarjeta en el
-            # Kanban) -- bypass_order_completed_stage es la salida oficial
-            # para escrituras programáticas legítimas como esta.
-            self.with_context(bypass_order_completed_stage=True).write(
-                {"stage_id": etapa_completada.id}
-            )
+        self._cerrar_visita_completada()
 
         self.message_post(
             body=_(
@@ -440,6 +454,163 @@ class FSMOrder(models.Model):
             "sale_order_name": sale_order.name,
             "total": sale_order.amount_total,
         }
+
+    @api.model
+    def shalom_estado_promociones_carrito(self, lineas):
+        """Calcula el estado de las promociones "comprar X llevar Y"
+        (loyalty.program, program_type='buy_x_get_y') para el carrito
+        TODAVÍA en memoria de la app -- mismo criterio que
+        sale.order.line.custom_promo_status de stock_picking_sale_buttons,
+        pero sin necesitar que existan sale.order.line reales (ese
+        cálculo depende de order_id.order_line, y acá el carrito recién
+        se va a confirmar). No importa ese módulo (es ajeno a este
+        proyecto, ver CLAUDE.md) -- reimplementa la misma lógica contra
+        loyalty.program/loyalty.rule directo.
+
+        A diferencia del original, acá SIEMPRE se usa el list_price del
+        producto para el chequeo de precio mínimo (el carrito de la app
+        no deja tocar precios) -- el criterio de "TINTE NNP" se
+        preserva por si algún día ese producto tuviera un list_price
+        más bajo que el mínimo.
+
+        lineas: mismo formato que shalom_confirmar_pedido (lista de
+        dicts {"product_id": int, "qty": float}).
+
+        Devuelve {"mensajes": {product_id: "✅ Tienes 2 promos completas
+        · Llevas 8 unidades válidas" / "⏳ Faltan 2 unidades · Llevas 6
+        unidades válidas"}, "recompensas": [{"regla_id",
+        "programa_nombre", "reward_product_id", "reward_product_name",
+        "reward_qty", "disponibles"} ...]} -- "recompensas" solo incluye
+        reglas con al menos 1 promo completa y una recompensa de tipo
+        producto (reward_type='product'); "disponibles" es cuántas
+        veces se completó la promo (el frontend descuenta las que el
+        vendedor ya reclamó en esta sesión, ver order_screen.js)."""
+        vacio = {"mensajes": {}, "recompensas": []}
+        if not lineas:
+            return vacio
+        programas = self.env["loyalty.program"].search(
+            [("program_type", "=", "buy_x_get_y"), ("active", "=", True)]
+        )
+        if not programas:
+            return vacio
+
+        def categoria_matchea(categ, categ_regla):
+            while categ:
+                if categ == categ_regla:
+                    return True
+                categ = categ.parent_id
+            return False
+
+        def regla_para_producto(producto):
+            for programa in programas:
+                for regla in programa.rule_ids:
+                    if producto in regla.product_ids:
+                        return programa, regla
+                    if regla.product_category_id and categoria_matchea(
+                        producto.categ_id, regla.product_category_id
+                    ):
+                        return programa, regla
+            return None, None
+
+        def precio_califica(producto, regla):
+            es_tinte_nnp = "TINTE NNP" in (producto.name or "").upper()
+            if regla.product_category_id and not es_tinte_nnp:
+                categ = producto.categ_id
+                while categ:
+                    if (
+                        categ.name
+                        and "tinte" in categ.name.lower()
+                        and "nnp" in categ.name.lower()
+                    ):
+                        es_tinte_nnp = True
+                        break
+                    categ = categ.parent_id
+            if es_tinte_nnp:
+                return producto.list_price >= PRECIO_MINIMO_TINTE_NNP
+            return True
+
+        # Agrupar cantidades por regla que matchea (varios productos
+        # del carrito pueden aportar a la misma promo).
+        regla_por_producto_id = {}
+        total_por_regla = {}
+        for linea in lineas:
+            producto = self.env["product.product"].browse(linea["product_id"])
+            if not producto.exists():
+                continue
+            _programa, regla = regla_para_producto(producto)
+            if not regla or not precio_califica(producto, regla):
+                continue
+            regla_por_producto_id[producto.id] = regla
+            total_por_regla[regla.id] = total_por_regla.get(regla.id, 0) + (
+                linea.get("qty") or 1
+            )
+
+        mensajes = {}
+        recompensas = []
+        reglas_ya_agregadas = set()
+        for product_id, regla in regla_por_producto_id.items():
+            total_qty = total_por_regla[regla.id]
+            min_qty = regla.minimum_qty
+            if min_qty <= 0:
+                continue
+            promos_completas = int(total_qty // min_qty)
+            resto = total_qty % min_qty
+            if resto == 0 and total_qty >= min_qty:
+                mensajes[product_id] = (
+                    f"✅ Tienes {promos_completas} promos completas · "
+                    f"Llevas {int(total_qty)} unidades válidas"
+                )
+            else:
+                faltan = int(min_qty - resto) if resto > 0 else int(min_qty)
+                mensajes[product_id] = (
+                    f"⏳ Faltan {faltan} unidades · "
+                    f"Llevas {int(total_qty)} unidades válidas"
+                )
+
+            if promos_completas < 1 or regla.id in reglas_ya_agregadas:
+                continue
+            reglas_ya_agregadas.add(regla.id)
+            programa = regla.program_id
+            recompensa = programa.reward_ids.filtered(
+                lambda r: r.reward_type == "product" and r.reward_product_id
+            )[:1]
+            if not recompensa:
+                continue
+            recompensas.append(
+                {
+                    "regla_id": regla.id,
+                    "programa_nombre": programa.name,
+                    "reward_product_id": recompensa.reward_product_id.id,
+                    "reward_product_name": recompensa.reward_product_id.display_name,
+                    "reward_qty": int(recompensa.reward_product_qty or 1),
+                    "disponibles": promos_completas,
+                }
+            )
+
+        return {"mensajes": mensajes, "recompensas": recompensas}
+
+    def _cerrar_visita_completada(self):
+        """Mueve esta visita a la etapa Completada -- usado tanto por
+        shalom_confirmar_pedido() (venta confirmada) como por
+        shalom_guardar_borrador_pedido() (cotización en borrador):
+        decisión de producto explícita: haber armado una cotización, así
+        sea en borrador, ya es prueba suficiente de que el cliente fue
+        atendido. Concretarla a orden de venta queda como
+        responsabilidad del vendedor, más tarde, desde el módulo de
+        Ventas -- eso no bloquea que la visita se cuente como resuelta."""
+        self.ensure_one()
+        etapa_completada = self.env.ref(
+            "fieldservice.fsm_stage_completed", raise_if_not_found=False
+        )
+        if etapa_completada:
+            # fieldservice bloquea por defecto escribir stage_id directo a
+            # la etapa Completado (pensado para que solo se llegue ahí por
+            # un flujo controlado, no arrastrando una tarjeta en el
+            # Kanban) -- bypass_order_completed_stage es la salida oficial
+            # para escrituras programáticas legítimas como esta.
+            self.with_context(bypass_order_completed_stage=True).write(
+                {"stage_id": etapa_completada.id}
+            )
 
     def _id_etapa_cancelada(self):
         """id de la etapa "Cancelado" (fieldservice.fsm_stage_cancelled),

@@ -87,14 +87,33 @@ class FSMLocation(models.Model):
         }
 
     @api.model
-    def shalom_crear_cliente_rapido(self, name, phone=False, address=False):
-        """Llamado desde la pestaña Clientes de la app del vendedor:
-        crea un cliente mínimo (res.partner + fsm.location) para el
-        caso ocasional de onboardear a alguien nuevo directo desde la
-        calle. NO lo asigna a ninguna ruta ni le carga x_orden_ruta --
-        eso lo hace oficina después, a mano, como corresponde al flujo
-        principal del proyecto (onboarding desde la calle es la
-        excepción, no la regla)."""
+    def shalom_crear_cliente_rapido(
+        self,
+        name,
+        phone=False,
+        address=False,
+        vat=False,
+        mobile=False,
+        email=False,
+        image_1920=False,
+        latitude=False,
+        longitude=False,
+        route_id=False,
+        cliente_anterior_id=False,
+    ):
+        """Llamado desde la pestaña Clientes de la app del vendedor (y
+        desde 'Editar cliente' cuando se crea desde cero): crea un
+        cliente (res.partner + fsm.location) con los datos que se
+        hayan cargado en el formulario ampliado -- RUC, celular, correo,
+        foto del local y GPS quedan en el contacto/ubicación igual que
+        si los cargara oficina.
+
+        route_id/cliente_anterior_id son OPCIONALES: si no se pasan, el
+        cliente queda sin ruta asignada, igual que el comportamiento
+        original (onboarding desde la calle es el caso ocasional, no
+        el flujo principal -- oficina asigna la ruta después). Si se
+        pasa route_id, se asigna la ruta y se calcula la posición con
+        el mismo criterio que shalom_asignar_ruta_y_orden()."""
         if not name or not name.strip():
             raise UserError(_("El nombre comercial es obligatorio."))
 
@@ -103,20 +122,83 @@ class FSMLocation(models.Model):
                 "name": name.strip(),
                 "phone": phone or False,
                 "street": address or False,
+                "vat": vat or False,
+                "mobile": mobile or False,
+                "email": email or False,
+                "image_1920": image_1920 or False,
                 "company_type": "company",
             }
         )
-        location = self.create(
-            {
-                "name": name.strip(),
-                "partner_id": partner.id,
-                "phone": phone or False,
-                "street": address or False,
-            }
-        )
+        location_vals = {
+            "name": name.strip(),
+            "partner_id": partner.id,
+            "phone": phone or False,
+            "street": address or False,
+        }
+        if latitude and longitude:
+            location_vals["partner_latitude"] = latitude
+            location_vals["partner_longitude"] = longitude
+        location = self.create(location_vals)
         _logger.info(
             "Cliente rápido creado desde la app del vendedor: "
             "fsm.location id=%s (partner id=%s) - %s",
             location.id, partner.id, name,
         )
+        if route_id:
+            location.shalom_asignar_ruta_y_orden(route_id, cliente_anterior_id)
         return {"id": location.id, "partner_id": partner.id}
+
+    def shalom_actualizar_gps(self, latitude, longitude):
+        """Botón 'Registrar coordenadas' de la ficha del cliente
+        (Editar cliente / Alta rápida), fuera del contexto de una
+        visita puntual -- guarda el GPS capturado del dispositivo
+        directo en la Ubicación. Distinto de
+        fsm.order.action_capturar_gps(), que además guarda una copia
+        propia en la visita; acá no hay ninguna visita de por medio."""
+        self.ensure_one()
+        self.write({"partner_latitude": latitude, "partner_longitude": longitude})
+        _logger.info(
+            "GPS actualizado desde la ficha del cliente para fsm.location "
+            "id=%s: lat=%s lng=%s",
+            self.id, latitude, longitude,
+        )
+        return True
+
+    def shalom_asignar_ruta_y_orden(self, route_id, cliente_anterior_id=False):
+        """Asigna esta Ubicación a la ruta indicada y calcula su
+        posición (x_orden_ruta) según "va después de" el cliente
+        indicado (cliente_anterior_id) -- o primera posición si no se
+        indica ninguno --, corriendo +1 el orden de los clientes que ya
+        ocupaban esa posición o una posterior DENTRO DE LA MISMA RUTA,
+        para que el nuevo cliente entre sin pisar a nadie.
+
+        route_id=False desasigna la ruta (deja el cliente sin ruta,
+        como si nunca se hubiera posicionado)."""
+        self.ensure_one()
+        if not route_id:
+            self.write({"fsm_route_id": False})
+            return True
+
+        nuevo_orden = 1
+        if cliente_anterior_id:
+            anterior = self.env["fsm.location"].browse(cliente_anterior_id)
+            nuevo_orden = (anterior.x_orden_ruta or 0) + 1
+
+        siguientes = self.env["fsm.location"].search(
+            [
+                ("fsm_route_id", "=", route_id),
+                ("x_orden_ruta", ">=", nuevo_orden),
+                ("id", "!=", self.id),
+            ],
+            order="x_orden_ruta desc",
+        )
+        for loc in siguientes:
+            loc.x_orden_ruta = loc.x_orden_ruta + 1
+
+        self.write({"fsm_route_id": route_id, "x_orden_ruta": nuevo_orden})
+        _logger.info(
+            "fsm.location id=%s asignada a fsm.route id=%s en posición %s "
+            "(%s ubicaciones corridas)",
+            self.id, route_id, nuevo_orden, len(siguientes),
+        )
+        return True

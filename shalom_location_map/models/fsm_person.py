@@ -66,17 +66,42 @@ class FSMPerson(models.Model):
         ]
 
     @api.model
+    def shalom_mis_rutas(self):
+        """Rutas (fsm.route) asignadas al vendedor logueado -- para el
+        selector de ruta del formulario ampliado de cliente (Editar
+        cliente / Alta rápida). Distinto de
+        shalom_mis_rutas_programadas(): acá se listan las rutas en sí,
+        no sus ocurrencias semanales."""
+        persona = self._shalom_persona_actual()
+        if not persona:
+            return []
+        rutas = self.env["fsm.route"].search(
+            [("fsm_person_id", "=", persona.id)], order="name asc"
+        )
+        return [{"id": r.id, "name": r.name} for r in rutas]
+
+    @api.model
     def shalom_mis_clientes(self):
         """Directorio de fsm.location asignadas (vía la ruta que las
-        contiene) al vendedor logueado."""
+        contiene) al vendedor logueado. Un mismo vendedor puede tener
+        varias rutas -- se incluye a cuál pertenece cada cliente
+        (fsm_route_id/fsm_route_name) para mostrarlo en la lista y para
+        el formulario ampliado de edición (RUC/celular/correo vienen
+        del contacto, res.partner)."""
         persona = self._shalom_persona_actual()
         if not persona:
             return []
         rutas = self.env["fsm.route"].search([("fsm_person_id", "=", persona.id)])
         if not rutas:
             return []
+        # Ordenados por ruta y después por posición dentro de la ruta
+        # (x_orden_ruta) -- sin esto, reordenar un cliente desde
+        # ClienteForm cambiaba bien el número pero la lista de la
+        # pestaña Clientes seguía mostrándolos en el orden de creación,
+        # sin reflejar el reordenamiento.
         locations = self.env["fsm.location"].search(
-            [("fsm_route_id", "in", rutas.ids)]
+            [("fsm_route_id", "in", rutas.ids)],
+            order="fsm_route_id, x_orden_ruta asc",
         )
         return [
             {
@@ -86,6 +111,11 @@ class FSMPerson(models.Model):
                 "street": loc.street,
                 "partner_id": loc.partner_id.id if loc.partner_id else False,
                 "x_orden_ruta": loc.x_orden_ruta,
+                "fsm_route_id": loc.fsm_route_id.id if loc.fsm_route_id else False,
+                "fsm_route_name": loc.fsm_route_id.name if loc.fsm_route_id else "",
+                "vat": loc.partner_id.vat if loc.partner_id else False,
+                "mobile": loc.partner_id.mobile if loc.partner_id else False,
+                "email": loc.partner_id.email if loc.partner_id else False,
             }
             for loc in locations
         ]

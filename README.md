@@ -117,22 +117,27 @@ Widgets Owl inyectados en `web.assets_backend`:
   compras/productos olvidados sobre `get_datos_grafico_compras()`.
 - `ruta_shalom/` — la app del vendedor ("Ruta Shalom"): shell + nav
   inferior (`app.js`), pestaña Rutas (`rutas_hub.js`), detalle de ruta
-  Lista/Mapa (`ruta_detalle.js`), hoja de visita (`visit_sheet.js`) y
+  Lista/Mapa (`ruta_detalle.js`), hoja de visita (`visit_sheet.js`),
   catálogo + carrito + escaneo de código de barras (`order_screen.js`,
-  Fase 3). Este último pide el catálogo directo con `orm.searchRead`
-  sobre `product.product` (sin método de backend nuevo, incluye foto
-  vía `image_128` y categoría) y usa el `BarcodeDetector` nativo del
+  Fase 3), y las pestañas Cotizaciones (`cotizaciones.js`, Fase 4) y
+  Clientes (`clientes.js`, Fase 4, con alta rápida desde la calle).
+  El catálogo pide sus datos directo con `orm.searchRead` sobre
+  `product.product` (sin método de backend nuevo, incluye foto vía
+  `image_1024` y categoría) y usa el `BarcodeDetector` nativo del
   navegador para escanear -- sin librería externa. Del carrito hay dos
   salidas: "Confirmar pedido" llama a
   `fsm.order.shalom_confirmar_pedido()` (venta real, reserva stock,
   cierra la visita); "Revisar cotización" llama a
   `shalom_guardar_borrador_pedido()` (deja la cotización en borrador y
   abre Ventas para que el vendedor ajuste precios/promociones ahí).
-  `nav_historial.js` (pila de niveles + `history.pushState`/`popstate`)
-  hace que el botón Atrás de Android cierre un nivel a la vez en vez de
-  saltar a la raíz de la app; `action_utils.js` normaliza las acciones
-  `ir.actions.act_window` que devuelven los métodos de Python para
-  `action.doAction()`.
+  `action_utils.js` normaliza las acciones `ir.actions.act_window` que
+  devuelven los métodos de Python para `action.doAction()` desde JS.
+  El cierre de pantallas (hoja de visita, catálogo) es siempre estado
+  interno de Owl, sin tocar el historial del navegador -- se probó con
+  `history.pushState`/`popstate` para que el botón Atrás de Android
+  cerrara un nivel a la vez, pero choca con el router propio del web
+  client de Odoo 18 (rompía la redirección de "Revisar cotización");
+  se sacó por completo, ver `docs/plan_fase_1_a_4.md`.
 
 ## Convención
 
@@ -143,15 +148,17 @@ por cambios de este equipo. Solo se versiona aquí el código propio
 
 ## Estado del proyecto
 
-Fases 0, 1, 2 y 3 completas, desplegadas y probadas en producción.
-Fase 3 tuvo una ronda de ajustes de UX después de la primera prueba
-real del usuario (fotos/categorías en el catálogo, botón Atrás de
-Android, arrastrar para cerrar la hoja de visita, fix del escáner,
-"Revisar cotización" antes de confirmar) -- ver el detalle en
-`docs/plan_fase_1_a_4.md`, sección "Ronda de feedback post-Fase 3".
-Falta Fase 4 (pestañas Cotizaciones y Clientes). Detalle completo de
-qué incluye cada fase, decisiones de producto ya confirmadas, y datos
-técnicos del servidor ya verificados: ver `docs/plan_fase_1_a_4.md`.
+Fases 0, 1, 2, 3 y 4 completas, desplegadas y probadas en producción.
+Varias tuvieron rondas de ajustes de UX después de la primera prueba
+real del usuario -- Fase 3: fotos/categorías en el catálogo, botón
+Atrás de Android, arrastrar para cerrar la hoja de visita, fix del
+escáner, "Revisar cotización" antes de confirmar; Fase 4: ficha de
+cliente ampliada (RUC, celular, correo, foto del local, ruta + orden,
+GPS) en un componente compartido (`ClienteForm`) entre "Editar
+cliente" y "Alta rápida". Ver el detalle completo en
+`docs/plan_fase_1_a_4.md`, que también tiene las decisiones de
+producto ya confirmadas y los datos técnicos del servidor ya
+verificados.
 
 ## Cómo desplegar cambios a producción
 

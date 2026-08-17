@@ -4,10 +4,12 @@
         <div class="sheet-overlay open" t-on-click.self="cerrar">
             <div
                 class="sheet"
+                t-ref="sheet"
                 t-att-class="state.arrastrando ? 'sin-transicion' : ''"
                 t-attf-style="transform: translateY({{state.arrastreY}}px);"
+                t-on-touchstart="iniciarArrastre"
             >
-                <div class="sheet-handle" t-on-touchstart="iniciarArrastre"/>
+                <div class="sheet-handle"/>
 
                 <div t-if="state.cargando" class="shalom-vacio">Cargando…</div>
 
@@ -74,27 +76,13 @@
             </div>
         </div>
 
-        <div class="edit-overlay open" t-if="state.editando">
-            <div class="edit-card">
-                <h3>Editar cliente</h3>
-                <div class="edit-field">
-                    <label for="shalom-edit-name">Nombre comercial</label>
-                    <input id="shalom-edit-name" type="text" t-model="state.edicion.name"/>
-                </div>
-                <div class="edit-field">
-                    <label for="shalom-edit-phone">Teléfono</label>
-                    <input id="shalom-edit-phone" type="text" t-model="state.edicion.phone"/>
-                </div>
-                <div class="edit-field">
-                    <label for="shalom-edit-street">Dirección</label>
-                    <input id="shalom-edit-street" type="text" t-model="state.edicion.street"/>
-                </div>
-                <div class="edit-actions">
-                    <button class="btn btn-ghost" t-on-click="cerrarEdicion">Cancelar</button>
-                    <button class="btn btn-primary" t-on-click="guardarEdicion">Guardar</button>
-                </div>
-            </div>
-        </div>
+        <ClienteForm
+            t-if="state.editando"
+            modo="'editar'"
+            locationId="state.visita.locationId"
+            onGuardado.bind="edicionGuardada"
+            onCancelar.bind="cerrarEdicion"
+        />
 
         <OrderScreen
             t-if="state.tomandoPedido"

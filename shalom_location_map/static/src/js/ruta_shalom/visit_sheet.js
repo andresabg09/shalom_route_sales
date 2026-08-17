@@ -1,9 +1,10 @@
 /** @odoo-module **/
 
-import {Component, onWillStart, onWillUnmount, useState} from "@odoo/owl";
+import {Component, onWillStart, onWillUnmount, useRef, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {ESTADO_ETIQUETA, estadoDesdeStageName, obtenerIdsEtapas} from "./stage_utils";
 import {normalizarAccionActWindow} from "./action_utils";
+import {ClienteForm} from "./cliente_form";
 import {OrderScreen} from "./order_screen";
 
 // Umbral de arrastre (px) para que soltar la barrita de arriba de la
@@ -40,7 +41,7 @@ const UMBRAL_ARRASTRE_CIERRE = 90;
  */
 export class VisitSheet extends Component {
     static template = "shalom_location_map.VisitSheet";
-    static components = {OrderScreen};
+    static components = {OrderScreen, ClienteForm};
     static props = {
         orderId: Number,
         onCerrar: Function,
@@ -51,12 +52,12 @@ export class VisitSheet extends Component {
         this.orm = useService("orm");
         this.notification = useService("notification");
         this.action = useService("action");
+        this.sheetRef = useRef("sheet");
         this.state = useState({
             cargando: true,
             visita: null,
             panelEstadoAbierto: false,
             editando: false,
-            edicion: {name: "", phone: "", street: ""},
             tomandoPedido: false,
             arrastreY: 0,
             arrastrando: false,
@@ -309,11 +310,6 @@ export class VisitSheet extends Component {
     }
 
     abrirEdicion() {
-        this.state.edicion = {
-            name: this.state.visita.nombre,
-            phone: this.state.visita.telefono,
-            street: this.state.visita.direccion,
-        };
         this.state.editando = true;
     }
 
@@ -321,36 +317,52 @@ export class VisitSheet extends Component {
         this.state.editando = false;
     }
 
-    async guardarEdicion() {
-        const nombre = this.state.edicion.name.trim();
-        if (!nombre) {
-            this.notification.add("El nombre no puede estar vacío.", {type: "warning"});
-            return;
-        }
-        try {
-            await this.orm.write("fsm.location", [this.state.visita.locationId], {
-                name: nombre,
-                phone: this.state.edicion.phone.trim(),
-                street: this.state.edicion.street.trim(),
-            });
-            this.state.visita.nombre = nombre;
-            this.state.visita.telefono = this.state.edicion.phone.trim();
-            this.state.visita.direccion = this.state.edicion.street.trim();
-            this.state.editando = false;
-            this.notification.add("Datos del cliente actualizados.", {type: "success"});
-            if (this.props.onCambio) {
-                this.props.onCambio();
-            }
-        } catch (error) {
-            this.notification.add("No se pudieron guardar los datos.", {type: "danger"});
+    /**
+     * ClienteForm (mismo componente que usa la pestaña Clientes) avisa
+     * con esto cuando guardó -- recargamos la visita para reflejar
+     * nombre/teléfono/dirección actualizados en esta misma tarjeta.
+     */
+    async edicionGuardada() {
+        this.state.editando = false;
+        await this.cargar();
+        if (this.props.onCambio) {
+            this.props.onCambio();
         }
     }
 
-    // -- Arrastrar la barrita de arriba de la hoja para cerrarla --
-    // (reportado como "no se puede mover" -- la barrita era puramente
-    // decorativa, sin ningún listener detrás).
+    // -- Arrastrar la hoja para cerrarla --
+    // Al principio (bug ya corregido) el gesto solo arrancaba tocando
+    // la barrita de 4px de arriba -- muy poco margen para hacerlo con
+    // una sola mano/en movimiento. Ahora arranca desde cualquier
+    // espacio en blanco de la hoja (no solo la barrita), siempre que
+    // el toque no haya sido sobre un control con su propia función.
 
     iniciarArrastre(ev) {
+        const objetivo = ev.target;
+        if (!objetivo.closest) {
+            return;
+        }
+        // El nombre del cliente (.name-btn) SÍ puede arrancar el
+        // arrastre -- toda la parte de arriba de la hoja tiene que
+        // servir para cerrar deslizando (pedido explícito: manejando/
+        // en el carro es más fácil deslizar desde cualquier punto de
+        // arriba que apuntar a una franja angosta). Esto no rompe el
+        // tocar-para-editar: un toque corto sin desplazamiento nunca
+        // llega al umbral de cierre (ver soltarArrastre), así que el
+        // click de abrirEdicion() se sigue disparando normal.
+        const enControlExclusivo =
+            objetivo.closest("input, textarea, a, select") ||
+            (objetivo.closest("button") && !objetivo.closest(".name-btn"));
+        if (enControlExclusivo) {
+            return;
+        }
+        // Si la hoja tiene scroll interno y no está en el tope, dejar
+        // que el gesto sea scroll normal (no competir con el scroll
+        // cuando hay mucho contenido) -- solo cierra arrastrando desde
+        // arriba del todo.
+        if (this.sheetRef.el && this.sheetRef.el.scrollTop > 0) {
+            return;
+        }
         this._arrastreInicioY = ev.touches ? ev.touches[0].clientY : ev.clientY;
         this.state.arrastrando = true;
         window.addEventListener("touchmove", this._onMoverArrastre, {passive: true});
