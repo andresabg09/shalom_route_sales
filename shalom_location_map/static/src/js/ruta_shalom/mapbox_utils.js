@@ -26,12 +26,36 @@ export async function getMapboxToken() {
 
 export async function cargarMapboxGl() {
     await loadJS(MAPBOX_GL_JS_URL);
-    if (!document.querySelector(`link[href="${MAPBOX_GL_CSS_URL}"]`)) {
+    await cargarMapboxCss();
+}
+
+/**
+ * Causa real (confirmada con la consola del navegador) del reporte "los
+ * pines se desubican al hacer zoom": esta función agregaba el <link>
+ * del CSS oficial de Mapbox y seguía de largo sin esperar a que el
+ * navegador terminara de bajarlo/aplicarlo -- como new mapboxgl.Map(...)
+ * se creaba justo después, Mapbox arrancaba a posicionar marcadores sin
+ * las reglas base de ese CSS todavía puestas (el propio Mapbox lo
+ * avisa: "missing CSS declarations for Mapbox GL JS"). Mover el mapa
+ * no lo notaba tanto, pero zoomear sí, cada vez peor.
+ *
+ * Ahora cargarMapboxGl() no se resuelve hasta que el <link> disparó
+ * "load" (o "error", mejor intentar dibujar el mapa sin el CSS que no
+ * dibujarlo nunca) -- si ya estaba agregado de una entrada anterior a
+ * la pestaña Mapa, se asume cargado y no hace falta esperar de nuevo.
+ */
+function cargarMapboxCss() {
+    if (document.querySelector(`link[href="${MAPBOX_GL_CSS_URL}"]`)) {
+        return Promise.resolve();
+    }
+    return new Promise((resolve) => {
         const link = document.createElement("link");
         link.rel = "stylesheet";
         link.href = MAPBOX_GL_CSS_URL;
+        link.onload = () => resolve();
+        link.onerror = () => resolve();
         document.head.appendChild(link);
-    }
+    });
 }
 
 /**

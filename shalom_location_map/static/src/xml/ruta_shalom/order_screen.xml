@@ -64,6 +64,12 @@
                 </div>
 
                 <div class="view catalog-list">
+                    <div class="paginador" t-if="totalPaginas > 1">
+                        <button class="btn btn-ghost" t-on-click="paginaAnterior" t-att-disabled="state.paginaActual === 1">‹ Anterior</button>
+                        <span class="paginador-info" t-esc="'Página ' + state.paginaActual + ' de ' + totalPaginas"/>
+                        <button class="btn btn-ghost" t-on-click="paginaSiguiente" t-att-disabled="state.paginaActual === totalPaginas">Siguiente ›</button>
+                    </div>
+
                     <div t-if="!productosFiltrados.length" class="shalom-vacio">
                         No se encontraron productos.
                     </div>
@@ -102,6 +108,7 @@
                                             class="qty-input"
                                             t-att-value="cantidadEnCarrito(producto.id)"
                                             t-on-change="(ev) => this.cambiarCantidadManual(producto.id, ev)"
+                                            t-on-focus="seleccionarTextoCantidad"
                                         />
                                         <button t-on-click="() => this.cambiarCantidad(producto.id, 1)">+</button>
                                     </div>
@@ -150,10 +157,10 @@
                             <span t-else="" class="reward-icon">🎁</span>
                         </div>
                         <div class="product-info">
-                            <div class="name" t-esc="item.producto.name"/>
+                            <div class="name" t-esc="(item.esRecompensa ? 'Promoción: ' : '') + item.producto.name"/>
                             <t t-if="item.esRecompensa">
                                 <div class="addr">
-                                    <span class="promo-badge promo-completa">🎁 Recompensa (gratis)</span>
+                                    <span class="promo-badge promo-completa">🎁 Promoción — producto gratis</span>
                                 </div>
                                 <div class="cart-line-bottom-row">
                                     <div class="cart-line-subtotal" t-esc="'x' + item.cantidad"/>
@@ -173,6 +180,7 @@
                                             class="qty-input"
                                             t-att-value="item.cantidad"
                                             t-on-change="(ev) => this.cambiarCantidadManual(item.producto.id, ev)"
+                                            t-on-focus="seleccionarTextoCantidad"
                                         />
                                         <button t-on-click="() => this.cambiarCantidad(item.producto.id, 1)">+</button>
                                     </div>
@@ -245,7 +253,7 @@
             <div class="confirm-overlay" t-if="state.recompensaMenuAbierto">
                 <div class="confirm-card">
                     <h3>Elegí la recompensa</h3>
-                    <p>Hay más de una promo completa lista para canjear. Se agrega una a la vez.</p>
+                    <p>Hay promos completas de más de una referencia. Elegí cuál agregar primero -- se suman todas las unidades disponibles de esa referencia de una vez.</p>
                     <div class="reward-list">
                         <button
                             t-foreach="recompensasConDisponibilidad"
@@ -254,8 +262,8 @@
                             class="reward-option"
                             t-on-click="() => this.elegirRecompensa(recompensa)"
                         >
-                            <div class="reward-option-nombre" t-esc="recompensa.reward_product_name"/>
-                            <div class="reward-option-detalle" t-esc="recompensa.programa_nombre + ' · x' + recompensa.reward_qty + ' · ' + recompensa.restantes + ' disponible(s)'"/>
+                            <div class="reward-option-nombre" t-esc="'Promoción: ' + recompensa.reward_product_name"/>
+                            <div class="reward-option-detalle" t-esc="recompensa.programa_nombre + ' · ' + (recompensa.restantes * recompensa.reward_qty) + ' unidad(es) disponibles'"/>
                         </button>
                     </div>
                     <div class="edit-actions">

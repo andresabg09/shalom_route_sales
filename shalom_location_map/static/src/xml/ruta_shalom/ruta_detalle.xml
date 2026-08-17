@@ -5,12 +5,29 @@
             <div class="topbar">
                 <div class="topbar-row">
                     <button class="icon-btn" t-on-click="volver" title="Volver a Rutas">←</button>
-                    <div>
+                    <div class="topbar-title">
                         <div class="route-name" t-esc="props.schedule.route_name"/>
                         <div class="route-sub">
                             <span class="progress-pill" t-if="!state.cargando" t-esc="resumen"/>
                         </div>
                     </div>
+                    <button
+                        t-if="!state.cargando"
+                        class="stock-toggle-btn visited-toggle-btn"
+                        t-att-class="state.mostrarVisitados ? 'active' : ''"
+                        t-on-click="toggleMostrarVisitados"
+                    ><t t-esc="state.mostrarVisitados ? '☰ Pendientes' : '✔ Visitados (' + visitasVisitadas.length + ')'"/></button>
+                </div>
+            </div>
+
+            <div class="search-row" t-if="!state.cargando &amp;&amp; state.visitas.length">
+                <div class="search-box-live">
+                    <span>🔎</span>
+                    <input
+                        type="text"
+                        placeholder="Buscar cliente por nombre o dirección…"
+                        t-model="state.busquedaCliente"
+                    />
                 </div>
             </div>
 
@@ -34,8 +51,13 @@
                         Pedile a oficina que las genere desde "Programación de
                         Rutas".
                     </div>
+                    <div t-elif="!visitasFiltradas.length" class="shalom-vacio">
+                        <t t-if="state.busquedaCliente">No se encontró ningún cliente con ese nombre/dirección.</t>
+                        <t t-elif="state.mostrarVisitados">Todavía no hay clientes visitados.</t>
+                        <t t-else="">No quedan clientes pendientes. 🎉</t>
+                    </div>
                     <button
-                        t-foreach="state.visitas"
+                        t-foreach="visitasFiltradas"
                         t-as="visita"
                         t-key="visita.id"
                         t-attf-class="stop-card st-{{visita.estado}}"
@@ -57,6 +79,29 @@
 
                 <div class="map-wrap" t-if="state.tab === 'mapa'">
                     <div class="shalom-mapa" t-ref="mapa"/>
+
+                    <button
+                        t-if="state.paletaVisible"
+                        class="mapa-paleta-siguiente"
+                        t-attf-style="left: {{state.paletaX}}px; top: {{state.paletaY}}px;"
+                        t-on-click="irAlSiguientePendiente"
+                        title="Ir al próximo cliente pendiente"
+                    >
+                        <span
+                            class="mapa-paleta-flecha"
+                            t-attf-style="transform: rotate({{state.paletaAngulo}}deg);"
+                        >⬆</span>
+                    </button>
+
+                    <div class="mapa-controles">
+                        <button class="mapa-control-btn" t-on-click="zoomMapaIn" title="Acercar">+</button>
+                        <button class="mapa-control-btn" t-on-click="zoomMapaOut" title="Alejar">−</button>
+                        <button
+                            class="mapa-control-btn mapa-control-btn-ubicacion"
+                            t-on-click="centrarEnVendedor"
+                            title="Centrar en mi ubicación"
+                        >📍</button>
+                    </div>
                 </div>
             </t>
 

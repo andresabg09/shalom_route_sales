@@ -333,26 +333,25 @@ export class VisitSheet extends Component {
     // -- Arrastrar la hoja para cerrarla --
     // Al principio (bug ya corregido) el gesto solo arrancaba tocando
     // la barrita de 4px de arriba -- muy poco margen para hacerlo con
-    // una sola mano/en movimiento. Ahora arranca desde cualquier
-    // espacio en blanco de la hoja (no solo la barrita), siempre que
-    // el toque no haya sido sobre un control con su propia función.
+    // una sola mano/en movimiento. Después se amplió solo al nombre del
+    // cliente (.name-btn). Ahora arranca desde CUALQUIER parte de la
+    // hoja, botones incluidos -- pedido explícito: no tiene que haber
+    // ningún área bloqueada, así es más simple de usar manejando/en la
+    // calle. Esto no rompe el tocar-para-usar cada botón: un toque
+    // corto sin desplazamiento nunca llega al umbral de cierre (ver
+    // soltarArrastre), así que el click de cada control se sigue
+    // disparando normal -- solo un arrastre real cierra la hoja.
 
     iniciarArrastre(ev) {
         const objetivo = ev.target;
         if (!objetivo.closest) {
             return;
         }
-        // El nombre del cliente (.name-btn) SÍ puede arrancar el
-        // arrastre -- toda la parte de arriba de la hoja tiene que
-        // servir para cerrar deslizando (pedido explícito: manejando/
-        // en el carro es más fácil deslizar desde cualquier punto de
-        // arriba que apuntar a una franja angosta). Esto no rompe el
-        // tocar-para-editar: un toque corto sin desplazamiento nunca
-        // llega al umbral de cierre (ver soltarArrastre), así que el
-        // click de abrirEdicion() se sigue disparando normal.
-        const enControlExclusivo =
-            objetivo.closest("input, textarea, a, select") ||
-            (objetivo.closest("button") && !objetivo.closest(".name-btn"));
+        // Únicos elementos donde SÍ se necesita precisión al tocar sin
+        // que un mini-arrastre se interprete como cierre: campos de
+        // texto reales y links. Los botones ya no están excluidos (ver
+        // comentario arriba).
+        const enControlExclusivo = objetivo.closest("input, textarea, a, select");
         if (enControlExclusivo) {
             return;
         }

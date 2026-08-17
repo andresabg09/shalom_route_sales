@@ -154,6 +154,36 @@ export class OrderScreen extends Component {
 
     // -- Categorías (menú desplegable con buscador) --
 
+    /**
+     * Productos que pasan los filtros de texto (buscador principal) y
+     * stock -- sin aplicar el de categoría, porque es justo el que se
+     * está por elegir acá. Se usa solo para calcular qué categorías
+     * mostrar como opción (pedido explícito: si buscás "tinte" o
+     * activás "Con stock", que el menú de categorías se reduzca a lo
+     * que realmente hay disponible, en vez de listar siempre todo el
+     * catálogo).
+     */
+    get productosParaCategorias() {
+        const texto = this.state.busqueda.trim().toLowerCase();
+        return this.state.productos.filter((producto) => {
+            if (this.state.soloConStock && producto.qty_available <= 0) {
+                return false;
+            }
+            if (!texto) {
+                return true;
+            }
+            return (
+                (producto.name || "").toLowerCase().includes(texto) ||
+                (producto.default_code || "").toLowerCase().includes(texto) ||
+                (producto.barcode || "").toLowerCase().includes(texto)
+            );
+        });
+    }
+
+    /** Todas las categorías del catálogo completo, sin filtrar -- se
+     * usa solo para resolver el nombre de la categoría ya elegida (así
+     * el título del selector no cambia si después se busca/filtra algo
+     * que la deja afuera de las opciones disponibles). */
     get categorias() {
         const vistas = new Map();
         for (const producto of this.state.productos) {
@@ -166,12 +196,26 @@ export class OrderScreen extends Component {
             .sort((a, b) => a.nombre.localeCompare(b.nombre));
     }
 
+    /** Categorías a ofrecer como opción en el menú -- reducidas a las
+     * que de verdad tienen productos con el texto/stock actuales. */
+    get categoriasDisponibles() {
+        const vistas = new Map();
+        for (const producto of this.productosParaCategorias) {
+            if (producto.categ_id) {
+                vistas.set(producto.categ_id[0], producto.categ_id[1]);
+            }
+        }
+        return Array.from(vistas.entries())
+            .map(([id, nombre]) => ({id, nombre}))
+            .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    }
+
     get categoriasFiltradas() {
         const texto = this.state.busquedaCategoria.trim().toLowerCase();
         if (!texto) {
-            return this.categorias;
+            return this.categoriasDisponibles;
         }
-        return this.categorias.filter((c) => c.nombre.toLowerCase().includes(texto));
+        return this.categoriasDisponibles.filter((c) => c.nombre.toLowerCase().includes(texto));
     }
 
     get etiquetaCategoriaActual() {
@@ -376,6 +420,16 @@ export class OrderScreen extends Component {
     }
 
     /**
+     * Al enfocar el input de cantidad, seleccionar todo el valor actual
+     * -- así escribir la cantidad nueva la reemplaza directo (pedido
+     * explícito: sin esto había que borrar dígito por dígito antes de
+     * poder escribir, ej. para cambiar "5" por "100").
+     */
+    seleccionarTextoCantidad(ev) {
+        ev.target.select();
+    }
+
+    /**
      * Cantidad escrita a mano con el teclado (en vez de tocar "+" una
      * por una) -- pedido explícito para pedidos grandes (ej. 100
      * unidades). Cualquier valor inválido o menor a 1 se trata como
@@ -431,9 +485,14 @@ export class OrderScreen extends Component {
     }
 
     // -- Recompensa (producto gratis de una promo "comprar X llevar Y"
-    // ya completa) -- misma lógica que el módulo de Ventas: se canjea
-    // una promo a la vez; si hay más de una disponible, el vendedor
-    // elige cuál primero. El botón deja de mostrarse cuando ya no
+    // ya completa) -- misma lógica que el módulo de Ventas para
+    // detectar cuándo hay una promo completa, pero acá se canjean TODAS
+    // las unidades disponibles de una misma referencia de un solo
+    // click (pedido explícito: si el vendedor completó 10 promos del
+    // mismo producto, un click carga las 10, no una por click). Si hay
+    // promos completas de referencias distintas, el vendedor elige cuál
+    // primero -- y esa elección también trae todas las unidades de esa
+    // referencia de una vez. El botón deja de mostrarse cuando ya no
     // queda ninguna promo completa sin canjear. --
 
     abrirRecompensas() {
@@ -455,6 +514,7 @@ export class OrderScreen extends Component {
     elegirRecompensa(recompensa) {
         const key = `reward-${recompensa.regla_id}`;
         const actual = this.state.carrito[key];
+        const unidadesACargar = recompensa.restantes * recompensa.reward_qty;
         this.state.carrito[key] = {
             producto: {
                 id: recompensa.reward_product_id,
@@ -463,14 +523,15 @@ export class OrderScreen extends Component {
                 qty_available: 0,
                 categ_id: false,
             },
-            cantidad: (actual ? actual.cantidad : 0) + recompensa.reward_qty,
+            cantidad: (actual ? actual.cantidad : 0) + unidadesACargar,
             esRecompensa: true,
             reglaId: recompensa.regla_id,
         };
         this.state.recompensaMenuAbierto = false;
-        this.notification.add(`🎁 Recompensa agregada: ${recompensa.reward_product_name}`, {
-            type: "success",
-        });
+        this.notification.add(
+            `🎁 Promoción agregada: ${unidadesACargar} x ${recompensa.reward_product_name}`,
+            {type: "success"}
+        );
     }
 
     irACatalogo() {

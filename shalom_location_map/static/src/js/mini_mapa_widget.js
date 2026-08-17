@@ -19,14 +19,22 @@ async function getMapboxToken() {
     return mapboxTokenCache;
 }
 
+// Misma causa que se encontró (y arregló) en mapbox_utils.js: hay que
+// esperar a que el navegador termine de bajar/aplicar el CSS antes de
+// crear el mapa -- si no, Mapbox arranca a posicionar marcadores sin
+// las reglas base de ese CSS todavía puestas.
 function cargarCssMapboxGl() {
     if (document.querySelector(`link[href="${MAPBOX_GL_CSS_URL}"]`)) {
-        return;
+        return Promise.resolve();
     }
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = MAPBOX_GL_CSS_URL;
-    document.head.appendChild(link);
+    return new Promise((resolve) => {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = MAPBOX_GL_CSS_URL;
+        link.onload = () => resolve();
+        link.onerror = () => resolve();
+        document.head.appendChild(link);
+    });
 }
 
 /**
@@ -104,7 +112,7 @@ class ShalomMiniMapaWidget extends Component {
                 this.state.lat = position.coords.latitude;
                 this.state.lng = position.coords.longitude;
                 await loadJS(MAPBOX_GL_JS_URL);
-                cargarCssMapboxGl();
+                await cargarCssMapboxGl();
                 this.state.cargando = false;
             },
             () => {
