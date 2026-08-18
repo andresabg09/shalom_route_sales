@@ -47,6 +47,7 @@
             "shalom_location_map/static/src/xml/mini_mapa_widget.xml",
             "shalom_location_map/static/src/scss/ruta_shalom.scss",
             "shalom_location_map/static/src/js/ruta_shalom/mapbox_utils.js",
+            "shalom_location_map/static/src/js/ruta_shalom/navegacion_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/stage_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/action_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/cliente_form.js",

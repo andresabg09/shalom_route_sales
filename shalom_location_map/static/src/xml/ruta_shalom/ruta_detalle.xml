@@ -74,11 +74,36 @@
                             title="Ir con Maps"
                             t-on-click.stop="() => this.abrirMaps(visita)"
                         >🧭</span>
+                        <span
+                            class="quick-icon-btn"
+                            title="Trazar ruta aquí"
+                            t-on-click.stop="() => this.trazarRutaAquiDesdeLista(visita)"
+                        >📍</span>
                     </button>
                 </div>
 
                 <div class="map-wrap" t-if="state.tab === 'mapa'">
                     <div class="shalom-mapa" t-ref="mapa"/>
+
+                    <div
+                        class="nav-barra"
+                        t-if="state.navegando"
+                        t-att-class="state.navExpandido ? 'nav-barra-expandida' : ''"
+                    >
+                        <button
+                            class="nav-barra-handle"
+                            t-on-click="toggleNavExpandido"
+                            title="Ver navegación"
+                        >🧭</button>
+                        <div class="nav-barra-info">
+                            <div class="nav-barra-nombre" t-esc="state.navNombreObjetivo"/>
+                            <div class="nav-barra-datos">
+                                <span t-esc="state.navDistanciaTexto"/>
+                                <span t-if="state.navDuracionTexto"> · <t t-esc="state.navDuracionTexto"/></span>
+                            </div>
+                        </div>
+                        <button class="nav-barra-salir" t-on-click="detenerNavegacion" title="Salir de la navegación">✕</button>
+                    </div>
 
                     <button
                         t-if="state.paletaVisible"
@@ -110,6 +135,14 @@
                 orderId="state.visitaAbiertaId"
                 onCerrar.bind="cerrarVisita"
                 onCambio.bind="recargarVisitas"
+            />
+
+            <ClienteForm
+                t-if="state.edicionLocationId"
+                modo="'editar'"
+                locationId="state.edicionLocationId"
+                onGuardado.bind="edicionClienteGuardada"
+                onCancelar.bind="cerrarEdicionCliente"
             />
         </div>
     </t>

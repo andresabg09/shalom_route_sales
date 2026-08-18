@@ -498,48 +498,40 @@
         line-height: 1;
     }
 
-    // pin de cliente en el mapa -- gota tipo Google Maps (antes era un
-    // círculo plano) coloreada por estado vía --pin-color (seteada
-    // inline desde ruta_detalle.js con COLOR_MARCADOR), con el número
-    // de orden en una insignia blanca arriba. anchor: "bottom" en el
-    // Marker de Mapbox hace que la punta de la gota (abajo del todo)
-    // sea la que queda exacto sobre la coordenada.
-    .shalom-marker-pin {
+    // pin de cliente en el mapa -- círculo de color por estado (vía
+    // --pin-color, seteada inline desde ruta_detalle.js con
+    // COLOR_MARCADOR) con el número de orden adentro.
+    //
+    // OJO -- historial real en producción: se probaron DOS formas de
+    // gota custom (border-radius+rotate, y después un <svg> con la
+    // forma ya dibujada sin rotate) y las DOS reprodujeron el bug de
+    // "los pines se desubican al hacer zoom". No quedó confirmado qué
+    // lo causa exactamente (sospecha: anchor "bottom" sobre un
+    // elemento no cuadrado, y/o el filter: drop-shadow del SVG mal
+    // sincronizado con el transform que aplica Mapbox durante el
+    // pinch-zoom). Este círculo -- cuadrado, anchor "center", sin
+    // filter/rotate -- es la ÚNICA forma confirmada estable. No
+    // cambiar el diseño del pin sin probar el zoom a fondo en un
+    // celular real antes de darlo por bueno.
+    .shalom-marker-numero {
         width: 30px;
-        height: 34px;
-        position: relative;
-        cursor: pointer;
-    }
-    .shalom-marker-pin::before {
-        content: "";
-        position: absolute;
-        left: 1px;
-        right: 1px;
-        top: 1px;
-        bottom: 5px;
-        background: var(--pin-color, var(--shalom-accent));
-        border: 2px solid var(--shalom-surface);
-        border-radius: 50% 50% 50% 0;
-        transform: rotate(-45deg);
-        box-shadow: 0 3px 8px rgba(20, 10, 15, 0.35);
-    }
-    .shalom-marker-pin-badge {
-        position: absolute;
-        top: -10px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 20px;
-        height: 20px;
+        height: 30px;
         border-radius: 50%;
-        background: var(--shalom-surface);
-        color: var(--shalom-ink);
-        font-size: 0.68rem;
-        font-weight: 800;
+        background: var(--pin-color, var(--shalom-accent));
+        border: 2.5px solid var(--shalom-surface);
+        box-shadow: 0 2px 6px rgba(20, 10, 15, 0.4);
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 1px 4px rgba(20, 10, 15, 0.25);
-        z-index: 1;
+        cursor: pointer;
+    }
+    .shalom-marker-numero-txt {
+        color: #fff;
+        font-weight: 800;
+        font-size: 0.78rem;
+        font-family: inherit;
+        line-height: 1;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
     }
 
     // punto pulsante en la posición GPS del vendedor -- color de marca
@@ -603,6 +595,27 @@
         padding-right: 14px; // no chocar con el botón de cerrar (×)
         color: var(--shalom-ink);
     }
+    // el nombre es tocable -- abre la ficha de edición del cliente
+    // (mismo ClienteForm que la pestaña Clientes). Reset de estilos de
+    // <button> + subrayado punteado como affordance de que se puede
+    // tocar (antes era un <div> de solo lectura).
+    .shalom-map-popup-name-btn {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: transparent;
+        padding: 0 14px 8px 0;
+        cursor: pointer;
+        font-family: inherit;
+        text-decoration: underline dotted;
+        text-underline-offset: 3px;
+    }
+    .shalom-map-popup-acciones {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
     .shalom-map-popup-btn {
         display: block;
         width: 100%;
@@ -616,6 +629,101 @@
         cursor: pointer;
         font-family: inherit;
         white-space: nowrap;
+    }
+    // "Trazar ruta aquí" -- sólido en el color de marca en vez del
+    // fondo suave de "Ir con Maps", para distinguir de un vistazo cuál
+    // de los dos abre la navegación en vivo dentro de la app.
+    .shalom-map-popup-btn-nav {
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+    }
+
+    // barra de navegación en vivo ("Trazar ruta aquí") -- arranca
+    // COLAPSADA (solo el ícono 🧭, pedido explícito para no taparle la
+    // vista del mapa) y se expande al tocarla, mostrando nombre del
+    // cliente + distancia/tiempo restante (los llena Mapbox Directions
+    // en cada recálculo) + botón para cortar la navegación. Toda la
+    // animación es CSS puro (max-width + opacity con transition) --
+    // nada de mostrar/ocultar con t-if, que cortaría en seco la
+    // transición.
+    .nav-barra {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 6;
+        display: flex;
+        align-items: center;
+        overflow: hidden;
+        background: var(--shalom-surface);
+        opacity: 0.96;
+        border-radius: 999px;
+        box-shadow: var(--shalom-shadow);
+        max-width: 42px; // colapsada: solo el ancho del handle
+        transition: max-width 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .nav-barra-expandida {
+        max-width: 230px;
+    }
+    .nav-barra-handle {
+        flex: 0 0 auto;
+        width: 42px;
+        height: 42px;
+        border: none;
+        background: transparent;
+        color: var(--shalom-accent);
+        font-size: 1.05rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .nav-barra-info {
+        flex: 1;
+        min-width: 0;
+        line-height: 1.25;
+        opacity: 0;
+        // el delay hace que el texto aparezca recién cuando la
+        // píldora ya casi terminó de abrirse, en vez de verse
+        // "achicado" mientras todavía no hay lugar -- mismo motivo
+        // del delay en .nav-barra-salir de abajo.
+        transition: opacity 0.18s ease 0.12s;
+    }
+    .nav-barra-expandida .nav-barra-info {
+        opacity: 1;
+    }
+    .nav-barra-nombre {
+        font-weight: 800;
+        font-size: 0.74rem;
+        color: var(--shalom-ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .nav-barra-datos {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: var(--shalom-accent);
+        white-space: nowrap;
+    }
+    .nav-barra-salir {
+        flex: 0 0 auto;
+        width: 24px;
+        height: 24px;
+        margin-right: 8px;
+        border-radius: 50%;
+        border: none;
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
+        font-weight: 800;
+        font-size: 0.72rem;
+        cursor: pointer;
+        font-family: inherit;
+        opacity: 0;
+        transition: opacity 0.18s ease 0.12s;
+    }
+    .nav-barra-expandida .nav-barra-salir {
+        opacity: 1;
     }
 
     // nav inferior
