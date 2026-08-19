@@ -17,15 +17,15 @@
                 <button
                     t-att-class="(state.screen === 'rutas' || state.screen === 'ruta-detalle') ? 'active' : ''"
                     t-on-click="() => this.irA('rutas')"
-                ><span>🗂️</span>Rutas</button>
+                ><span><i class="fa fa-map-o" aria-hidden="true"/></span>Rutas</button>
                 <button
                     t-att-class="state.screen === 'cotizaciones' ? 'active' : ''"
                     t-on-click="() => this.irA('cotizaciones')"
-                ><span>🧾</span>Cotizaciones</button>
+                ><span><i class="fa fa-file-text-o" aria-hidden="true"/></span>Cotizaciones</button>
                 <button
                     t-att-class="state.screen === 'clientes' ? 'active' : ''"
                     t-on-click="() => this.irA('clientes')"
-                ><span>👤</span>Clientes</button>
+                ><span><i class="fa fa-user" aria-hidden="true"/></span>Clientes</button>
             </div>
         </div>
     </t>

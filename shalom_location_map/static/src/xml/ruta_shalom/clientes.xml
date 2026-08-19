@@ -9,7 +9,7 @@
 
             <div class="search-row">
                 <div class="search-box-live">
-                    <span class="search-icon">🔎</span>
+                    <span class="search-icon"><i class="fa fa-search" aria-hidden="true"/></span>
                     <input
                         type="text"
                         placeholder="Buscar cliente por nombre o dirección…"
@@ -44,8 +44,8 @@
                             <div class="route-tag" t-if="cliente.fsm_route_name" t-esc="cliente.fsm_route_name"/>
                             <div class="route-tag route-tag-sin-asignar" t-else="">Sin ruta asignada</div>
                         </div>
-                        <span class="quick-icon-btn" title="Llamar" t-on-click.stop="() => this.llamar(cliente)">📞</span>
-                        <span class="quick-icon-btn" title="Ir con Maps" t-on-click.stop="() => this.abrirMaps(cliente)">🧭</span>
+                        <span class="quick-icon-btn" title="Llamar" t-on-click.stop="() => this.llamar(cliente)"><i class="fa fa-phone" aria-hidden="true"/></span>
+                        <span class="quick-icon-btn" title="Ir con Maps" t-on-click.stop="() => this.abrirMaps(cliente)"><i class="fa fa-location-arrow" aria-hidden="true"/></span>
                     </div>
                 </t>
             </div>

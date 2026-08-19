@@ -1,3 +1,8 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_fsm_route_schedule_manager,fsm.route.schedule.manager,model_fsm_route_schedule,fieldservice.group_fsm_manager,1,1,1,1
 access_fsm_route_schedule_user,fsm.route.schedule.user,model_fsm_route_schedule,fieldservice.group_fsm_user,1,0,0,0
+access_shalom_buscar_gps_wizard,shalom.buscar.gps.wizard,model_shalom_buscar_gps_wizard,fieldservice.group_fsm_manager,1,1,1,1
+access_shalom_buscar_gps_wizard_line,shalom.buscar.gps.wizard.line,model_shalom_buscar_gps_wizard_line,fieldservice.group_fsm_manager,1,1,1,1
+access_shalom_buscar_gps_wizard_opcion,shalom.buscar.gps.wizard.opcion,model_shalom_buscar_gps_wizard_opcion,fieldservice.group_fsm_manager,1,1,1,1
+access_shalom_buscar_gps_wizard_candidato,shalom.buscar.gps.wizard.candidato,model_shalom_buscar_gps_wizard_candidato,fieldservice.group_fsm_manager,1,1,1,1
+access_shalom_eliminar_ubicaciones_wizard,shalom.eliminar.ubicaciones.wizard,model_shalom_eliminar_ubicaciones_wizard,fieldservice.group_fsm_manager,1,1,1,1

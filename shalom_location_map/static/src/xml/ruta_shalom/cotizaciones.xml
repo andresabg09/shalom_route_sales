@@ -9,7 +9,7 @@
 
             <div class="search-row">
                 <div class="search-box-live">
-                    <span class="search-icon">🔎</span>
+                    <span class="search-icon"><i class="fa fa-search" aria-hidden="true"/></span>
                     <input
                         type="text"
                         placeholder="Buscar por cliente o número…"

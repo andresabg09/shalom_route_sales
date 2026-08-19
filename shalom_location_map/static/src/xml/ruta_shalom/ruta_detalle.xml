@@ -22,7 +22,7 @@
 
             <div class="search-row" t-if="!state.cargando &amp;&amp; state.visitas.length">
                 <div class="search-box-live">
-                    <span>🔎</span>
+                    <span><i class="fa fa-search" aria-hidden="true"/></span>
                     <input
                         type="text"
                         placeholder="Buscar cliente por nombre o dirección…"
@@ -39,7 +39,7 @@
                 <button
                     t-att-class="state.tab === 'mapa' ? 'active' : ''"
                     t-on-click="() => this.cambiarTab('mapa')"
-                >🧭 Mapa</button>
+                ><i class="fa fa-map-o" aria-hidden="true"/> Mapa</button>
             </div>
 
             <div t-if="state.cargando" class="shalom-vacio">Cargando visitas…</div>
@@ -66,19 +66,24 @@
                         <div class="stop-num" t-esc="visita.orden"/>
                         <div class="stop-info">
                             <div class="name" t-esc="visita.nombre"/>
-                            <div class="addr" t-esc="visita.direccion"/>
+                            <div class="addr-row">
+                                <div class="addr" t-esc="visita.direccion"/>
+                                <div class="meta-venta" t-if="visita.metaVenta">
+                                    <i class="fa fa-flag" aria-hidden="true"/> <t t-esc="'$' + visita.metaVenta.toFixed(2)"/>
+                                </div>
+                            </div>
                         </div>
                         <div class="stop-badge" t-esc="etiquetaEstado(visita.estado)"/>
                         <span
                             class="quick-icon-btn"
                             title="Ir con Maps"
                             t-on-click.stop="() => this.abrirMaps(visita)"
-                        >🧭</span>
+                        ><i class="fa fa-location-arrow" aria-hidden="true"/></span>
                         <span
                             class="quick-icon-btn"
                             title="Trazar ruta aquí"
                             t-on-click.stop="() => this.trazarRutaAquiDesdeLista(visita)"
-                        >📍</span>
+                        ><i class="fa fa-map-pin" aria-hidden="true"/></span>
                     </button>
                 </div>
 
@@ -94,7 +99,7 @@
                             class="nav-barra-handle"
                             t-on-click="toggleNavExpandido"
                             title="Ver navegación"
-                        >🧭</button>
+                        ><i class="fa fa-map-o" aria-hidden="true"/></button>
                         <div class="nav-barra-info">
                             <div class="nav-barra-nombre" t-esc="state.navNombreObjetivo"/>
                             <div class="nav-barra-datos">
@@ -115,7 +120,7 @@
                         <span
                             class="mapa-paleta-flecha"
                             t-attf-style="transform: rotate({{state.paletaAngulo}}deg);"
-                        >⬆</span>
+                        ><i class="fa fa-long-arrow-up" aria-hidden="true"/></span>
                     </button>
 
                     <div class="mapa-controles">
@@ -125,7 +130,7 @@
                             class="mapa-control-btn mapa-control-btn-ubicacion"
                             t-on-click="centrarEnVendedor"
                             title="Centrar en mi ubicación"
-                        >📍</button>
+                        ><i class="fa fa-crosshairs" aria-hidden="true"/></button>
                     </div>
                 </div>
             </t>

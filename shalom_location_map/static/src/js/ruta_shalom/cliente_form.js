@@ -2,6 +2,7 @@
 
 import {Component, onWillStart, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
+import {cerrarConAnimacion} from "./animacion_utils";
 
 /**
  * Formulario ampliado de cliente (Fase 4, ronda de feedback): un solo
@@ -70,6 +71,7 @@ export class ClienteForm extends Component {
             lng: false,
             formModificado: false,
             confirmandoSalida: false,
+            cerrando: false,
         });
 
         onWillStart(async () => {
@@ -344,7 +346,7 @@ export class ClienteForm extends Component {
                 }
                 this.notification.add("Datos del cliente actualizados.", {type: "success"});
             }
-            this.props.onGuardado();
+            cerrarConAnimacion(this.state, () => this.props.onGuardado());
         } catch (error) {
             console.error("shalom: error al guardar cliente", error);
             const mensajeServidor = error && error.data && error.data.message;
@@ -383,6 +385,6 @@ export class ClienteForm extends Component {
     }
 
     cancelar() {
-        this.props.onCancelar();
+        cerrarConAnimacion(this.state, () => this.props.onCancelar());
     }
 }

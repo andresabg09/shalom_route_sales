@@ -40,13 +40,24 @@ Depende de `fieldservice`, `fieldservice_geoengine`, `fieldservice_route` y
 `base_geoengine` (declarado en su `__manifest__.py`; **no** depende de
 `fieldservice_sale`, `fieldservice_crm`, `fieldservice_account` ni
 `base_territory` — esos quedan disponibles en el servidor por el resto del
-stack, pero este módulo no los toca). Solo agrega comportamiento vía
-herencia (`_inherit`) sobre tres modelos nativos de `fieldservice`, más un
-controller HTTP y widgets Owl en el frontend. No define modelos propios.
+stack, pero este módulo no los toca). Agrega comportamiento vía herencia
+(`_inherit`) sobre tres modelos nativos de `fieldservice`, más un
+controller HTTP, widgets Owl en el frontend, y un wizard de administración
+con modelos transitorios propios (ver más abajo) — el primer modelo
+propio que define el módulo en vez de solo extender los nativos.
 
 ### `models/fsm_location.py` — hereda `fsm.location`
 - `x_orden_ruta` (Integer): posición del cliente dentro de su ruta (1 =
   primero a visitar). Editable a mano; se usa al generar visitas.
+- `x_venta_mas_alta` (Monetary, calculado): la venta CONFIRMADA de
+  mayor monto (no la última, la más alta) que se le haya hecho alguna
+  vez al contacto de este cliente — mismo criterio que `capacidad` en
+  `fsm_route_schedule.py` (que suma la ÚLTIMA venta de cada cliente de
+  la ruta para estimar el potencial de la ruta completa), pero acá por
+  MÁXIMO y a nivel de un solo cliente. Se muestra en el listado de
+  clientes de una ruta puntual, dentro de la app del vendedor (ver
+  `ruta_detalle.js`/`.xml` más abajo), como meta concreta: "a este
+  cliente ya se le vendió hasta $X".
 - `geo_localize()` sobrescrito: `fieldservice_geoengine` llama a un
   geocoder externo al crear una ubicación sin coordenadas, y si ese
   servicio falla, la excepción original interrumpe la creación/importación
@@ -99,6 +110,99 @@ controller HTTP y widgets Owl en el frontend. No define modelos propios.
   implementado); requiere `MAPBOX_ACCESS_TOKEN` como variable de entorno
   del servidor (nunca hardcodeado).
 
+### `wizards/shalom_buscar_gps_wizard.py` — "Buscar GPS por nombre"
+Wizard de administración (solo `fieldservice.group_fsm_manager`), menú
+"Operaciones" de Field Service. Ayuda a completar el GPS de clientes
+buscando por **nombre** en **Google Places API (Text Search)** — el mismo
+truco que ya se usa a mano en Waze/Google Maps para encontrar un comercio
+sin tener la dirección exacta (es literalmente el mismo motor). Requiere
+`GOOGLE_PLACES_API_KEY` como variable de entorno del servidor (nunca
+hardcodeada) — cargada desde EasyPanel, igual que `MAPBOX_ACCESS_TOKEN`.
+Se probó primero con Mapbox Geocoding, pero su cobertura de comercios
+chicos en Panamá resultó floja; Google Places la reemplazó por decisión
+explícita del usuario. `MAPBOX_ACCESS_TOKEN` sigue existiendo para el
+trazado de rutas en `fsm_route.py`, sin relación con este wizard.
+
+La búsqueda es **por cliente, a pedido** — no hay un botón que busque
+todo de una (para no disparar más llamadas a Google de las necesarias).
+La lista principal (`ShalomBuscarGpsWizardLine`) tiene, por fila, 3
+botones:
+- **"Buscar opciones en Google"** (`action_buscar_opciones`): busca EN EL
+  MOMENTO, solo para ese cliente, y abre un popup
+  (`shalom.buscar.gps.wizard.opcion` / `.candidato`) con hasta
+  `TOPE_OPCIONES_POR_CLIENTE` (3) resultados — Google no siempre acierta
+  con el primero. Cada opción tiene su propio botón "Ver mapa"
+  (`action_ver_mapa`, abre Google Maps en pestaña nueva) y "Usar esta
+  opción" (`action_usar_esta`, guarda esa coordenada vía
+  `fsm.location.shalom_actualizar_gps()`). Si ya se capturó "mi
+  ubicación" (ver abajo), cada opción también muestra a cuántos km está
+  (`distancia_km`, calculado con la fórmula de Haversine en
+  `_distancia_km()`, sin depender de ninguna API paga extra).
+- **"Dejar como está"** (`action_dejar_como_esta`): no busca ni cambia
+  nada, pero saca al cliente de la cola para siempre.
+- **"Borrar coordenada actual"** (`action_borrar_coordenada`): vacía el
+  GPS del cliente pero lo DEJA en la cola — a diferencia de "Dejar como
+  está", acá la intención es seguir buscándole una coordenada real más
+  adelante, no abandonarlo.
+
+La cola de "a quién mostrar" se basa en `fsm.location.x_gps_wizard_revisado`
+(campo interno, no pensado para tocarse a mano fuera de este wizard): un
+cliente sale de la cola cuando se le guarda una coordenada real o se
+elige "Dejar como está" — "Borrar coordenada actual" es la única decisión
+que NO lo saca de la cola. Se puede abrir desde el menú (carga las
+ubicaciones no revisadas, con tope de `LIMITE_UBICACIONES_POR_CORRIDA` =
+200) o desde una selección hecha a mano en la lista de Ubicaciones de
+Servicio (acción del menú "Acción", vía `binding_model_id`, que ignora si
+ya estaban revisadas). También tiene un selector de **Ruta** opcional
+(`route_id`) con el botón "Cargar ubicaciones de esta ruta"
+(`action_cargar_ubicaciones`), para atender ruta por ruta en el orden que
+se prefiera.
+
+El popup de opciones (`shalom.buscar.gps.wizard.opcion`) tiene además un
+campo editable **"Buscar en Google Maps"** (`query_busqueda`, precargado
+con el nombre guardado del cliente) + botón "Buscar"
+(`action_buscar_de_nuevo`): si el nombre tal cual está guardado no
+encuentra el local correcto (typo, alias, local que cambió de nombre), se
+puede reescribir la búsqueda a mano — agregar una calle, una referencia,
+otro nombre — y volver a consultar Google sin salir del popup ni depender
+de un solo intento automático. Reemplaza `candidato_ids` con los
+resultados nuevos (recalculando `distancia_km` si ya se capturó "mi
+ubicación").
+
+**"Capturar mi ubicación"** (ícono `fa-crosshairs`) (`action_abrir_captura_mi_ubicacion` +
+`static/src/js/shalom_capturar_mi_ubicacion_button.js`): pide el GPS del
+navegador (sin confirmación, a diferencia de
+`fsm_order_gps_button.js` — acá es de solo lectura, nunca sobreescribe
+nada de un cliente) y lo guarda en `mi_lat`/`mi_lng` del wizard, para que
+las próximas búsquedas de opciones muestren la distancia.
+
+### `models/fsm_location.py` — `action_eliminar_ubicacion()` ("Eliminar esta Ubicación")
+Botón en el formulario de Ubicación (solo `fieldservice.group_fsm_manager`,
+con confirmación obligatoria antes de ejecutar) que borra **únicamente**
+ese registro de `fsm.location` — nunca el contacto. Existe por un bug de
+datos real encontrado en producción: `fsm.location` usa `_inherits` sobre
+`res.partner` vía `partner_id` (`delegate=True`), así que `name`, `street`,
+`active`, GPS, etc. son en realidad campos del contacto delegado, no de la
+Ubicación. Eso significa que **archivar** una Ubicación (`active=False`,
+lo que hacía antes el botón nativo "Archivar") apaga el `active` del
+contacto — y si ese contacto tiene más de una Ubicación apuntándolo (pasó
+con ~261 clientes de la importación original: dos o tres `fsm.location`
+distintas comparten el mismo `partner_id`), las demás Ubicaciones del
+mismo contacto se ven archivadas también, aunque no se hayan tocado, y el
+cliente queda bloqueado para facturar. `action_eliminar_ubicacion()` en
+cambio usa `unlink()`: por cómo funciona `_inherits` en Odoo, borrar la
+fila de `fsm.location` NO borra ni toca el contacto delegado
+(`partner_id`/`owner_id`), que sigue existiendo y activo. Si la Ubicación
+tiene visitas y es la única del contacto, no se borra (se perdería ese
+historial) y avisa en vez de bloquear en silencio; si hay otra Ubicación
+del mismo contacto, las visitas se reasignan ahí antes de borrar.
+
+(El wizard "Fusionar ubicaciones duplicadas" que hubo en una versión
+anterior de este documento se descartó: los duplicados reales resultaron
+ser casi todos este mismo patrón -- mismo contacto, Ubicación de más --,
+resuelto con este botón más una limpieza puntual por script, no con un
+wizard de fusión manual grupo por grupo.)
+
 ### `controllers/mapbox_token.py`
 Endpoint JSON (`/shalom_location_map/mapbox_public_token`, `auth="user"`)
 que expone el mismo token público de Mapbox al JS del navegador para
@@ -107,6 +211,10 @@ pintar el mapa base.
 ### Frontend (`static/src/`)
 Widgets Owl inyectados en `web.assets_backend`:
 - `fsm_order_gps_button.js` — botón de captura de GPS con confirmación.
+- `shalom_capturar_mi_ubicacion_button.js` — mismo patrón que el
+  anterior pero SIN confirmación (de solo lectura, nunca sobreescribe
+  un cliente): usado por "Capturar mi ubicación" en el wizard
+  "Buscar GPS por nombre", para calcular distancias.
 - `mapbox_background_layer.js` — capa de tiles Mapbox sobre las vistas
   geoengine nativas.
 - `mini_mapa_widget.js`/`.xml` — mini-mapa embebido en la tarjeta de
@@ -117,7 +225,12 @@ Widgets Owl inyectados en `web.assets_backend`:
   compras/productos olvidados sobre `get_datos_grafico_compras()`.
 - `ruta_shalom/` — la app del vendedor ("Ruta Shalom"): shell + nav
   inferior (`app.js`), pestaña Rutas (`rutas_hub.js`), detalle de ruta
-  Lista/Mapa (`ruta_detalle.js`), hoja de visita (`visit_sheet.js`),
+  Lista/Mapa (`ruta_detalle.js` -- cada tarjeta de cliente muestra
+  también `x_venta_mas_alta` (ícono `fa-flag`) en la misma fila que la
+  dirección (`.addr-row`, no como línea aparte -- se reportó que como
+  línea aparte la tarjeta se veía apretada en mobile), leído junto con
+  `phone`/`street` en el mismo `orm.read` de `fsm.location`), hoja de
+  visita (`visit_sheet.js`),
   catálogo + carrito + escaneo de código de barras (`order_screen.js`,
   Fase 3), y las pestañas Cotizaciones (`cotizaciones.js`, Fase 4) y
   Clientes (`clientes.js`, Fase 4, con alta rápida desde la calle).
@@ -132,8 +245,45 @@ Widgets Owl inyectados en `web.assets_backend`:
   abre Ventas para que el vendedor ajuste precios/promociones ahí).
   `action_utils.js` normaliza las acciones `ir.actions.act_window` que
   devuelven los métodos de Python para `action.doAction()` desde JS.
-  El cierre de pantallas (hoja de visita, catálogo) es siempre estado
-  interno de Owl, sin tocar el historial del navegador -- se probó con
+  `animacion_utils.js` (`cerrarConAnimacion()` + `DURACION_CIERRE_MS`) da
+  la animación de salida a los 3 popups/pantallas principales (hoja de
+  visita, ficha de cliente, catálogo+carrito): marca `state.cerrando`
+  (la vista suma la clase `closing`, con la keyframe `-out` que le toca
+  en `ruta_shalom.scss`) y recién después del delay llama al cierre real
+  -- si no, Owl saca el nodo del DOM al instante y la animación nunca se
+  ve. Los 5 overlays custom de la app (`sheet-overlay`, `edit-overlay`,
+  `order-overlay`, `confirm-overlay`, `scan-overlay`) tienen animación de
+  ENTRADA pareja (fondo con fade, contenido con la curva `cubic-bezier
+  (0.32, 0.72, 0, 1)` de iOS -- rápida, sin rebote); de los 5, solo los 3
+  de arriba también animan la SALIDA por JS -- `confirm-overlay` (avisos
+  chicos de "¿salir sin guardar?") y `scan-overlay` (cámara del
+  escáner) se cierran sin ese delay a propósito, porque
+  `order_screen.js` ya tenía una advertencia de que `OrderScreen` tiene
+  que estar REALMENTE desmontado antes de un `doAction()` que le sigue
+  en dos de sus salidas (confirmar pedido, revisar cotización) -- meter
+  un delay ahí reintroduciría un bug ya arreglado. `intentarSalir()`/
+  `confirmarSalirSinGuardar()` (las salidas donde no hay ningún
+  `doAction()` inmediatamente después) sí animan.
+
+  Los emoji de botones/atajos de toda la app (y de los formularios
+  nativos de `fsm.order`/el wizard de GPS) se reemplazaron por íconos
+  Font Awesome (ya vienen con Odoo, sin assets nuevos) monocromos, cada
+  uno con un solo significado fijo -- antes 🧭 y 📍 se usaban para varias
+  cosas distintas a la vez (ir a Google Maps, ver el mapa interno,
+  capturar GPS, trazar ruta), lo que confundía. Mapeo:
+  `fa-location-arrow` = ir a Google Maps (externo); `fa-map-o` = ver
+  mapa interno/Mapbox; `fa-crosshairs` = capturar/centrar en mi GPS;
+  `fa-map-pin` = trazar ruta aquí (mapa interno); `fa-flag` = meta de
+  venta; `fa-map-marker` = ver un punto puntual en un mapa (ya se usaba
+  así en el popup de opciones de GPS). El resto (`fa-phone`, `fa-user`,
+  `fa-shopping-cart`, `fa-file-text-o`, `fa-camera`, `fa-search`,
+  `fa-trash-o`, `fa-gift`, `fa-history`, `fa-pencil`, `fa-long-arrow-up`)
+  son swaps 1:1 sin ambigüedad. Fuera de este cambio, a propósito: las
+  etiquetas de promo "✅ Tienes.../⏳ Faltan..." que arma
+  `fsm_order.py` (`shalom_estado_promociones_carrito`) siguen con emoji
+  porque `order_screen.js` matchea ese texto literal
+  (`.includes("✅")`) para decidir el color del badge -- cambiarlo es un
+  refactor aparte, no un swap de ícono.
   `history.pushState`/`popstate` para que el botón Atrás de Android
   cerrara un nivel a la vez, pero choca con el router propio del web
   client de Odoo 18 (rompía la redirección de "Revisar cotización");

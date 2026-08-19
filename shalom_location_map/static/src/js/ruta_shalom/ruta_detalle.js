@@ -82,7 +82,7 @@ const NAV_COLOR_CHISPA = "#ff9dc2"; // tono claro sobre el color de marca, efect
 // CADA lectura de GPS sin importar que el vendedor estuviera paneando
 // para mirar el resto de la ruta, así que el mapa se sentía "pegado"
 // / imposible de mover. 60s le da tiempo de examinar antes de que
-// vuelva a seguirlo solo -- y tocar "Centrar en mí" (📍, ya existía)
+// vuelva a seguirlo solo -- y tocar "Centrar en mí" (ícono fa-crosshairs, ya existía)
 // lo reactiva antes si el vendedor ya terminó de mirar (ver
 // centrarEnVendedor()).
 const NAV_PAUSA_SEGUIMIENTO_MS = 60000;
@@ -227,6 +227,7 @@ export class RutaDetalle extends Component {
                 const locaciones = await this.orm.read("fsm.location", locationIds, [
                     "phone",
                     "street",
+                    "x_venta_mas_alta",
                 ]);
                 datosPorLocation = Object.fromEntries(locaciones.map((l) => [l.id, l]));
             }
@@ -243,6 +244,7 @@ export class RutaDetalle extends Component {
                     lng: o.x_cliente_lng,
                     telefono: loc ? loc.phone : "",
                     direccion: loc ? loc.street : "",
+                    metaVenta: loc ? loc.x_venta_mas_alta : 0,
                 };
             });
 
@@ -459,7 +461,12 @@ export class RutaDetalle extends Component {
                 const nombreEl = document.createElement("button");
                 nombreEl.type = "button";
                 nombreEl.className = "shalom-map-popup-name shalom-map-popup-name-btn";
-                nombreEl.textContent = (v.orden ? "#" + v.orden + " · " : "") + v.nombre + " ✏️";
+                nombreEl.textContent = (v.orden ? "#" + v.orden + " · " : "") + v.nombre;
+                const editIconEl = document.createElement("i");
+                editIconEl.className = "fa fa-pencil";
+                editIconEl.setAttribute("aria-hidden", "true");
+                nombreEl.appendChild(document.createTextNode(" "));
+                nombreEl.appendChild(editIconEl);
                 nombreEl.title = "Editar cliente";
                 nombreEl.addEventListener("click", () => this.abrirEdicionCliente(v));
                 popupEl.appendChild(nombreEl);
@@ -469,13 +476,13 @@ export class RutaDetalle extends Component {
                 const btnMapsEl = document.createElement("button");
                 btnMapsEl.type = "button";
                 btnMapsEl.className = "shalom-map-popup-btn";
-                btnMapsEl.textContent = "🧭 Ir con Maps";
+                btnMapsEl.innerHTML = '<i class="fa fa-location-arrow" aria-hidden="true"></i> Ir con Maps';
                 btnMapsEl.addEventListener("click", () => this.abrirMaps(v));
                 accionesEl.appendChild(btnMapsEl);
                 const btnNavEl = document.createElement("button");
                 btnNavEl.type = "button";
                 btnNavEl.className = "shalom-map-popup-btn shalom-map-popup-btn-nav";
-                btnNavEl.textContent = "📍 Trazar ruta aquí";
+                btnNavEl.innerHTML = '<i class="fa fa-map-pin" aria-hidden="true"></i> Trazar ruta aquí';
                 btnNavEl.addEventListener("click", () => this.iniciarNavegacion(v));
                 accionesEl.appendChild(btnNavEl);
                 popupEl.appendChild(accionesEl);
@@ -1093,7 +1100,7 @@ export class RutaDetalle extends Component {
     }
 
     /**
-     * La barra de navegación arranca colapsada (solo el ícono 🧭) para
+     * La barra de navegación arranca colapsada (solo el ícono fa-map-o) para
      * no taparle la vista del mapa al vendedor -- pedido explícito. Un
      * toque la expande mostrando destino + distancia/tiempo, otro
      * toque la vuelve a colapsar. La animación (ancho + opacidad) es

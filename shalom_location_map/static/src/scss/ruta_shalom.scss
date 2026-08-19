@@ -345,13 +345,39 @@
         white-space: normal;
         overflow-wrap: break-word;
     }
+    // dirección + meta de venta en la MISMA fila (antes la meta se
+    // agregaba como línea propia debajo de la dirección -- entre
+    // nombre + dirección + meta apiladas, la tarjeta se veía "apretada"
+    // en pantallas chicas). La dirección se sigue truncando con "…" si
+    // hace falta lugar para la meta, que nunca se corta (monto corto,
+    // fijo a la derecha).
+    .addr-row {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin-top: 2px;
+        min-width: 0;
+    }
     .stop-info .addr {
+        flex: 1 1 auto;
+        min-width: 0;
         color: var(--shalom-ink-muted);
         font-size: 0.8rem;
-        margin-top: 2px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+    // venta más alta histórica del cliente (meta concreta para el
+    // vendedor), en el listado de clientes de una ruta.
+    .stop-info .meta-venta {
+        flex: 0 0 auto;
+        color: var(--shalom-primary, #7c5cff);
+        font-size: 0.74rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .stop-info .meta-venta .fa {
+        font-size: 0.7rem;
     }
     // pestaña Clientes: a qué ruta pertenece cada cliente (un
     // vendedor puede tener más de una ruta asignada)
@@ -404,6 +430,7 @@
         justify-content: center;
         color: var(--shalom-ink);
         cursor: pointer;
+        font-size: 1.05rem;
     }
 
     .icon-btn {
@@ -755,6 +782,52 @@
         font-size: 1.1rem;
     }
 
+    // -- Animación de apertura/cierre de TODOS los popups y pantallas
+    // de la app (hoja de visita, ficha de cliente, catálogo+carrito,
+    // avisos de confirmación, escáner) -- pedido explícito: rápida y
+    // sólida, no un efecto largo/decorativo, y pareja en los 5. Fondo:
+    // fade. Contenido: entra deslizando/escalando con la curva "sheet"
+    // de iOS (cubic-bezier(0.32, 0.72, 0, 1) -- rápida, sin rebote). El
+    // cierre usa la MISMA curva en reversa pero más corto (ver
+    // DURACION_CIERRE_MS en animacion_utils.js, tiene que coincidir con
+    // la duración de las keyframes "-out" de acá abajo). La clase
+    // "closing" la agregan los componentes (ver cerrarConAnimacion en
+    // animacion_utils.js) antes de desmontarse de verdad.
+    $shalom-curva-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+
+    @keyframes shalom-fondo-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    @keyframes shalom-fondo-out {
+        from { opacity: 1; }
+        to { opacity: 0; }
+    }
+    @keyframes shalom-hoja-in {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+    }
+    @keyframes shalom-hoja-out {
+        from { transform: translateY(0); }
+        to { transform: translateY(100%); }
+    }
+    @keyframes shalom-tarjeta-in {
+        from { opacity: 0; transform: scale(0.94) translateY(8px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    @keyframes shalom-tarjeta-out {
+        from { opacity: 1; transform: scale(1) translateY(0); }
+        to { opacity: 0; transform: scale(0.96) translateY(4px); }
+    }
+    @keyframes shalom-pantalla-in {
+        from { opacity: 0; transform: translateX(16px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes shalom-pantalla-out {
+        from { opacity: 1; transform: translateX(0); }
+        to { opacity: 0; transform: translateX(16px); }
+    }
+
     // hoja de visita (Fase 2)
     .sheet-overlay {
         position: fixed;
@@ -764,6 +837,10 @@
         display: flex;
         align-items: flex-end;
         justify-content: center;
+        animation: shalom-fondo-in 0.15s ease both;
+    }
+    .sheet-overlay.closing {
+        animation: shalom-fondo-out 0.15s ease both;
     }
     .sheet {
         width: 100%;
@@ -775,9 +852,17 @@
         padding: 10px 20px 26px;
         box-shadow: 0 -12px 30px -10px rgba(0, 0, 0, 0.3);
         transition: transform 0.2s ease;
+        animation: shalom-hoja-in 0.22s $shalom-curva-sheet both;
     }
     .sheet.sin-transicion {
         transition: none;
+    }
+    .sheet.closing {
+        // sin transition acá -- se reemplaza por la animación de
+        // salida, si no compiten los dos por la misma propiedad
+        // (transform) y se ve entrecortado.
+        transition: none;
+        animation: shalom-hoja-out 0.16s $shalom-curva-sheet both;
     }
     .sheet-handle {
         width: 56px;
@@ -961,14 +1046,22 @@
         justify-content: center;
         padding: 20px;
         z-index: 60;
+        animation: shalom-fondo-in 0.15s ease both;
+    }
+    .edit-overlay.closing {
+        animation: shalom-fondo-out 0.15s ease both;
     }
     .edit-card {
+        animation: shalom-tarjeta-in 0.2s $shalom-curva-sheet both;
         width: 100%;
         max-width: 320px;
         background: var(--shalom-surface);
         border-radius: var(--shalom-radius-lg);
         padding: 20px;
         box-shadow: var(--shalom-shadow);
+    }
+    .edit-card.closing {
+        animation: shalom-tarjeta-out 0.16s $shalom-curva-sheet both;
     }
     .edit-card h3 {
         font-size: 1.05rem;
@@ -1108,7 +1201,9 @@
         border: 1px solid var(--shalom-line);
     }
 
-    // catálogo + carrito (Fase 3)
+    // catálogo + carrito (Fase 3) -- pantalla completa, no una tarjeta
+    // chica: entra/sale como si se "empujara" desde la derecha (patrón
+    // nativo de pantalla nueva), no con el escalado de un modal.
     .order-overlay {
         position: fixed;
         inset: 0;
@@ -1117,6 +1212,10 @@
         color: var(--shalom-ink);
         display: flex;
         flex-direction: column;
+        animation: shalom-pantalla-in 0.2s $shalom-curva-sheet both;
+    }
+    .order-overlay.closing {
+        animation: shalom-pantalla-out 0.16s $shalom-curva-sheet both;
     }
     .order-topbar {
         flex: 0 0 auto;
@@ -1625,6 +1724,7 @@
         align-items: center;
         justify-content: center;
         padding: 20px;
+        animation: shalom-fondo-in 0.12s ease both;
     }
     .confirm-card {
         width: 100%;
@@ -1633,6 +1733,7 @@
         border-radius: var(--shalom-radius-lg);
         padding: 20px;
         box-shadow: var(--shalom-shadow);
+        animation: shalom-tarjeta-in 0.16s $shalom-curva-sheet both;
     }
     .confirm-card h3 {
         font-size: 1.05rem;
@@ -1652,7 +1753,11 @@
         margin-top: 18px;
     }
 
-    // escáner de código de barras
+    // escáner de código de barras -- solo animación de entrada (el
+    // cierre pasa por detenerEscaneo(), que se llama desde varios
+    // lugares distintos, incluido el cierre de toda la pantalla del
+    // pedido -- animarlo ahí reintroduciría el retraso que ya se evitó
+    // a propósito en cerrarDeVerdad(), ver order_screen.js).
     .scan-overlay {
         position: fixed;
         inset: 0;
@@ -1662,6 +1767,7 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        animation: shalom-fondo-in 0.15s ease both;
     }
     .scan-video {
         position: absolute;

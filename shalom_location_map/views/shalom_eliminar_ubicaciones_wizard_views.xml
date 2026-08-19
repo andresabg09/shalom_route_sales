@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Wizard de administración "Eliminar Ubicaciones seleccionadas":
+        aparece en el menú de acciones (engranaje) del listado de
+        Ubicaciones de Servicio cuando hay filas tildadas. Ver
+        wizards/shalom_eliminar_ubicaciones_wizard.py.
+    -->
+    <record id="shalom_eliminar_ubicaciones_wizard_form" model="ir.ui.view">
+        <field name="name">shalom.eliminar.ubicaciones.wizard.form</field>
+        <field name="model">shalom.eliminar.ubicaciones.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <p>
+                    Se van a eliminar ÚNICAMENTE estas Ubicaciones -- los
+                    contactos/clientes detrás NO se tocan. Si alguna es la
+                    única Ubicación de su contacto y tiene visitas en su
+                    historial, se omite (no se borra) y queda avisado en el
+                    resultado.
+                </p>
+                <field name="location_ids" readonly="1">
+                    <list create="0" delete="0">
+                        <field name="name" />
+                        <field name="street" />
+                        <field name="partner_id" />
+                    </list>
+                </field>
+                <footer>
+                    <button
+                        name="action_eliminar"
+                        type="object"
+                        string="Eliminar seleccionadas"
+                        class="btn-danger"
+                        confirm="Esto borra PERMANENTEMENTE las Ubicaciones listadas (los contactos NO se tocan). ¿Confirmás?"
+                    />
+                    <button string="Cancelar" special="cancel" />
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="shalom_eliminar_ubicaciones_wizard_action" model="ir.actions.act_window">
+        <field name="name">Eliminar Ubicaciones seleccionadas</field>
+        <field name="res_model">shalom.eliminar.ubicaciones.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="fieldservice.model_fsm_location" />
+        <field name="binding_view_types">list</field>
+        <field name="groups_id" eval="[(4, ref('fieldservice.group_fsm_manager'))]" />
+    </record>
+</odoo>

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <templates xml:space="preserve">
     <t t-name="shalom_location_map.OrderScreen">
-        <div class="order-overlay">
+        <div class="order-overlay" t-att-class="state.cerrando ? 'closing' : ''">
             <div class="order-topbar">
                 <button class="icon-btn" t-on-click="atras" title="Atrás">←</button>
                 <div class="order-topbar-title">
@@ -16,7 +16,7 @@
             <t t-elif="state.pantalla === 'catalogo'">
                 <div class="search-row">
                     <div class="search-box-live">
-                        <span>🔎</span>
+                        <span><i class="fa fa-search" aria-hidden="true"/></span>
                         <input
                             type="text"
                             placeholder="Buscar producto, código o barcode…"
@@ -24,7 +24,7 @@
                             t-on-input="onBusquedaInput"
                         />
                     </div>
-                    <button class="icon-btn" t-on-click="iniciarEscaneo" title="Escanear código de barras">📷</button>
+                    <button class="icon-btn" t-on-click="iniciarEscaneo" title="Escanear código de barras"><i class="fa fa-camera" aria-hidden="true"/></button>
                 </div>
 
                 <div class="categ-bar">
@@ -116,7 +116,7 @@
                                         class="qty-trash-btn"
                                         title="Quitar del carrito"
                                         t-on-click="() => this.quitarDelCarrito(producto.id)"
-                                    >🗑</button>
+                                    ><i class="fa fa-trash-o" aria-hidden="true"/></button>
                                 </div>
                                 <span
                                     t-if="etiquetaPromo(producto.id)"
@@ -154,18 +154,18 @@
                                 alt=""
                                 t-on-error="onImagenError"
                             />
-                            <span t-else="" class="reward-icon">🎁</span>
+                            <span t-else="" class="reward-icon"><i class="fa fa-gift" aria-hidden="true"/></span>
                         </div>
                         <div class="product-info">
                             <div class="name" t-esc="(item.esRecompensa ? 'Promoción: ' : '') + item.producto.name"/>
                             <t t-if="item.esRecompensa">
                                 <div class="addr">
-                                    <span class="promo-badge promo-completa">🎁 Promoción — producto gratis</span>
+                                    <span class="promo-badge promo-completa"><i class="fa fa-gift" aria-hidden="true"/> Promoción — producto gratis</span>
                                 </div>
                                 <div class="cart-line-bottom-row">
                                     <div class="cart-line-subtotal" t-esc="'x' + item.cantidad"/>
                                     <button class="qty-trash-btn" t-on-click="() => this.quitarDelCarrito('reward-' + item.reglaId)">
-                                        🗑 Eliminar
+                                        <i class="fa fa-trash-o" aria-hidden="true"/> Eliminar
                                     </button>
                                 </div>
                             </t>
@@ -194,7 +194,7 @@
                                 <div class="cart-line-bottom-row">
                                     <div class="cart-line-subtotal" t-esc="'$' + (item.cantidad * item.producto.list_price).toFixed(2)"/>
                                     <button class="qty-trash-btn" t-on-click="() => this.quitarDelCarrito(item.producto.id)">
-                                        🗑 Eliminar
+                                        <i class="fa fa-trash-o" aria-hidden="true"/> Eliminar
                                     </button>
                                 </div>
                             </t>
@@ -203,7 +203,7 @@
                 </div>
 
                 <button class="reward-cta" t-if="recompensasConDisponibilidad.length" t-on-click="abrirRecompensas">
-                    🎁 Recompensa disponible
+                    <i class="fa fa-gift" aria-hidden="true"/> Recompensa disponible
                 </button>
 
                 <div class="cart-total-row">
@@ -216,7 +216,7 @@
                     t-att-disabled="state.guardandoBorrador || state.confirmando || !itemsCarrito.length"
                 >
                     <t t-if="state.guardandoBorrador">Guardando…</t>
-                    <t t-else="">📋 Revisar cotización (precios/promos en Ventas)</t>
+                    <t t-else=""><i class="fa fa-file-text-o" aria-hidden="true"/> Revisar cotización (precios/promos en Ventas)</t>
                 </button>
                 <button
                     class="cta-order"

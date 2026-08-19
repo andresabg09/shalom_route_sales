@@ -21,6 +21,11 @@ from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
+# Mismo criterio que ESTADOS_VENTA_CONFIRMADA en fsm_order.py y
+# fsm_route_schedule.py: estados de sale.order que cuentan como venta
+# real, no borrador.
+ESTADOS_VENTA_CONFIRMADA = ("sale", "done")
+
 
 class FSMLocation(models.Model):
     _inherit = "fsm.location"
@@ -31,6 +36,50 @@ class FSMLocation(models.Model):
         "visitar, 2 = segundo, etc. Editable directamente. Al generar "
         "visitas de una ruta, las tareas se ordenan según este número.",
     )
+    x_gps_wizard_revisado = fields.Boolean(
+        string="GPS revisado (wizard)",
+        default=False,
+        help="Casilla interna, no pensada para tocarse a mano: la usa "
+        "el wizard 'Buscar GPS por nombre' para saber qué clientes ya "
+        "se revisaron (aceptados, descartados o con la coordenada "
+        "borrada a propósito) y no volver a mostrarlos en la próxima "
+        "corrida, tenga o no tenga GPS cargado.",
+    )
+    x_venta_mas_alta = fields.Monetary(
+        string="Venta más alta",
+        compute="_compute_x_venta_mas_alta",
+        currency_field="x_currency_id",
+        help="La venta CONFIRMADA de mayor monto (no la última, la "
+        "más alta) que se le haya hecho alguna vez al contacto de "
+        "este cliente. Se muestra en el listado de clientes de la "
+        "ruta (app del vendedor) como meta concreta -- 'a este "
+        "cliente ya se le vendió hasta $X'. Se recalcula al leerse, "
+        "no queda guardada en la base (mismo criterio que 'capacidad' "
+        "en fsm.route.schedule, pero por máximo en vez de por "
+        "última venta).",
+    )
+    x_currency_id = fields.Many2one(
+        "res.currency",
+        string="Moneda",
+        default=lambda self: self.env.company.currency_id,
+        help="Solo para mostrar x_venta_mas_alta con el símbolo "
+        "correcto -- fsm.location no tenía un campo de moneda propio.",
+    )
+
+    @api.depends("partner_id")
+    def _compute_x_venta_mas_alta(self):
+        for location in self:
+            mejor = False
+            if location.partner_id:
+                mejor = self.env["sale.order"].search(
+                    [
+                        ("partner_id", "=", location.partner_id.id),
+                        ("state", "in", list(ESTADOS_VENTA_CONFIRMADA)),
+                    ],
+                    order="amount_total desc",
+                    limit=1,
+                )
+            location.x_venta_mas_alta = mejor.amount_total if mejor else 0.0
 
     def geo_localize(self):
         try:
@@ -132,6 +181,13 @@ class FSMLocation(models.Model):
         location_vals = {
             "name": name.strip(),
             "partner_id": partner.id,
+            # owner_id es obligatorio en fsm.location (no tiene default ni
+            # se completa solo fuera del onchange del formulario nativo,
+            # que este create() directo no dispara) -- sin esto, el INSERT
+            # fallaba por violar la restricción NOT NULL de la columna.
+            # Para un alta desde la calle sin jerarquía de Ubicaciones, el
+            # dueño es el mismo contacto recién creado.
+            "owner_id": partner.id,
             "phone": phone or False,
             "street": address or False,
         }
@@ -163,6 +219,91 @@ class FSMLocation(models.Model):
             self.id, latitude, longitude,
         )
         return True
+
+    def _shalom_eliminar_ubicacion_o_motivo(self):
+        """Núcleo compartido entre action_eliminar_ubicacion() (botón
+        de la ficha, un solo registro) y
+        shalom.eliminar.ubicaciones.wizard (borrado en lote desde el
+        listado): intenta borrar ÚNICAMENTE este registro de
+        fsm.location, nunca el contacto.
+
+        fsm.location usa _inherits sobre res.partner vía partner_id
+        (delegate=True) -- eso significa que name, street, active,
+        GPS, etc. son en realidad campos del contacto delegado, no de
+        la Ubicación. Por esto mismo, ARCHIVAR una Ubicación
+        (active=False) apaga el 'active' del contacto delegado -- si
+        ese contacto tiene más de una Ubicación apuntándolo (caso
+        típico de la importación original), las demás se ven
+        archivadas también aunque no se hayan tocado. Borrar (unlink)
+        en cambio solo elimina la fila propia de fsm.location: por
+        cómo funciona _inherits en Odoo, el contacto delegado
+        (partner_id/owner_id) NO se borra ni se toca -- sigue
+        existiendo, activo, igual que antes.
+
+        Si esta es la única Ubicación del contacto y tiene visitas en
+        su historial, NO se borra (se perdería ese historial sin
+        ubicación a la que quedar asociado) -- devuelve el motivo
+        como texto en vez de lanzar una excepción, para que un
+        borrado en lote pueda seguir con las demás filas seleccionadas
+        en vez de frenarse en la primera que falle. Si hay otra
+        Ubicación del mismo contacto, las visitas se reasignan ahí
+        antes de borrar. Devuelve False si se borró con éxito."""
+        self.ensure_one()
+        otras_ubicaciones = self.search(
+            [("partner_id", "=", self.partner_id.id), ("id", "!=", self.id)]
+        )
+        visitas = self.env["fsm.order"].search([("location_id", "=", self.id)])
+
+        if visitas and not otras_ubicaciones:
+            return _(
+                "es la única Ubicación de este contacto y tiene "
+                "%(cantidad)s visita(s) en su historial",
+                cantidad=len(visitas),
+            )
+
+        if visitas:
+            visitas.write({"location_id": otras_ubicaciones[0].id})
+
+        nombre = self.name
+        contacto_id = self.partner_id.id
+        cantidad_visitas = len(visitas)
+        # fsm.location no tiene perm_unlink habilitado para ningún grupo
+        # en el módulo nativo (fuerza archivar en vez de borrar desde
+        # cualquier lado) -- acá se salta a propósito solo para esta
+        # llamada puntual, ya protegida por el grupo manager y la
+        # confirmación obligatoria en la vista.
+        self.sudo().unlink()
+
+        _logger.info(
+            "Ubicación eliminada a mano: '%s' (contacto id=%s). %s "
+            "visita(s) reasignada(s). El contacto no se tocó.",
+            nombre, contacto_id, cantidad_visitas,
+        )
+        return False
+
+    def action_eliminar_ubicacion(self):
+        """Botón 'Eliminar esta Ubicación' en la ficha (con
+        confirmación en la vista, un solo registro). Ver
+        _shalom_eliminar_ubicacion_o_motivo() para la lógica real."""
+        self.ensure_one()
+        motivo = self._shalom_eliminar_ubicacion_o_motivo()
+        if motivo:
+            raise UserError(
+                _("No se pudo eliminar esta Ubicación: %(motivo)s. Si "
+                  "querés eliminar el contacto completo, hacelo desde "
+                  "Contactos.",
+                  motivo=motivo)
+            )
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Ubicación eliminada"),
+                "message": _("Eliminada. El contacto sigue intacto."),
+                "sticky": False,
+                "type": "success",
+            },
+        }
 
     def shalom_asignar_ruta_y_orden(self, route_id, cliente_anterior_id=False):
         """Asigna esta Ubicación a la ruta indicada y calcula su

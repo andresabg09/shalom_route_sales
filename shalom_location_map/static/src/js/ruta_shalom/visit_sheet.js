@@ -4,6 +4,7 @@ import {Component, onWillStart, onWillUnmount, useRef, useState} from "@odoo/owl
 import {useService} from "@web/core/utils/hooks";
 import {ESTADO_ETIQUETA, estadoDesdeStageName, obtenerIdsEtapas} from "./stage_utils";
 import {normalizarAccionActWindow} from "./action_utils";
+import {cerrarConAnimacion} from "./animacion_utils";
 import {ClienteForm} from "./cliente_form";
 import {OrderScreen} from "./order_screen";
 
@@ -61,10 +62,10 @@ export class VisitSheet extends Component {
             tomandoPedido: false,
             arrastreY: 0,
             arrastrando: false,
+            cerrando: false,
         });
         this._onMoverArrastre = (ev) => this.moverArrastre(ev);
         this._onSoltarArrastre = (ev) => this.soltarArrastre(ev);
-        this._cerrando = false;
 
         onWillStart(() => this.cargar());
         onWillUnmount(() => this.detenerArrastre());
@@ -408,10 +409,10 @@ export class VisitSheet extends Component {
     }
 
     cerrar() {
-        if (this._cerrando) {
-            return;
-        }
-        this._cerrando = true;
-        this.props.onCerrar();
+        // cerrarConAnimacion() ya es idempotente sola (revisa
+        // state.cerrando) -- reemplaza el guard _cerrando que había acá
+        // antes para el mismo propósito (evitar el doble cierre del
+        // click fantasma después de un arrastre, ver soltarArrastre).
+        cerrarConAnimacion(this.state, () => this.props.onCerrar());
     }
 }

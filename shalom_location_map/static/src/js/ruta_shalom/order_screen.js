@@ -3,6 +3,7 @@
 import {Component, onWillStart, onWillUnmount, useEffect, useRef, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {normalizarAccionActWindow} from "./action_utils";
+import {cerrarConAnimacion} from "./animacion_utils";
 
 /**
  * Catálogo + carrito (Fase 3): se abre de pantalla completa desde el
@@ -113,6 +114,7 @@ export class OrderScreen extends Component {
             confirmando: false,
             guardandoBorrador: false,
             confirmandoSalida: false,
+            cerrando: false,
         });
 
         onWillStart(() => this.cargarProductos());
@@ -529,7 +531,7 @@ export class OrderScreen extends Component {
         };
         this.state.recompensaMenuAbierto = false;
         this.notification.add(
-            `🎁 Promoción agregada: ${unidadesACargar} x ${recompensa.reward_product_name}`,
+            `Promoción agregada: ${unidadesACargar} x ${recompensa.reward_product_name}`,
             {type: "success"}
         );
     }
@@ -769,7 +771,7 @@ export class OrderScreen extends Component {
      */
     intentarSalir() {
         if (!this.cantidadItems) {
-            this.cerrarDeVerdad();
+            cerrarConAnimacion(this.state, () => this.cerrarDeVerdad());
             return;
         }
         this.state.confirmandoSalida = true;
@@ -781,13 +783,23 @@ export class OrderScreen extends Component {
 
     confirmarSalirSinGuardar() {
         this.state.confirmandoSalida = false;
-        this.cerrarDeVerdad();
+        cerrarConAnimacion(this.state, () => this.cerrarDeVerdad());
     }
 
     /**
      * Cierre real -- con guarda de idempotencia por si algo dispara el
      * cierre dos veces (ej. un click fantasma después de un touch en
      * otra parte de la pantalla).
+     *
+     * OJO: a propósito NO pasa por cerrarConAnimacion() en
+     * confirmarPedido()/revisarCotizacion() -- ahí se llama directo,
+     * sin animación, porque el comentario de revisarCotizacion() ya
+     * advertía que OrderScreen tiene que estar REALMENTE desmontado
+     * antes del doAction() que le sigue (si no, se repite un bug ya
+     * arreglado de la pantalla quedando montada por encima del
+     * formulario de Ventas). El resto de las salidas (intentarSalir,
+     * confirmarSalirSinGuardar) sí animan porque no hay ningún doAction
+     * inmediatamente después.
      */
     cerrarDeVerdad() {
         if (this._cerrado) {

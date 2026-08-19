@@ -33,6 +33,8 @@
         "views/fsm_route_views.xml",
         "views/fsm_route_schedule_views.xml",
         "views/fsm_person_views.xml",
+        "views/shalom_buscar_gps_wizard_views.xml",
+        "views/shalom_eliminar_ubicaciones_wizard_views.xml",
         "views/ruta_shalom_action.xml",
         "data/mapbox_raster_layer.xml",
         "data/migrar_orden_ruta.xml",
@@ -40,6 +42,7 @@
     "assets": {
         "web.assets_backend": [
             "shalom_location_map/static/src/js/fsm_order_gps_button.js",
+            "shalom_location_map/static/src/js/shalom_capturar_mi_ubicacion_button.js",
             "shalom_location_map/static/src/js/mapbox_background_layer.js",
             "shalom_location_map/static/src/js/resumen_compras_widget.js",
             "shalom_location_map/static/src/xml/resumen_compras_widget.xml",
@@ -50,6 +53,7 @@
             "shalom_location_map/static/src/js/ruta_shalom/navegacion_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/stage_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/action_utils.js",
+            "shalom_location_map/static/src/js/ruta_shalom/animacion_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/cliente_form.js",
             "shalom_location_map/static/src/js/ruta_shalom/order_screen.js",
             "shalom_location_map/static/src/js/ruta_shalom/visit_sheet.js",

@@ -62,7 +62,7 @@
                     target="_blank"
                     role="button"
                     class="btn btn-sm btn-outline-primary ms-2 oe_kanban_action"
-                >📍 Ir con Maps</a>
+                ><i class="fa fa-location-arrow" aria-hidden="true"/> Ir con Maps</a>
             </xpath>
         </field>
     </record>

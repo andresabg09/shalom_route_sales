@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <templates xml:space="preserve">
     <t t-name="shalom_location_map.VisitSheet">
-        <div class="sheet-overlay open" t-on-click.self="cerrar">
+        <div class="sheet-overlay open" t-att-class="state.cerrando ? 'closing' : ''" t-on-click.self="cerrar">
             <div
                 class="sheet"
                 t-ref="sheet"
-                t-att-class="state.arrastrando ? 'sin-transicion' : ''"
+                t-attf-class="{{state.arrastrando ? 'sin-transicion' : ''}} {{state.cerrando ? 'closing' : ''}}"
                 t-attf-style="transform: translateY({{state.arrastreY}}px);"
                 t-on-touchstart="iniciarArrastre"
             >
@@ -16,7 +16,7 @@
                 <t t-elif="state.visita">
                     <button class="name-btn" t-on-click="abrirEdicion" title="Editar datos del cliente">
                         <span class="name" t-esc="state.visita.nombre"/>
-                        <span class="edit-hint">✎</span>
+                        <span class="edit-hint"><i class="fa fa-pencil" aria-hidden="true"/></span>
                     </button>
                     <div class="addr" t-esc="state.visita.direccion"/>
                     <div class="addr" t-esc="'Orden de ruta: ' + (state.visita.orden || '-')"/>
@@ -58,20 +58,20 @@
 
                     <div class="action-grid">
                         <button class="action-tile" t-on-click="llamar">
-                            <span class="lbl">📞 Llamar</span>
+                            <span class="lbl"><i class="fa fa-phone" aria-hidden="true"/> Llamar</span>
                         </button>
                         <button class="action-tile" t-on-click="irConMaps">
-                            <span class="lbl">📍 Ir con Maps</span>
+                            <span class="lbl"><i class="fa fa-location-arrow" aria-hidden="true"/> Ir con Maps</span>
                         </button>
                         <button class="action-tile" t-on-click="capturarGps">
-                            <span class="lbl">🎯 Capturar GPS</span>
+                            <span class="lbl"><i class="fa fa-crosshairs" aria-hidden="true"/> Capturar GPS</span>
                         </button>
                         <button class="action-tile" t-on-click="verHistorial">
-                            <span class="lbl">🕘 Historial</span>
+                            <span class="lbl"><i class="fa fa-history" aria-hidden="true"/> Historial</span>
                         </button>
                     </div>
-                    <button t-if="!state.visita.saleId" class="cta-order" t-on-click="tomarPedido">🛒 Tomar pedido</button>
-                    <button t-else="" class="cta-order" t-on-click="examinarCotizacion">📋 Examinar cotización</button>
+                    <button t-if="!state.visita.saleId" class="cta-order" t-on-click="tomarPedido"><i class="fa fa-shopping-cart" aria-hidden="true"/> Tomar pedido</button>
+                    <button t-else="" class="cta-order" t-on-click="examinarCotizacion"><i class="fa fa-file-text-o" aria-hidden="true"/> Examinar cotización</button>
                 </t>
             </div>
         </div>

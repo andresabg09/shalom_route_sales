@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <templates xml:space="preserve">
     <t t-name="shalom_location_map.ClienteForm">
-        <div class="edit-overlay open">
-            <div class="edit-card cliente-form-card">
+        <div class="edit-overlay open" t-att-class="state.cerrando ? 'closing' : ''">
+            <div class="edit-card cliente-form-card" t-att-class="state.cerrando ? 'closing' : ''">
                 <div class="cliente-form-header">
                     <button class="icon-btn" t-on-click="intentarCancelar" title="Atrás">←</button>
                     <h3 t-esc="props.modo === 'crear' ? 'Cliente nuevo' : 'Editar cliente'"/>
@@ -17,7 +17,7 @@
                     <div class="foto-picker">
                         <label class="foto-picker-label" for="shalom-cliente-foto">
                             <img t-if="state.fotoPreviewUrl" class="foto-preview" t-att-src="state.fotoPreviewUrl" alt=""/>
-                            <span t-else="" class="foto-picker-placeholder">📷 Foto del local</span>
+                            <span t-else="" class="foto-picker-placeholder"><i class="fa fa-camera" aria-hidden="true"/> Foto del local</span>
                         </label>
                         <input
                             id="shalom-cliente-foto"
@@ -59,7 +59,7 @@
                     </div>
 
                     <button class="btn btn-secondary gps-btn" t-on-click="capturarGps">
-                        🎯 Registrar coordenadas
+                        <i class="fa fa-crosshairs" aria-hidden="true"/> Registrar coordenadas
                         <t t-if="state.lat"> (capturadas)</t>
                     </button>
 
