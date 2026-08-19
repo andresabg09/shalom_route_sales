@@ -138,14 +138,19 @@ nunca la edita.
 - `action_generar_proximo_ciclo()`: arranca el ciclo siguiente de la
   misma ruta en un solo paso — pensado para el caso típico de un mismo
   vendedor recorriendo la misma ruta muchas veces al año (ej. mensual).
-  Cierra como "No atendido" las visitas de ESTA ocurrencia que quedaron
-  sin cerrar (si no se hiciera esto, `action_generar_visitas_ruta` las
-  vería como "orden abierta" del cliente y saltaría a esos clientes en
-  el ciclo nuevo — el bug reportado de "tengo 37 clientes pero solo se
-  generan 9"), archiva las cerradas de la ruta, crea la
-  `fsm.route.schedule` siguiente (`date_start` = `date_end` de esta + 1
-  día, `date_end` sugerido por `x_duracion_dias`) y le genera las
-  visitas.
+  Cierra como "No atendido" **todas** las visitas abiertas de la RUTA
+  (no solo las de esta ocurrencia puntual — cualquier visita vieja de
+  la ruta que haya quedado sin cerrar, venga o no de un ciclo generado
+  por este sistema; si solo mirara esta ocurrencia, `action_generar_
+  visitas_ruta` seguiría viendo esas otras como "orden abierta" del
+  cliente y saltaría a esos clientes en el ciclo nuevo — el bug
+  reportado de "tengo 37 clientes pero solo se generan 9"), archiva las
+  cerradas de la ruta, crea la `fsm.route.schedule` siguiente
+  (`date_start` = `date_end` de esta + 1 día, `date_end` sugerido por
+  `x_duracion_dias`) y le genera las visitas a los 37 clientes, no solo
+  a los que ya tenían visita antes. Criterio explícito: si un cliente
+  fue o no atendido el ciclo pasado no decide si le toca visita nueva —
+  siempre le toca, a todos los clientes de la ruta, cada ciclo.
 
 ### `wizards/shalom_buscar_gps_wizard.py` — "Buscar GPS por nombre"
 Wizard de administración (solo `fieldservice.group_fsm_manager`), menú

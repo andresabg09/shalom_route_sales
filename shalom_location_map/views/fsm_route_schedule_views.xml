@@ -4,7 +4,13 @@
         Vistas de administración de fsm.route.schedule (programación de
         rutas por ciclo). Las usa oficina para armar el calendario que
         alimenta la pestaña "Rutas" de la app del vendedor: el
-        vendedor solo lee esto, nunca lo edita.
+        vendedor solo lee esto, nunca lo edita. Los dos botones de
+        generar visitas llevan confirmación porque ambos cierran como
+        "No atendido" (nunca archivan) cualquier visita vieja que haya
+        quedado abierta, para poder generar SIEMPRE a todos los
+        clientes de la ruta sin saltearse a nadie — un doble-click sin
+        querer podría resetear trabajo en curso del día si no hubiera
+        confirmación.
     -->
     <record id="fsm_route_schedule_view_list" model="ir.ui.view">
         <field name="name">fsm.route.schedule.list</field>
@@ -34,15 +40,16 @@
                         type="object"
                         string="Generar visitas de esta ocurrencia"
                         class="btn-primary"
-                        help="Igual que 'Generar visitas de esta ruta', pero vinculando cada visita nueva a esta ocurrencia."
+                        confirm="Esto va a generar una visita para TODOS los clientes de esta ruta, vinculadas a esta ocurrencia. Cualquier visita vieja que haya quedado abierta se va a cerrar sola como 'No atendido'. ¿Continuar?"
+                        help="Igual que 'Generar visitas de esta ruta', pero vinculando cada visita nueva a esta ocurrencia y copiándole el rango de fechas del ciclo."
                     />
                     <button
                         name="action_generar_proximo_ciclo"
                         type="object"
                         string="Generar próximo ciclo"
                         class="btn-secondary"
-                        confirm="Esto va a marcar como 'No atendido' las visitas de ESTA ocurrencia que sigan sin cerrar, archivar las cerradas, y crear + generar el ciclo siguiente de esta ruta. ¿Continuar?"
-                        help="Cierra lo que quedó sin atender de este ciclo y arranca el ciclo siguiente de esta misma ruta (misma lista de clientes, todos en pendiente otra vez)."
+                        confirm="Esto va a crear el ciclo siguiente de esta ruta (arranca hoy, misma duración que este ciclo) y generar visita para TODOS sus clientes. Cualquier visita vieja que haya quedado abierta se va a cerrar sola como 'No atendido'. ¿Continuar?"
+                        help="Arranca el ciclo siguiente de esta misma ruta: fecha de inicio = hoy, misma duración que este ciclo, todos los clientes con visita nueva."
                     />
                     <field name="estado" widget="statusbar" statusbar_visible="por_iniciar,en_curso,completada" />
                 </header>

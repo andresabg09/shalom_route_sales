@@ -36,17 +36,25 @@ class FSMPerson(models.Model):
     def shalom_mis_rutas_programadas(self, date_start, date_end):
         """Ocurrencias de fsm.route.schedule de las rutas asignadas al
         vendedor logueado cuya semana se solape con [date_start,
-        date_end] (strings 'YYYY-MM-DD'). Devuelve datos ya listos
-        para la pestaña 'Rutas' de la app, sin que el frontend tenga
-        que hacer una segunda llamada por ruta."""
+        date_end] (strings 'YYYY-MM-DD'), MÁS cualquier ocurrencia que
+        todavía no esté completada (estado != 'completada') aunque su
+        fecha haya quedado afuera de esa ventana -- para que una ruta
+        con clientes sin atender no se pierda de vista solo porque
+        pasó su fecha de fin estimada; una vez que de verdad se cierra
+        del todo (todas las visitas en una etapa cerrada), recién ahí
+        puede salir de la ventana por fecha como cualquier otra.
+        Devuelve datos ya listos para la pestaña 'Rutas' de la app,
+        sin que el frontend tenga que hacer una segunda llamada por
+        ruta."""
         persona = self._shalom_persona_actual()
         if not persona:
             return []
         schedules = self.env["fsm.route.schedule"].search(
             [
                 ("fsm_person_id", "=", persona.id),
-                ("date_start", "<=", date_end),
-                ("date_end", ">=", date_start),
+                "|",
+                "&", ("date_start", "<=", date_end), ("date_end", ">=", date_start),
+                ("estado", "!=", "completada"),
             ],
             order="date_start asc",
         )

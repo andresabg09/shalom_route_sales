@@ -56,6 +56,14 @@ Extiende fsm.order (la tarea/orden de visita a un cliente) con:
    el mismo criterio (no importa ese módulo, que es ajeno a este
    proyecto) contra loyalty.program/loyalty.rule directo.
 
+10. stage_id con tracking=True + _shalom_fecha_primer_cierre(): agrega
+    historial (mail.tracking.value) sobre los cambios de etapa, para
+    poder leer el momento EXACTO en que una visita se cerró por primera
+    vez. Lo usa fsm.route.schedule._compute_tiempo_estimado() para
+    calcular solo (sin que oficina lo cargue a mano) las horas reales
+    que tomó el ciclo: desde que se cerró el primer cliente hasta que
+    se cerró el último.
+
 Nota: "Orden de Ruta" (x_cliente_orden_ruta) es un campo related con
 store=True hacia fsm.location.x_orden_ruta -- es literalmente el mismo
 dato en ambos lados: editar el valor desde la tarjeta de visita o desde
@@ -180,6 +188,41 @@ class FSMOrder(models.Model):
         "propio de la app del vendedor, independiente de otros campos "
         "de notas nativos del pedido.",
     )
+    # Solo se agrega tracking=True -- el resto de la definición del
+    # campo (comodel, relación con fsm.stage, etc.) la hereda de
+    # fieldservice. Esto hace que Odoo registre en el historial
+    # (mail.tracking.value) el momento exacto de cada cambio de etapa,
+    # que es lo que usa _shalom_fecha_primer_cierre() más abajo -- sin
+    # esto, fsm.route.schedule.x_tiempo_estimado no tendría de dónde
+    # sacar una fecha/hora real de cierre.
+    stage_id = fields.Many2one(tracking=True)
+
+    def _shalom_fecha_primer_cierre(self):
+        """Devuelve el datetime exacto (leído del historial de
+        seguimiento del campo etapa, mail.tracking.value) en que esta
+        visita pasó por primera vez a una etapa cerrada, o False si
+        nunca se cerró o no hay historial registrado (ej. visitas
+        creadas antes de que este módulo tuviera tracking=True en
+        stage_id). Usado por fsm.route.schedule._compute_tiempo_
+        estimado() para calcular las horas reales que tomó el ciclo."""
+        self.ensure_one()
+        if not self.stage_id.is_closed:
+            return False
+        ids_cerradas = self.env["fsm.stage"].search(
+            [("is_closed", "=", True)]
+        ).ids
+        seguimiento = self.env["mail.tracking.value"].sudo().search(
+            [
+                ("mail_message_id.model", "=", "fsm.order"),
+                ("mail_message_id.res_id", "=", self.id),
+                ("field_id.name", "=", "stage_id"),
+            ],
+            order="create_date asc, id asc",
+        )
+        for valor in seguimiento:
+            if valor.new_value_integer in ids_cerradas:
+                return valor.create_date
+        return False
 
     @api.depends("location_id.partner_id")
     def _compute_x_cantidad_cotizaciones(self):
