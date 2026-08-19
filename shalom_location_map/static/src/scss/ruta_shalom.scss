@@ -345,39 +345,36 @@
         white-space: normal;
         overflow-wrap: break-word;
     }
-    // dirección + meta de venta en la MISMA fila (antes la meta se
-    // agregaba como línea propia debajo de la dirección -- entre
-    // nombre + dirección + meta apiladas, la tarjeta se veía "apretada"
-    // en pantallas chicas). La dirección se sigue truncando con "…" si
-    // hace falta lugar para la meta, que nunca se corta (monto corto,
-    // fijo a la derecha).
-    .addr-row {
-        display: flex;
-        align-items: baseline;
-        gap: 6px;
-        margin-top: 2px;
-        min-width: 0;
-    }
     .stop-info .addr {
-        flex: 1 1 auto;
-        min-width: 0;
         color: var(--shalom-ink-muted);
         font-size: 0.8rem;
+        margin-top: 2px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    // columna a la derecha de la tarjeta -- meta de venta arriba del
+    // estado de la visita, apilados, SIN tocar el ancho disponible
+    // para el nombre/dirección del cliente (se reportó que compartir
+    // fila con la dirección los apretaba y hacía quedar el nombre casi
+    // vertical).
+    .stop-right {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 5px;
+    }
     // venta más alta histórica del cliente (meta concreta para el
     // vendedor), en el listado de clientes de una ruta.
-    .stop-info .meta-venta {
-        flex: 0 0 auto;
+    .meta-venta {
         color: var(--shalom-primary, #7c5cff);
-        font-size: 0.74rem;
+        font-size: 0.72rem;
         font-weight: 700;
         white-space: nowrap;
     }
-    .stop-info .meta-venta .fa {
-        font-size: 0.7rem;
+    .meta-venta .fa {
+        font-size: 0.68rem;
     }
     // pestaña Clientes: a qué ruta pertenece cada cliente (un
     // vendedor puede tener más de una ruta asignada)
@@ -804,15 +801,11 @@
         to { opacity: 0; }
     }
     @keyframes shalom-hoja-in {
-        from { transform: translateY(100%); }
-        to { transform: translateY(0); }
-    }
-    @keyframes shalom-hoja-out {
-        from { transform: translateY(0); }
-        to { transform: translateY(100%); }
+        from { transform: translateY(100%); opacity: 0.4; }
+        to { transform: translateY(0); opacity: 1; }
     }
     @keyframes shalom-tarjeta-in {
-        from { opacity: 0; transform: scale(0.94) translateY(8px); }
+        from { opacity: 0; transform: scale(0.9) translateY(14px); }
         to { opacity: 1; transform: scale(1) translateY(0); }
     }
     @keyframes shalom-tarjeta-out {
@@ -820,7 +813,7 @@
         to { opacity: 0; transform: scale(0.96) translateY(4px); }
     }
     @keyframes shalom-pantalla-in {
-        from { opacity: 0; transform: translateX(16px); }
+        from { opacity: 0; transform: translateX(28px); }
         to { opacity: 1; transform: translateX(0); }
     }
     @keyframes shalom-pantalla-out {
@@ -851,18 +844,17 @@
         border-radius: 24px 24px 0 0;
         padding: 10px 20px 26px;
         box-shadow: 0 -12px 30px -10px rgba(0, 0, 0, 0.3);
+        // El CIERRE reusa esta misma transición (ver cerrar() en
+        // visit_sheet.js, que empuja arrastreY hasta abajo del todo) --
+        // es el mismo mecanismo que ya existía para el arrastre, a
+        // propósito: pedido explícito de no reemplazarlo por una
+        // animación nueva. La APERTURA usa una keyframe aparte, más
+        // notoria (con fade además del deslizamiento).
         transition: transform 0.2s ease;
-        animation: shalom-hoja-in 0.22s $shalom-curva-sheet both;
+        animation: shalom-hoja-in 0.32s $shalom-curva-sheet both;
     }
     .sheet.sin-transicion {
         transition: none;
-    }
-    .sheet.closing {
-        // sin transition acá -- se reemplaza por la animación de
-        // salida, si no compiten los dos por la misma propiedad
-        // (transform) y se ve entrecortado.
-        transition: none;
-        animation: shalom-hoja-out 0.16s $shalom-curva-sheet both;
     }
     .sheet-handle {
         width: 56px;
@@ -1052,7 +1044,7 @@
         animation: shalom-fondo-out 0.15s ease both;
     }
     .edit-card {
-        animation: shalom-tarjeta-in 0.2s $shalom-curva-sheet both;
+        animation: shalom-tarjeta-in 0.3s $shalom-curva-sheet both;
         width: 100%;
         max-width: 320px;
         background: var(--shalom-surface);
@@ -1061,7 +1053,7 @@
         box-shadow: var(--shalom-shadow);
     }
     .edit-card.closing {
-        animation: shalom-tarjeta-out 0.16s $shalom-curva-sheet both;
+        animation: shalom-tarjeta-out 0.22s $shalom-curva-sheet both;
     }
     .edit-card h3 {
         font-size: 1.05rem;
@@ -1212,10 +1204,10 @@
         color: var(--shalom-ink);
         display: flex;
         flex-direction: column;
-        animation: shalom-pantalla-in 0.2s $shalom-curva-sheet both;
+        animation: shalom-pantalla-in 0.3s $shalom-curva-sheet both;
     }
     .order-overlay.closing {
-        animation: shalom-pantalla-out 0.16s $shalom-curva-sheet both;
+        animation: shalom-pantalla-out 0.22s $shalom-curva-sheet both;
     }
     .order-topbar {
         flex: 0 0 auto;

@@ -5,7 +5,7 @@
             <div
                 class="sheet"
                 t-ref="sheet"
-                t-attf-class="{{state.arrastrando ? 'sin-transicion' : ''}} {{state.cerrando ? 'closing' : ''}}"
+                t-att-class="state.arrastrando ? 'sin-transicion' : ''"
                 t-attf-style="transform: translateY({{state.arrastreY}}px);"
                 t-on-touchstart="iniciarArrastre"
             >

@@ -10,7 +10,7 @@
  * sentirse sólido y rápido para un vendedor que abre/cierra estas
  * pantallas muchas veces por día, sin ser un salto brusco.
  */
-export const DURACION_CIERRE_MS = 170;
+export const DURACION_CIERRE_MS = 220;
 
 /**
  * Dispara la animación de salida de un popup y recién después de

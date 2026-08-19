@@ -384,7 +384,6 @@ export class VisitSheet extends Component {
         }
         this.state.arrastrando = false;
         const cerrar = this.state.arrastreY > UMBRAL_ARRASTRE_CIERRE;
-        this.state.arrastreY = 0;
         this.detenerArrastre();
         if (cerrar) {
             // Evita que el navegador dispare, además del touchend, un
@@ -399,7 +398,14 @@ export class VisitSheet extends Component {
             if (ev && ev.cancelable) {
                 ev.preventDefault();
             }
+            // OJO: NO resetear arrastreY a 0 acá -- cerrar() ya pone el
+            // valor final (bien afuera de la pantalla). Resetear a 0
+            // primero y de inmediato a otro valor en el mismo gesto no
+            // se nota mal, pero es innecesario y confunde a quien lea
+            // el código.
             this.cerrar();
+        } else {
+            this.state.arrastreY = 0;
         }
     }
 
@@ -409,10 +415,21 @@ export class VisitSheet extends Component {
     }
 
     cerrar() {
+        // Reusa el MISMO mecanismo que ya existía para el arrastre
+        // (transition: transform 0.2s ease en .sheet, ver
+        // ruta_shalom.scss) en vez de una animación nueva -- se pidió
+        // explícitamente dejar "el recorrido que tenía antes" tal cual
+        // estaba, que ya se sentía bien. Empujar arrastreY bien afuera
+        // de la pantalla (window.innerHeight, NO el alto propio de la
+        // hoja -- con hojas de contenido corto, offsetHeight quedaba
+        // chico y el recorrido casi no se notaba) hace que la hoja se
+        // deslice sola, aunque el cierre no haya venido de un arrastre
+        // (ej. tocar el fondo).
         // cerrarConAnimacion() ya es idempotente sola (revisa
         // state.cerrando) -- reemplaza el guard _cerrando que había acá
         // antes para el mismo propósito (evitar el doble cierre del
         // click fantasma después de un arrastre, ver soltarArrastre).
+        this.state.arrastreY = window.innerHeight + 200;
         cerrarConAnimacion(this.state, () => this.props.onCerrar());
     }
 }

@@ -158,6 +158,55 @@ ya estaban revisadas). También tiene un selector de **Ruta** opcional
 (`action_cargar_ubicaciones`), para atender ruta por ruta en el orden que
 se prefiera.
 
+**El popup de opciones ya NO saca al usuario del wizard principal al
+manejar un cliente** (usar una coordenada, dejar como está, borrar
+coordenada, o "Cerrar sin elegir") -- se reportó que con 100+ clientes en
+una ruta, tener que reabrir el wizard y volver a elegir Ruta + "Capturar
+mi ubicación" por cada cliente hacía la tarea impracticable.
+`_volver_al_wizard_o_cerrar()` (en `.opcion`, reusado por `.candidato` vía
+`opcion_id`) responde con un `next` que reabre el MISMO
+`shalom.buscar.gps.wizard` (mismo `wizard_id`, ya guardado en `.opcion`
+para esto) en vez de cerrar todo -- y saca de la lista la línea del
+cliente ya manejado (o la deja, si fue "Borrar coordenada"/"Cerrar sin
+elegir", donde no se decidió nada definitivo). El botón "Dejar como
+está" de la lista principal (`ShalomBuscarGpsWizardLine`, sin popup de
+por medio) hace lo mismo con `self.unlink()` directo. "Cerrar sin
+elegir" dejó de ser un botón nativo `special="cancel"` -- por cómo Odoo
+NO apila diálogos `target="new"` abiertos desde dentro de otro diálogo,
+ese botón nativo cerraba TODO en vez de solo el popup; ahora es
+`action_cerrar_popup()`, un botón `type="object"` normal que pasa por el
+mismo mecanismo de "volver al wizard". Importante para cualquier acción
+que reabra un wizard vía el `next` de una notificación (no vía el
+return directo de un botón): **el dict de la acción necesita
+`"views": [[False, "form"]]` explícito** -- sin eso, el cliente web tira
+`TypeError: Cannot read properties of undefined (reading 'map')` en
+`_preprocessAction`. Un botón `type="object"` que devuelve el action
+DIRECTO (no envuelto en un `next`) no lo necesita porque Odoo lo
+completa solo camino a `doActionButton`, pero se agregó por las dudas en
+todos los act_window que devuelve este wizard.
+
+El popup de opciones también muestra la **coordenada YA GUARDADA en
+Odoo** para el cliente (`location_lat`/`location_lng`, `related` a
+`fsm.location`) con su propio botón "Ver en mapa la coordenada actual"
+(`action_ver_mapa_actual`), al lado de las opciones de Google -- para
+poder comparar antes de elegir.
+
+**La cola del wizard ya NO se basa en "revisado"**: antes, tanto
+`default_get` como "Cargar ubicaciones de esta ruta" filtraban por
+`x_gps_wizard_revisado = False`, lo que sacaba de la lista a clientes
+que seguían sin GPS real solo porque ya se habían "revisado" antes.
+Ahora el filtro por defecto es **clientes sin coordenadas** (`
+partner_latitude`/`partner_longitude` vacíos o en 0) -- un cliente sale
+de la lista únicamente cuando de verdad tiene una coordenada guardada.
+Dos campos nuevos en el header dan control manual sobre ese filtro:
+`mostrar_solo_sin_gps` (Boolean, default True -- "Solo sin GPS", como
+el toggle de stock del catálogo) y `busqueda_nombre` (Char -- busca por
+nombre SIN IMPORTAR el toggle, para encontrar y corregir un cliente
+puntual al que se le puso una coordenada mal). `_dominio_ubicaciones()`
+arma el domain combinando Ruta + toggle + búsqueda; el botón se
+renombró a "Buscar / recargar lista" (antes "Cargar ubicaciones de esta
+ruta", ahora también aplica el toggle y la búsqueda).
+
 El popup de opciones (`shalom.buscar.gps.wizard.opcion`) tiene además un
 campo editable **"Buscar en Google Maps"** (`query_busqueda`, precargado
 con el nombre guardado del cliente) + botón "Buscar"
@@ -226,9 +275,11 @@ Widgets Owl inyectados en `web.assets_backend`:
 - `ruta_shalom/` — la app del vendedor ("Ruta Shalom"): shell + nav
   inferior (`app.js`), pestaña Rutas (`rutas_hub.js`), detalle de ruta
   Lista/Mapa (`ruta_detalle.js` -- cada tarjeta de cliente muestra
-  también `x_venta_mas_alta` (ícono `fa-flag`) en la misma fila que la
-  dirección (`.addr-row`, no como línea aparte -- se reportó que como
-  línea aparte la tarjeta se veía apretada en mobile), leído junto con
+  también `x_venta_mas_alta` (ícono `fa-flag`) en una columna propia a
+  la derecha (`.stop-right`), apilada arriba del estado de la visita --
+  NO comparte espacio con el nombre/dirección del cliente (se probó
+  antes en la misma fila que la dirección; se reportó que así apretaba
+  demasiado y el nombre se veía casi vertical), leído junto con
   `phone`/`street` en el mismo `orm.read` de `fsm.location`), hoja de
   visita (`visit_sheet.js`),
   catálogo + carrito + escaneo de código de barras (`order_screen.js`,
@@ -264,6 +315,23 @@ Widgets Owl inyectados en `web.assets_backend`:
   un delay ahí reintroduciría un bug ya arreglado. `intentarSalir()`/
   `confirmarSalirSinGuardar()` (las salidas donde no hay ningún
   `doAction()` inmediatamente después) sí animan.
+
+  El CIERRE de la hoja de visita en particular NO usa una keyframe
+  nueva: reusa el mecanismo que ya existía para el gesto de arrastre
+  (`transition: transform 0.2s ease` en `.sheet`, empujando
+  `state.arrastreY` hasta abajo del todo en `cerrar()`) -- se probó con
+  una keyframe de salida propia y se reportó que se sentía entrecortada
+  ("como que se rompe") comparada con el deslizamiento que ya tenía el
+  arrastre, así que se volvió a ese mecanismo tal cual estaba. El
+  destino de `arrastreY` es `window.innerHeight + 200` (NO el
+  `offsetHeight` propio de la hoja, que se probó primero): con hojas de
+  contenido corto `offsetHeight` da un número chico y el recorrido se
+  sentía "casi no se mueve" -- con el alto de la pantalla como destino,
+  el recorrido es siempre grande y notorio sin importar cuánto
+  contenido tenga la hoja. Las entradas (`shalom-hoja-in`,
+  `shalom-tarjeta-in`, `shalom-pantalla-in`) se hicieron más
+  largas/notorias (0.3-0.32s, con más recorrido) que la primera
+  versión, que se reportó "casi imperceptible".
 
   Los emoji de botones/atajos de toda la app (y de los formularios
   nativos de `fsm.order`/el wizard de GPS) se reemplazaron por íconos

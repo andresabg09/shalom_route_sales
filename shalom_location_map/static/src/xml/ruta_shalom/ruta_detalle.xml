@@ -66,14 +66,14 @@
                         <div class="stop-num" t-esc="visita.orden"/>
                         <div class="stop-info">
                             <div class="name" t-esc="visita.nombre"/>
-                            <div class="addr-row">
-                                <div class="addr" t-esc="visita.direccion"/>
-                                <div class="meta-venta" t-if="visita.metaVenta">
-                                    <i class="fa fa-flag" aria-hidden="true"/> <t t-esc="'$' + visita.metaVenta.toFixed(2)"/>
-                                </div>
-                            </div>
+                            <div class="addr" t-esc="visita.direccion"/>
                         </div>
-                        <div class="stop-badge" t-esc="etiquetaEstado(visita.estado)"/>
+                        <div class="stop-right">
+                            <div class="meta-venta" t-if="visita.metaVenta">
+                                <i class="fa fa-flag" aria-hidden="true"/> <t t-esc="'$' + visita.metaVenta.toFixed(2)"/>
+                            </div>
+                            <div class="stop-badge" t-esc="etiquetaEstado(visita.estado)"/>
+                        </div>
                         <span
                             class="quick-icon-btn"
                             title="Ir con Maps"
