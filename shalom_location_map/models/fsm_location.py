@@ -5,21 +5,33 @@ un servicio externo de geocoding) cada vez que se crea una fsm.location sin
 partner_latitude/partner_longitude. Si ese servicio externo no está
 disponible o falla, la excepción interrumpe toda la operación de creación.
 
-Esta extensión hace que ese intento automático sea tolerante a fallos:
-si el servicio de geocoding no responde, la Ubicación se crea igual, sin
-coordenadas (no se inventa ningún dato), y el error queda solo registrado
-en el log del servidor en vez de interrumpir la importación o la creación
-manual del registro. El vendedor o el administrador puede completar la
-ubicación real más tarde, a mano o reintentando el geocoding cuando el
-servicio esté disponible.
+Esta extensión hace que SOLO ese intento automático (disparado durante
+create()) sea tolerante a fallos: si el servicio de geocoding no responde,
+la Ubicación se crea igual, sin coordenadas (no se inventa ningún dato), y
+el error queda solo registrado en el log del servidor en vez de interrumpir
+la importación o la creación manual del registro.
+
+IMPORTANTE: geo_localize() también se llama de forma interactiva, por
+ejemplo desde el botón "Geolocalizar" del formulario de Ubicación (el popup
+donde se edita el cliente). Ahí NO queremos tragarnos el error: si se traga
+en silencio, la llamada RPC termina como "exitosa" y Odoo hace commit de
+cualquier escritura parcial que el geocoder haya hecho antes de fallar
+(por ejemplo, limpiar lat/lng antes de intentar poner las nuevas) — el
+usuario ve el campo de coordenadas vacío sin ningún mensaje de error. Si en
+cambio se deja propagar la excepción, Odoo hace rollback de toda la
+transacción (las coordenadas anteriores quedan intactas) y le muestra al
+usuario el error real. Por eso el modo tolerante a fallos se activa solo
+con un flag de contexto que ponemos nosotros mismos alrededor de create().
 """
 import logging
 import re
 
-from odoo import _, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
+
+CONTEXT_KEY_GEOLOCALIZAR_TOLERANTE = "shalom_geo_localize_tolerante_a_fallos"
 
 
 class FSMLocation(models.Model):
@@ -32,7 +44,20 @@ class FSMLocation(models.Model):
         "visitas de una ruta, las tareas se ordenan según este número.",
     )
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        return super(
+            FSMLocation,
+            self.with_context(**{CONTEXT_KEY_GEOLOCALIZAR_TOLERANTE: True}),
+        ).create(vals_list)
+
     def geo_localize(self):
+        if not self.env.context.get(CONTEXT_KEY_GEOLOCALIZAR_TOLERANTE):
+            # Llamada interactiva (ej. botón "Geolocalizar" del formulario
+            # de Ubicación): dejar que la excepción se propague, para que
+            # Odoo haga rollback y muestre el error real al usuario, en vez
+            # de guardar en silencio un estado a medio terminar.
+            return super().geo_localize()
         try:
             return super().geo_localize()
         except Exception:
