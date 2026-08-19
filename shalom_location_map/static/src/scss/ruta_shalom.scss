@@ -850,8 +850,18 @@
         // propósito: pedido explícito de no reemplazarlo por una
         // animación nueva. La APERTURA usa una keyframe aparte, más
         // notoria (con fade además del deslizamiento).
+        //
+        // OJO con "both" acá: sin querer quedó puesto en cd8ac44 y
+        // rompía el arrastre -- con fill-mode "both"/"forwards", una vez
+        // terminada la animación de apertura el navegador sigue
+        // "congelando" el transform en su valor final con más prioridad
+        // que la transition/el style en línea de arrastreY, así que el
+        // dedo dejaba de mover la hoja (quedaba pasmada) y el cierre no
+        // se veía. Sin "both", al terminar la animación de apertura deja
+        // de pisar transform y vuelve a mandar la transition + el
+        // arrastreY en línea, como era antes de cd8ac44.
         transition: transform 0.2s ease;
-        animation: shalom-hoja-in 0.32s $shalom-curva-sheet both;
+        animation: shalom-hoja-in 0.32s $shalom-curva-sheet;
     }
     .sheet.sin-transicion {
         transition: none;

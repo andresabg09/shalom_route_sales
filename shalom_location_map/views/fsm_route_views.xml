@@ -4,7 +4,10 @@
         Extiende el formulario de fsm.route (Ruta) para agregar el botón
         "Generar visitas de esta ruta", que crea una fsm.order por cada
         Ubicación de Servicio de la ruta (respetando el orden ya guardado
-        en las notas de cada Ubicación) sin duplicar visitas ya abiertas.
+        en las notas de cada Ubicación) sin duplicar visitas ya abiertas,
+        y el campo x_duracion_dias (Duración típica del ciclo), que solo
+        sugiere la fecha de fin al crear una fsm.route.schedule de esta
+        ruta (ver fsm_route_schedule.py).
     -->
     <record id="fsm_route_form_shalom_generar_visitas" model="ir.ui.view">
         <field name="name">fsm.route.form.shalom.generar.visitas</field>
@@ -35,6 +38,11 @@
                         help="Calcula el trazado real (siguiendo calles) de la ruta con Mapbox, uniendo los clientes en el orden de su Orden de Ruta. Requiere hasta 25 clientes con coordenadas GPS cargadas."
                     />
                 </div>
+            </xpath>
+            <xpath expr="//div[hasclass('oe_title')]" position="after">
+                <group>
+                    <field name="x_duracion_dias" />
+                </group>
             </xpath>
         </field>
     </record>

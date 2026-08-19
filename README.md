@@ -109,6 +109,43 @@ propio que define el módulo en vez de solo extender los nativos.
   `MAPBOX_MAX_WAYPOINTS = 25` clientes por ruta (dividir en tramos no está
   implementado); requiere `MAPBOX_ACCESS_TOKEN` como variable de entorno
   del servidor (nunca hardcodeado).
+- `x_duracion_dias` (Integer, default 7): cuántos días dura típicamente
+  un recorrido completo de esta ruta (no todas duran una semana). Solo
+  se usa para SUGERIR la fecha de fin al crear/renovar una
+  `fsm.route.schedule` de esta ruta (ver abajo) — la fecha real de cada
+  ciclo concreto siempre es editable a mano.
+
+### `models/fsm_route_schedule.py` — modelo propio (no `_inherit`)
+Una "ocurrencia" de una `fsm.route` para un ciclo concreto (`date_start`
+– `date_end`), separada de la ruta en sí (que solo es la lista ordenada
+de clientes). Es lo que alimenta la pestaña "Rutas" de la app del
+vendedor, agrupada/filtrada por ciclo o mes — el vendedor solo la lee,
+nunca la edita.
+- `date_start`/`date_end`: ambos editables a mano — `date_end` **no**
+  es un cálculo fijo a +6 días (no todas las rutas son semanales).
+  `date_end` se sugiere solo, vía `_onchange_date_start_sugerir_fin`,
+  a partir de `route_id.x_duracion_dias`, y solo si venía vacío (nunca
+  pisa un valor ya cargado).
+- `capacidad` (Monetary, calculado): suma del último `sale.order`
+  CONFIRMADO de cada cliente de la ruta — estimación de cuánto puede
+  vender el vendedor si visita a todos.
+- `estado` (calculado): `por_iniciar` / `en_curso` / `completada` según
+  cuántas de las visitas generadas (`fsm_order_ids`) ya están en una
+  etapa cerrada.
+- `action_generar_visitas()`: igual que
+  `action_generar_visitas_ruta()`, pero taggeando cada `fsm.order`
+  creada con esta ocurrencia (`x_route_schedule_id`).
+- `action_generar_proximo_ciclo()`: arranca el ciclo siguiente de la
+  misma ruta en un solo paso — pensado para el caso típico de un mismo
+  vendedor recorriendo la misma ruta muchas veces al año (ej. mensual).
+  Cierra como "No atendido" las visitas de ESTA ocurrencia que quedaron
+  sin cerrar (si no se hiciera esto, `action_generar_visitas_ruta` las
+  vería como "orden abierta" del cliente y saltaría a esos clientes en
+  el ciclo nuevo — el bug reportado de "tengo 37 clientes pero solo se
+  generan 9"), archiva las cerradas de la ruta, crea la
+  `fsm.route.schedule` siguiente (`date_start` = `date_end` de esta + 1
+  día, `date_end` sugerido por `x_duracion_dias`) y le genera las
+  visitas.
 
 ### `wizards/shalom_buscar_gps_wizard.py` — "Buscar GPS por nombre"
 Wizard de administración (solo `fieldservice.group_fsm_manager`), menú

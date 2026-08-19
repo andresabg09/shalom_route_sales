@@ -9,7 +9,8 @@
           - Cada tarjeta se pinte de fondo según el NOMBRE de su etapa
             (stage_name, campo nativo de texto) con colores fijos y
             reconocibles: verde = Completado, rojo = Cancelado, ámbar =
-            No quiso, gris = pendiente/New. Antes se pintaba con clases
+            No quiso, azul grisáceo = No atendido, gris = pendiente/New.
+            Antes se pintaba con clases
             CSS atadas a IDs de etapa fijos (shalom-stage-1/2/3),
             asumiendo que New/Completado/Cancelado siempre tenían esos
             IDs; en esta instalación en realidad son 7/2/3, así que
@@ -43,7 +44,7 @@
                     #{kanban_color(record.color.raw_value)} oe_kanban_global_click
                 </attribute>
                 <attribute name="t-attf-style">
-                    background-color: #{record.stage_name.raw_value == 'Completado' ? '#BBF7D0' : record.stage_name.raw_value == 'Cancelado' ? '#FECACA' : record.stage_name.raw_value == 'No quiso' ? '#FDE68A' : '#E5E7EB'};
+                    background-color: #{record.stage_name.raw_value == 'Completado' ? '#BBF7D0' : record.stage_name.raw_value == 'Cancelado' ? '#FECACA' : record.stage_name.raw_value == 'No quiso' ? '#FDE68A' : record.stage_name.raw_value == 'No atendido' ? '#CBD5E1' : '#E5E7EB'};
                 </attribute>
             </xpath>
 

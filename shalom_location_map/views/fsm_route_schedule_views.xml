@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <odoo>
     <!--
-        Vistas de administración de fsm.route.schedule (programación
-        semanal de rutas). Las usa oficina para armar el calendario que
+        Vistas de administración de fsm.route.schedule (programación de
+        rutas por ciclo). Las usa oficina para armar el calendario que
         alimenta la pestaña "Rutas" de la app del vendedor: el
         vendedor solo lee esto, nunca lo edita.
     -->
@@ -34,7 +34,15 @@
                         type="object"
                         string="Generar visitas de esta ocurrencia"
                         class="btn-primary"
-                        help="Igual que 'Generar visitas de esta ruta', pero vinculando cada visita nueva a esta ocurrencia semanal."
+                        help="Igual que 'Generar visitas de esta ruta', pero vinculando cada visita nueva a esta ocurrencia."
+                    />
+                    <button
+                        name="action_generar_proximo_ciclo"
+                        type="object"
+                        string="Generar próximo ciclo"
+                        class="btn-secondary"
+                        confirm="Esto va a marcar como 'No atendido' las visitas de ESTA ocurrencia que sigan sin cerrar, archivar las cerradas, y crear + generar el ciclo siguiente de esta ruta. ¿Continuar?"
+                        help="Cierra lo que quedó sin atender de este ciclo y arranca el ciclo siguiente de esta misma ruta (misma lista de clientes, todos en pendiente otra vez)."
                     />
                     <field name="estado" widget="statusbar" statusbar_visible="por_iniciar,en_curso,completada" />
                 </header>
@@ -56,7 +64,7 @@
                         </group>
                         <group>
                             <field name="date_start" />
-                            <field name="date_end" readonly="1" />
+                            <field name="date_end" />
                         </group>
                     </group>
                     <group>
@@ -84,6 +92,7 @@
                                     decoration-success="stage_name == 'Completado'"
                                     decoration-danger="stage_name == 'Cancelado'"
                                     decoration-warning="stage_name == 'No quiso'"
+                                    decoration-info="stage_name == 'No atendido'"
                                     decoration-muted="stage_name == 'New'"
                                 >
                                     <field name="location_id" />
@@ -104,9 +113,11 @@
         <field name="res_model">fsm.route.schedule</field>
         <field name="view_mode">list,form</field>
         <field name="help">
-            Crea una fila por cada semana en que se recorre una ruta.
-            Esto es lo que alimenta la pestaña "Rutas" de la app del
-            vendedor, agrupada/filtrada por semana o mes.
+            Crea una fila por cada ciclo en que se recorre una ruta (no
+            todas duran una semana). Esto es lo que alimenta la pestaña
+            "Rutas" de la app del vendedor, agrupada/filtrada por ciclo o
+            mes. Usá "Generar próximo ciclo" en una ocurrencia existente
+            para no tener que armar cada ciclo siguiente a mano.
         </field>
     </record>
 

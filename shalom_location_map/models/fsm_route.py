@@ -22,6 +22,11 @@ Agrega a fsm.route:
    la geometría de la ruta real (siguiendo calles) devuelta por Mapbox.
    Requiere la variable de entorno MAPBOX_ACCESS_TOKEN configurada en
    el servidor (nunca hardcodeada en el módulo).
+
+4. El campo x_duracion_dias: cuántos días dura típicamente un
+   recorrido completo de esta ruta. Solo se usa para sugerir la fecha
+   de fin al crear/renovar una fsm.route.schedule (ver ese modelo) --
+   la fecha real de cada programación concreta siempre es editable.
 """
 import json
 import logging
@@ -50,6 +55,18 @@ class FSMRoute(models.Model):
         "por Mapbox Directions API, uniendo los clientes en el orden "
         "de su Orden de Ruta. Se actualiza con el botón 'Calcular "
         "trazado de ruta'.",
+    )
+    x_duracion_dias = fields.Integer(
+        string="Duración típica del ciclo (días)",
+        default=7,
+        help="Cuántos días suele durar un recorrido completo de esta "
+        "ruta (1, 2, 3, una semana...) -- no todas las rutas duran lo "
+        "mismo. Se usa solo para SUGERIR la fecha de fin al crear una "
+        "fsm.route.schedule nueva para esta ruta (ver "
+        "_onchange_date_start_sugerir_fin en fsm_route_schedule.py) y "
+        "al generar el ciclo siguiente con 'Generar próximo ciclo'; la "
+        "fecha de fin de cada programación concreta siempre se puede "
+        "editar a mano si ese mes es distinto.",
     )
 
     def action_generar_visitas_ruta(self, schedule=None):

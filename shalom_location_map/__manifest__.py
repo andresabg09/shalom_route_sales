@@ -5,7 +5,7 @@
                "botón de GPS y orden/jornada de visita en las órdenes de servicio, "
                "generación de visitas por ruta, y la app de venta de ruta callejera "
                "del vendedor (Ruta Shalom).",
-    "version": "18.0.17.0.0",
+    "version": "18.0.18.0.0",
     "category": "Field Service",
     "author": "AutomatePTY",
     "license": "AGPL-3",
@@ -24,6 +24,7 @@
         "security/ir.model.access.csv",
         "data/fsm_stage_colors.xml",
         "data/fsm_stage_no_quiso.xml",
+        "data/fsm_stage_no_atendido.xml",
         "views/fsm_location_action.xml",
         "views/fsm_location_geoengine_patch.xml",
         "views/fsm_location_orden_views.xml",
