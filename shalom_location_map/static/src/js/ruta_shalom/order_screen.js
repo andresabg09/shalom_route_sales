@@ -75,6 +75,30 @@ const CATEGORIA_TODAS = "todas";
 // productos de la página actual.
 const PRODUCTOS_POR_PAGINA = 80;
 
+// Recuperación de carrito sin guardar (memoria de 30 min, pedido
+// explícito): la pantalla se puede perder por cualquier vía que no sea
+// un cierre intencional (confirmar pedido, revisar cotización, o
+// "Salir sin guardar" del aviso propio) -- típicamente el botón/gesto
+// "atrás" de Android, que a propósito NO se intercepta (ver el
+// comentario grande al principio del archivo: ya se probó y rompía la
+// navegación de Odoo). Sin nada más, eso perdía el carrito entero sin
+// ningún aviso. Se guarda un snapshot en localStorage en cada cambio
+// del carrito, y se restaura solo (sin preguntar) si se reabre esta
+// misma visita dentro de los 30 minutos. Cualquier actividad
+// (agregar/sacar un producto, o simplemente reabrir el catálogo con un
+// borrador pendiente) reinicia el conteo -- se re-guarda con timestamp
+// nuevo en cada una de esas acciones. Se limpia el snapshot en
+// cerrarDeVerdad(), que es el único punto de cierre intencional
+// compartido por las cuatro salidas legítimas (carrito vacío, "Salir
+// sin guardar", pedido confirmado, cotización guardada) -- así nunca
+// se limpia en un cierre accidental, que por definición no pasa por
+// ningún código nuestro.
+const INACTIVIDAD_MAXIMA_BORRADOR_MS = 30 * 60 * 1000;
+
+function claveBorradorCarrito(orderId) {
+    return `shalom_carrito_borrador_${orderId}`;
+}
+
 export class OrderScreen extends Component {
     static template = "shalom_location_map.OrderScreen";
     static props = {
@@ -117,6 +141,8 @@ export class OrderScreen extends Component {
             cerrando: false,
         });
 
+        this._restaurarBorradorCarritoSiCorresponde();
+
         onWillStart(() => this.cargarProductos());
         onWillUnmount(() => this.detenerEscaneo());
 
@@ -133,6 +159,75 @@ export class OrderScreen extends Component {
             },
             () => [this.state.escaneando, this.videoRef.el]
         );
+    }
+
+    // -- Memoria de 30 min del carrito (ver comentario grande de
+    // INACTIVIDAD_MAXIMA_BORRADOR_MS más arriba) --
+
+    /** Guarda un snapshot del carrito actual en localStorage, con la
+     * hora de este guardado -- cualquier llamada reinicia la ventana
+     * de 30 minutos. Se guarda igual si el carrito quedó vacío (evita
+     * quedar con un borrador viejo de un ítem que ya se sacó; un
+     * snapshot vacío tampoco restaura nada, ver
+     * _restaurarBorradorCarritoSiCorresponde). */
+    _guardarBorradorCarrito() {
+        try {
+            localStorage.setItem(
+                claveBorradorCarrito(this.props.orderId),
+                JSON.stringify({ts: Date.now(), carrito: this.state.carrito})
+            );
+        } catch (error) {
+            // localStorage puede fallar (modo privado del navegador,
+            // cuota llena, etc.) -- no es crítico para seguir armando
+            // el pedido en memoria, solo se pierde la posibilidad de
+            // recuperarlo si la pantalla se cierra por accidente.
+        }
+    }
+
+    _borrarBorradorCarrito() {
+        try {
+            localStorage.removeItem(claveBorradorCarrito(this.props.orderId));
+        } catch (error) {
+            // ver _guardarBorradorCarrito()
+        }
+    }
+
+    /** Si hay un borrador guardado de esta misma visita, de menos de 30
+     * minutos de inactividad, lo restaura sin preguntar (pedido
+     * explícito) y reinicia el conteo re-guardándolo con timestamp
+     * nuevo -- reabrir el catálogo con un borrador pendiente también
+     * cuenta como actividad. Se llama una sola vez, en setup(), antes
+     * de que el vendedor pueda tocar nada. */
+    _restaurarBorradorCarritoSiCorresponde() {
+        let crudo;
+        try {
+            crudo = localStorage.getItem(claveBorradorCarrito(this.props.orderId));
+        } catch (error) {
+            return;
+        }
+        if (!crudo) {
+            return;
+        }
+        let borrador;
+        try {
+            borrador = JSON.parse(crudo);
+        } catch (error) {
+            this._borrarBorradorCarrito();
+            return;
+        }
+        const cantidadItems = Object.keys(borrador.carrito || {}).length;
+        if (!cantidadItems || Date.now() - borrador.ts > INACTIVIDAD_MAXIMA_BORRADOR_MS) {
+            this._borrarBorradorCarrito();
+            return;
+        }
+        Object.assign(this.state.carrito, borrador.carrito);
+        this.notification.add(
+            `Se recuperaron ${cantidadItems} producto(s) sin guardar de una ` +
+            "sesión anterior con este cliente.",
+            {type: "info"}
+        );
+        this._guardarBorradorCarrito(); // reinicia el conteo de 30 min
+        this.actualizarPromos();
     }
 
     async cargarProductos() {
@@ -400,6 +495,7 @@ export class OrderScreen extends Component {
             cantidad: (actual ? actual.cantidad : 0) + 1,
         };
         this.actualizarPromos();
+        this._guardarBorradorCarrito();
     }
 
     cambiarCantidad(productoId, delta) {
@@ -414,11 +510,13 @@ export class OrderScreen extends Component {
             item.cantidad = nueva;
         }
         this.actualizarPromos();
+        this._guardarBorradorCarrito();
     }
 
     quitarDelCarrito(productoId) {
         delete this.state.carrito[productoId];
         this.actualizarPromos();
+        this._guardarBorradorCarrito();
     }
 
     /**
@@ -449,6 +547,7 @@ export class OrderScreen extends Component {
             item.cantidad = nueva;
         }
         this.actualizarPromos();
+        this._guardarBorradorCarrito();
     }
 
     /**
@@ -534,6 +633,7 @@ export class OrderScreen extends Component {
             `Promoción agregada: ${unidadesACargar} x ${recompensa.reward_product_name}`,
             {type: "success"}
         );
+        this._guardarBorradorCarrito();
     }
 
     irACatalogo() {
@@ -674,8 +774,9 @@ export class OrderScreen extends Component {
             return;
         }
         const mensaje =
-            `Vas a confirmar un pedido de ${this.cantidadItems} producto(s) por ` +
-            `$${this.total.toFixed(2)} para "${this.props.clienteNombre}".\n\n` +
+            `Vas a finalizar una cotización a orden de venta de ` +
+            `${this.cantidadItems} producto(s) por $${this.total.toFixed(2)} para ` +
+            `"${this.props.clienteNombre}".\n\n` +
             "Esto genera una venta real y reserva el stock ahora mismo. La " +
             "factura se genera después, en oficina.\n\n¿Confirmás que querés continuar?";
         // eslint-disable-next-line no-alert
@@ -807,6 +908,12 @@ export class OrderScreen extends Component {
         }
         this._cerrado = true;
         this.detenerEscaneo();
+        // Único punto de cierre intencional (carrito vacío, "Salir sin
+        // guardar", pedido confirmado, cotización guardada) -- se
+        // limpia acá el borrador de recuperación para que no quede
+        // colgado. Un cierre accidental (botón/gesto atrás de Android)
+        // no pasa por acá, así que ahí el borrador queda intacto.
+        this._borrarBorradorCarrito();
         this.props.onCerrar();
     }
 }

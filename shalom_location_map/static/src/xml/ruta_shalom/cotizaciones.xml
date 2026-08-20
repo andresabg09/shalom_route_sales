@@ -43,7 +43,7 @@
                             <span
                                 class="stop-badge"
                                 t-att-class="cotizacion.confirmada ? 'badge-confirmada' : 'badge-borrador'"
-                                t-esc="cotizacion.confirmada ? 'Confirmada' : 'Borrador'"
+                                t-esc="cotizacion.confirmada ? 'Orden de Venta' : 'Cotización'"
                             />
                         </div>
                         <div class="addr" t-esc="cotizacion.partner_name"/>

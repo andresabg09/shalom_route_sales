@@ -5,6 +5,7 @@ import {useService} from "@web/core/utils/hooks";
 import {ESTADO_ETIQUETA, estadoDesdeStageName, obtenerIdsEtapas} from "./stage_utils";
 import {normalizarAccionActWindow} from "./action_utils";
 import {cerrarConAnimacion} from "./animacion_utils";
+import {capturarMejorPosicionGps} from "./gps_utils";
 import {ClienteForm} from "./cliente_form";
 import {OrderScreen} from "./order_screen";
 
@@ -195,7 +196,7 @@ export class VisitSheet extends Component {
         window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, "_blank");
     }
 
-    capturarGps() {
+    async capturarGps() {
         const mensaje =
             `Vas a actualizar la ubicación GPS de "${this.state.visita.nombre}" ` +
             "con tu posición actual.\n\nEsto reemplaza la ubicación guardada del " +
@@ -211,37 +212,47 @@ export class VisitSheet extends Component {
             });
             return;
         }
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                const {latitude, longitude} = position.coords;
-                try {
-                    await this.orm.call("fsm.order", "action_capturar_gps", [
-                        [this.props.orderId],
-                        latitude,
-                        longitude,
-                    ]);
-                    this.state.visita.lat = latitude;
-                    this.state.visita.lng = longitude;
-                    this.notification.add("Ubicación GPS capturada correctamente.", {
-                        type: "success",
-                    });
-                    if (this.props.onCambio) {
-                        this.props.onCambio();
-                    }
-                } catch (error) {
-                    this.notification.add("No se pudo guardar la ubicación GPS.", {
-                        type: "danger",
-                    });
-                }
-            },
-            () => {
-                this.notification.add(
-                    "No se pudo obtener tu ubicación GPS. Verificá el permiso de ubicación.",
-                    {type: "danger"}
-                );
-            },
-            {enableHighAccuracy: true, timeout: 15000, maximumAge: 0}
+
+        this.notification.add(
+            "Obteniendo tu ubicación GPS... puede tardar unos segundos, no cierres " +
+            "esta pantalla.",
+            {type: "info"}
         );
+
+        let position;
+        try {
+            position = await capturarMejorPosicionGps();
+        } catch (error) {
+            this.notification.add(
+                "No se pudo obtener tu ubicación GPS. Verificá el permiso de " +
+                "ubicación y que tengas señal.",
+                {type: "danger"}
+            );
+            return;
+        }
+
+        const {latitude, longitude} = position.coords;
+        try {
+            await this.orm.call("fsm.order", "action_capturar_gps", [
+                [this.props.orderId],
+                latitude,
+                longitude,
+            ]);
+            this.state.visita.lat = latitude;
+            this.state.visita.lng = longitude;
+            this.notification.add(
+                `Ubicación GPS capturada correctamente (precisión: ` +
+                `${Math.round(position.coords.accuracy)}m).`,
+                {type: "success"}
+            );
+            if (this.props.onCambio) {
+                this.props.onCambio();
+            }
+        } catch (error) {
+            this.notification.add("No se pudo guardar la ubicación GPS.", {
+                type: "danger",
+            });
+        }
     }
 
     async verHistorial() {

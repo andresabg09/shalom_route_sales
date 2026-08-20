@@ -55,6 +55,7 @@
             "shalom_location_map/static/src/js/ruta_shalom/stage_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/action_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/animacion_utils.js",
+            "shalom_location_map/static/src/js/ruta_shalom/gps_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/cliente_form.js",
             "shalom_location_map/static/src/js/ruta_shalom/order_screen.js",
             "shalom_location_map/static/src/js/ruta_shalom/visit_sheet.js",

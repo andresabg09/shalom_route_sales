@@ -537,13 +537,19 @@
     // filter/rotate -- es la ÚNICA forma confirmada estable. No
     // cambiar el diseño del pin sin probar el zoom a fondo en un
     // celular real antes de darlo por bueno.
+    // Tamaño/borde subidos (30px→34px, 2.5px→3px borde, sombra un
+    // poco más marcada) a pedido -- reportado que costaba distinguir
+    // el punto exacto del cliente. Se tocaron SOLO width/height/border/
+    // box-shadow -- ninguna de las propiedades señaladas como causa
+    // del bug de zoom (filter, transform/rotate); sigue siendo
+    // "cuadrado, anchor center, sin filter/rotate".
     .shalom-marker-numero {
-        width: 30px;
-        height: 30px;
+        width: 34px;
+        height: 34px;
         border-radius: 50%;
         background: var(--pin-color, var(--shalom-accent));
-        border: 2.5px solid var(--shalom-surface);
-        box-shadow: 0 2px 6px rgba(20, 10, 15, 0.4);
+        border: 3px solid var(--shalom-surface);
+        box-shadow: 0 2px 8px rgba(20, 10, 15, 0.5);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -552,7 +558,7 @@
     .shalom-marker-numero-txt {
         color: #fff;
         font-weight: 800;
-        font-size: 0.78rem;
+        font-size: 0.82rem;
         font-family: inherit;
         line-height: 1;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -569,9 +575,13 @@
     // gestos de zoom en algunos Android. Animando box-shadow en vez de
     // scale() se logra el mismo efecto de "halo creciendo" sin tocar
     // esa propiedad para nada.
+    // Subido de 16px a 22px para hacerle lugar a la flecha de
+    // orientación (shalom-marker-vendedor-flecha) sin que quede
+    // apretada -- el círculo/pulso de abajo sigue exactamente igual,
+    // no se tocó ninguna de sus propiedades.
     .shalom-marker-vendedor {
-        width: 16px;
-        height: 16px;
+        width: 22px;
+        height: 22px;
         position: relative;
     }
     .shalom-marker-vendedor-punto {
@@ -581,6 +591,20 @@
         background: var(--shalom-accent);
         border: 2px solid var(--shalom-surface);
         animation: shalom-pulso-vendedor 1.8s ease-out infinite;
+    }
+    // Flecha fija (no rota) que muestra hacia dónde apunta el rumbo de
+    // navegación -- el MAPA es el que gira (bearing), así que esto
+    // siempre queda "mirando arriba" en pantalla. Centrada con flex,
+    // no con transform: translate(-50%,-50%) -- a propósito, mismo
+    // motivo que el punto pulsante de arriba (ver ese comentario):
+    // nada de transform ni filter adentro de un marcador de Mapbox.
+    .shalom-marker-vendedor-flecha {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
     }
     @keyframes shalom-pulso-vendedor {
         0% {

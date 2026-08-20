@@ -3,6 +3,7 @@
 import {Component, onWillStart, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {cerrarConAnimacion} from "./animacion_utils";
+import {capturarMejorPosicionGps} from "./gps_utils";
 
 /**
  * Formulario ampliado de cliente (Fase 4, ronda de feedback): un solo
@@ -98,12 +99,29 @@ export class ClienteForm extends Component {
             const [loc] = await this.orm.read(
                 "fsm.location",
                 [this.props.locationId],
-                ["name", "phone", "street", "partner_id", "fsm_route_id"]
+                [
+                    "name",
+                    "phone",
+                    "street",
+                    "partner_id",
+                    "fsm_route_id",
+                    "partner_latitude",
+                    "partner_longitude",
+                ]
             );
             this.state.campos.name = loc.name || "";
             this.state.campos.phone = loc.phone || "";
             this.state.campos.street = loc.street || "";
             this.state.rutaId = loc.fsm_route_id ? loc.fsm_route_id[0] : RUTA_SIN_ASIGNAR;
+            // Se cargan las coordenadas YA guardadas del cliente -- son
+            // las que este mismo formulario va a reenviar en guardar()
+            // junto con el resto de los datos (ver el comentario grande
+            // ahí) para que un geo_localize() automático por dirección
+            // no las pise en silencio. Si no se cargaran acá, cualquier
+            // cliente al que no se le toque el GPS en esta sesión
+            // quedaría con partner_latitude/longitude en 0 al guardar.
+            this.state.lat = loc.partner_latitude || false;
+            this.state.lng = loc.partner_longitude || false;
 
             if (loc.partner_id) {
                 this.state.partnerId = loc.partner_id[0];
@@ -240,7 +258,7 @@ export class ClienteForm extends Component {
         this.marcarModificado();
     }
 
-    capturarGps() {
+    async capturarGps() {
         const mensaje =
             `Vas a guardar tu posición actual como la ubicación de "${
                 this.state.campos.name || "este cliente"
@@ -255,40 +273,52 @@ export class ClienteForm extends Component {
             });
             return;
         }
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                const {latitude, longitude} = position.coords;
-                this.state.lat = latitude;
-                this.state.lng = longitude;
-                if (this.props.modo === "editar" && this.props.locationId) {
-                    try {
-                        await this.orm.call("fsm.location", "shalom_actualizar_gps", [
-                            [this.props.locationId],
-                            latitude,
-                            longitude,
-                        ]);
-                        this.notification.add("Coordenadas guardadas.", {type: "success"});
-                    } catch (error) {
-                        this.notification.add("No se pudieron guardar las coordenadas.", {
-                            type: "danger",
-                        });
-                    }
-                } else {
-                    this.marcarModificado();
-                    this.notification.add(
-                        "Coordenadas capturadas -- se guardan al crear el cliente.",
-                        {type: "success"}
-                    );
-                }
-            },
-            () => {
-                this.notification.add(
-                    "No se pudo obtener tu ubicación GPS. Verificá el permiso de ubicación.",
-                    {type: "danger"}
-                );
-            },
-            {enableHighAccuracy: true, timeout: 15000, maximumAge: 0}
+
+        this.notification.add(
+            "Obteniendo tu ubicación GPS... puede tardar unos segundos, no cierres " +
+            "esta pantalla.",
+            {type: "info"}
         );
+
+        let position;
+        try {
+            position = await capturarMejorPosicionGps();
+        } catch (error) {
+            this.notification.add(
+                "No se pudo obtener tu ubicación GPS. Verificá el permiso de " +
+                "ubicación y que tengas señal.",
+                {type: "danger"}
+            );
+            return;
+        }
+
+        const {latitude, longitude} = position.coords;
+        this.state.lat = latitude;
+        this.state.lng = longitude;
+        if (this.props.modo === "editar" && this.props.locationId) {
+            try {
+                await this.orm.call("fsm.location", "shalom_actualizar_gps", [
+                    [this.props.locationId],
+                    latitude,
+                    longitude,
+                ]);
+                this.notification.add(
+                    `Coordenadas guardadas (precisión: ` +
+                    `${Math.round(position.coords.accuracy)}m).`,
+                    {type: "success"}
+                );
+            } catch (error) {
+                this.notification.add("No se pudieron guardar las coordenadas.", {
+                    type: "danger",
+                });
+            }
+        } else {
+            this.marcarModificado();
+            this.notification.add(
+                "Coordenadas capturadas -- se guardan al crear el cliente.",
+                {type: "success"}
+            );
+        }
     }
 
     async guardar() {
@@ -321,10 +351,33 @@ export class ClienteForm extends Component {
                 ]);
                 this.notification.add(`Cliente "${nombre}" creado.`, {type: "success"});
             } else {
+                // OJO -- causa real del bug de "coordenadas que se
+                // borran/cambian solas al guardar", reportado en
+                // producción: este write() manda `street`, y
+                // fieldservice_geoengine dispara un geo_localize()
+                // automático (por dirección) apenas detecta un campo de
+                // dirección en un write -- sin importar que ya hubiera
+                // coordenadas buenas guardadas (ej. recién capturadas a
+                // mano con el botón de arriba). El geocoder externo
+                // puede pisarlas con un resultado peor, o vaciarlas si
+                // no encuentra nada -- y como el resultado no siempre
+                // queda en 0 (a veces es simplemente una coordenada mala
+                // pero no vacía), el fix de geo_localize() en
+                // fsm_location.py (que solo restaura si quedó en 0) no
+                // alcanza a cubrir este caso. La solución acá: mandar
+                // SIEMPRE partner_latitude/partner_longitude en esta
+                // misma escritura, con el valor que ya tenemos en
+                // memoria (this.state.lat/lng -- cargado al abrir el
+                // formulario, o actualizado por capturarGps() más
+                // arriba). Al venir explícitas en el mismo write(), no
+                // quedan "vacías" para que el geocoder automático las
+                // toque.
                 await this.orm.write("fsm.location", [this.props.locationId], {
                     name: nombre,
                     phone: this.state.campos.phone.trim() || false,
                     street: this.state.campos.street.trim() || false,
+                    partner_latitude: this.state.lat || 0,
+                    partner_longitude: this.state.lng || 0,
                 });
                 if (this.state.partnerId) {
                     const valoresPartner = {

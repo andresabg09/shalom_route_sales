@@ -76,16 +76,76 @@ const NAV_FLUJO_INTERVALO_MS = 55;
 const NAV_COLOR_GLOW_FALLBACK = "#b1245a"; // = --shalom-accent en modo claro
 const NAV_COLOR_CHISPA = "#ff9dc2"; // tono claro sobre el color de marca, efecto "electricidad"
 
-// Cuánto se pausa el auto-seguimiento de cámara (easeTo recentrando en
-// el vendedor) después de que el vendedor mueve el mapa a mano durante
-// una navegación en vivo -- pedido explícito: antes se recentraba en
-// CADA lectura de GPS sin importar que el vendedor estuviera paneando
-// para mirar el resto de la ruta, así que el mapa se sentía "pegado"
-// / imposible de mover. 60s le da tiempo de examinar antes de que
-// vuelva a seguirlo solo -- y tocar "Centrar en mí" (ícono fa-crosshairs, ya existía)
-// lo reactiva antes si el vendedor ya terminó de mirar (ver
-// centrarEnVendedor()).
-const NAV_PAUSA_SEGUIMIENTO_MS = 60000;
+// El auto-seguimiento de cámara se pausa apenas el vendedor mueve el
+// mapa a mano durante una navegación en vivo -- pedido explícito: antes
+// se recentraba en CADA lectura de GPS sin importar que el vendedor
+// estuviera paneando para mirar el resto de la ruta, así que el mapa se
+// sentía "pegado"/imposible de mover.
+//
+// Antes esta pausa era temporizada (60s y volvía sola) -- también
+// reportado como molesto: el vendedor quería mover el mapa libremente
+// y que se quedara así hasta que ÉL decidiera volver, no que el
+// seguimiento se reactivara solo a mitad de camino. Ahora es indefinida:
+// una vez que el vendedor toca el mapa, el seguimiento automático de
+// cámara queda pausado hasta que vuelva a tocar "Centrar en mí" (ver
+// _navSeguimientoPausado, centrarEnVendedor() e iniciarNavegacion()).
+
+// -- Cámara estilo Waze durante "Trazar ruta aquí" -------------------
+// La cámara del mapa (bearing/pitch/center) la maneja un loop de
+// requestAnimationFrame (_iniciarLoopCamaraNav) en vez de un easeTo
+// puntual por cada lectura de GPS -- eso se sentía "a saltos" con el
+// easeTo(400ms) de antes, sobre todo al girar. El marcador del
+// vendedor en sí (shalom-marker-vendedor) NO rota -- rota el MAPA
+// (bearing = rumbo de avance), así el marcador queda siempre "mirando
+// para arriba" en pantalla y son las calles las que giran debajo,
+// igual que el "puck" de Waze/Google Maps. A propósito no se le puso
+// rotación propia al marcador: el historial de este archivo (ver
+// comentario grande sobre los pines numerados, más arriba) ya dejó un
+// bug real de producción con transforms/rotate en marcadores custom
+// durante el zoom -- más vale no repetir esa clase de problema acá.
+
+// Debajo de esta velocidad (m/s, ~2 km/h) el rumbo que reporta el GPS
+// (coords.heading) es ruido -- a pie o detenido "para dónde estás
+// mirando" según el GPS salta para cualquier lado. Por debajo del
+// umbral se calcula el rumbo por diferencia contra la lectura anterior
+// en su lugar.
+const NAV_VELOCIDAD_MINIMA_RUMBO_GPS = 0.6;
+
+// Si no se movió al menos esto (metros) desde la lectura anterior, no
+// se recalcula el rumbo por diferencia de coordenadas -- girar la
+// cámara por ruido de GPS "quieto" es peor que dejarla como estaba.
+const NAV_DISTANCIA_MINIMA_RUMBO_DELTA_M = 5;
+
+// Inclinación (grados) de la cámara mientras se navega -- vista en
+// perspectiva mirando "hacia adelante" en vez del mapa plano a 90°
+// desde arriba. Zoom también sube durante la navegación (detalle de
+// calle) y baja de vuelta al salir -- ver _iniciarNavegacion()/
+// detenerNavegacion().
+const NAV_PITCH = 55;
+// Historial de ajustes de este número, para quien lo toque después:
+//   - 17 -> 18.5: reportado que se sentía lejos/arriba con la cámara
+//     inclinada, aunque "centrar" (sin inclinación, zoom 15) sí se
+//     sentía bien acercado -- una cámara inclinada, al mirar "de
+//     costado" hacia el horizonte en vez de derecho desde arriba,
+//     abarca más superficie en pantalla que la misma cámara plana al
+//     mismo número de zoom, así que hace falta un número más alto acá
+//     que en centrarEnVendedor() (que no inclina) para sentirse igual
+//     de cerca.
+//   - 18.5 -> 19.5: mismo motivo, seguía sintiéndose lejos.
+//   - 19.5 -> 17.5 (acá): reportado que 19.5 quedó DEMASIADO cerca. El
+//     loop de cámara (_iniciarLoopCamaraNav) mantiene el zoom clavado
+//     acá en cada cuadro MIENTRAS el seguimiento no esté pausado -- ya
+//     no fuerza este zoom si el vendedor está paneando/zoomeando a
+//     mano (ver _navSeguimientoPausado, ahora indefinido en vez de por
+//     tiempo), así que un zoom manual del vendedor no se pierde.
+const NAV_ZOOM = 17.5;
+
+// Qué tan rápido la cámara "alcanza" la posición/rumbo real en cada
+// cuadro del loop de animación (0-1): más alto = más pegado al GPS
+// pero más brusco, más bajo = más suave pero con más retraso. 0.12 a
+// ~60fps equivale a alcanzar ~95% del camino en poco menos de un
+// segundo.
+const NAV_FACTOR_SUAVIZADO_CAMARA = 0.12;
 
 /**
  * Rumbo (bearing) en grados desde (lat1,lng1) hacia (lat2,lng2), 0-360,
@@ -102,6 +162,43 @@ function calcularRumbo(lat1, lng1, lat2, lng2) {
     const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
     const θ = Math.atan2(y, x);
     return ((θ * 180) / Math.PI + 360) % 360;
+}
+
+/**
+ * Construye el elemento DOM del marcador del vendedor: círculo pulsante
+ * (ya existía) + una flecha fija apuntando "hacia arriba" en la
+ * pantalla, para que se distinga hacia dónde está orientado durante la
+ * navegación en vivo (bearing = rumbo, ver NAV_* más arriba) -- el mapa
+ * es el que rota, la flecha no necesita rotar nunca, así que no hace
+ * falta transform/rotate en el marcador (ver el comentario grande de
+ * .shalom-marker-numero en ruta_shalom.scss sobre por qué eso es
+ * justo lo que hay que evitar acá: ni filter ni transform animado
+ * adentro de un marcador de Mapbox, causaron un bug real de
+ * producción con el zoom). Mismo criterio "cuadrado, anchor center,
+ * sin filter/rotate" que ya está confirmado estable para los pines
+ * numerados de clientes -- esto solo agrega una forma estática nueva
+ * encima, no cambia ninguna de esas reglas.
+ */
+function crearElementoMarcadorVendedor() {
+    const el = document.createElement("div");
+    el.className = "shalom-marker-vendedor";
+    el.innerHTML =
+        '<span class="shalom-marker-vendedor-punto"></span>' +
+        '<span class="shalom-marker-vendedor-flecha">' +
+        '<svg width="10" height="10" viewBox="0 0 10 10">' +
+        '<path d="M5 0 L8.5 8 L5 6 L1.5 8 Z" fill="#fff"/>' +
+        "</svg>" +
+        "</span>";
+    return el;
+}
+
+/** Interpola un ángulo (0-360°) hacia otro por el camino más corto
+ * (nunca da la vuelta larga cruzando 0°/360° al revés) -- para suavizar
+ * el rumbo de la cámara cuadro a cuadro sin que gire "para el lado que
+ * no es". */
+function interpolarAngulo(actual, objetivo, factor) {
+    const diferencia = ((objetivo - actual + 540) % 360) - 180;
+    return (actual + diferencia * factor + 360) % 360;
 }
 
 /**
@@ -149,9 +246,12 @@ export class RutaDetalle extends Component {
         this._navToken = null; // token público de Mapbox, cacheado para no volver a pedirlo en cada recálculo
         this._navWatchId = null; // id de navigator.geolocation.watchPosition
         this._navUltimoRecalculoTs = 0;
+        this._navRumboObjetivo = 0; // último rumbo calculado (heading GPS o por delta)
+        this._navCamara = {lat: null, lng: null, rumbo: 0}; // estado suavizado que dibuja el loop de cámara
+        this._navAnimacionCamaraId = null; // id de requestAnimationFrame del loop de cámara
         this._navFlujoIntervalId = null; // setInterval de la animación de la línea
         this._navFlujoPaso = 0;
-        this._navUltimaInteraccionUsuarioTs = 0; // último gesto real (drag/pinch) del vendedor sobre el mapa
+        this._navSeguimientoPausado = false; // true tras un gesto real (drag/pinch) del vendedor; se queda así hasta "Centrar en mí"
         this.state = useState({
             cargando: true,
             visitas: [],
@@ -514,7 +614,17 @@ export class RutaDetalle extends Component {
                 });
             }
 
-            if (!bounds.isEmpty()) {
+            // Si ya hay una navegación esperando para arrancar
+            // (_navPendiente, tocado desde la Lista), no tiene sentido
+            // encuadrar TODOS los clientes de la ruta acá -- eso hacía
+            // que el mapa animara primero hacia un zoom "toda la
+            // ciudad/provincia" y, un instante después, otra vez hacia
+            // el cliente puntual (flyTo, más abajo) -- dos animaciones
+            // peleándose, reportado en producción como que el mapa "no
+            // avanzaba" al entrar a navegar. Si no hay navegación
+            // pendiente (solo se está mirando el mapa), el fitBounds
+            // sigue siendo el comportamiento correcto.
+            if (!bounds.isEmpty() && !this._navPendiente) {
                 this.mapboxMap.fitBounds(bounds, {padding: 50, maxZoom: 15});
             }
 
@@ -528,14 +638,15 @@ export class RutaDetalle extends Component {
 
             // Distingue un gesto REAL del vendedor (drag, pellizco de
             // zoom, rueda del mouse) de un movimiento programático
-            // nuestro (easeTo/flyTo, ej. el auto-seguimiento durante
-            // "Trazar ruta aquí") -- Mapbox solo llena `originalEvent`
-            // en el primer caso. Se usa para pausar el auto-seguimiento
-            // mientras el vendedor está paneando a propósito (ver
-            // _moverMarcadorVendedor).
+            // nuestro (easeTo/flyTo/jumpTo, ej. el auto-seguimiento
+            // durante "Trazar ruta aquí") -- Mapbox solo llena
+            // `originalEvent` en el primer caso. Un gesto real pausa el
+            // auto-seguimiento INDEFINIDAMENTE (no por un tiempo fijo)
+            // -- se queda pausado hasta que el vendedor toque "Centrar
+            // en mí" (ver centrarEnVendedor(), _iniciarLoopCamaraNav()).
             this.mapboxMap.on("movestart", (e) => {
                 if (e.originalEvent) {
-                    this._navUltimaInteraccionUsuarioTs = Date.now();
+                    this._navSeguimientoPausado = true;
                 }
             });
 
@@ -605,10 +716,9 @@ export class RutaDetalle extends Component {
                 if (this._marcadorVendedor) {
                     this._marcadorVendedor.setLngLat([longitude, latitude]);
                 } else {
-                    const el = document.createElement("div");
-                    el.className = "shalom-marker-vendedor";
-                    el.innerHTML = '<span class="shalom-marker-vendedor-punto"></span>';
-                    this._marcadorVendedor = new window.mapboxgl.Marker({element: el})
+                    this._marcadorVendedor = new window.mapboxgl.Marker({
+                        element: crearElementoMarcadorVendedor(),
+                    })
                         .setLngLat([longitude, latitude])
                         .addTo(this.mapboxMap);
                 }
@@ -705,21 +815,29 @@ export class RutaDetalle extends Component {
      * esta sesión (this.posicionVendedor) la reusa para no pedir el
      * permiso/GPS de nuevo; si no, lo pide en el momento. Durante una
      * navegación en vivo, tocarlo también reactiva el auto-seguimiento
-     * al toque (sin esperar los 60s de NAV_PAUSA_SEGUIMIENTO_MS) --
-     * es la forma explícita en que el vendedor dice "ya terminé de
-     * mirar, seguime de nuevo".
+     * -- es la forma explícita en que el vendedor dice "ya terminé de
+     * mirar, seguime de nuevo" (la pausa por moverlo a mano es
+     * indefinida, no por tiempo -- ver _navSeguimientoPausado).
      */
     centrarEnVendedor() {
         if (!this.mapboxMap) {
             return;
         }
+        // Durante navegación en vivo, "centrar" tiene que devolver a la
+        // MISMA vista de navegación (zoom/inclinación de calle), no a
+        // un zoom de "solo mirando el mapa". Reactivar el
+        // auto-seguimiento ya alcanza -- el loop de cámara
+        // (_iniciarLoopCamaraNav) se encarga de llevar zoom/pitch/bearing
+        // de vuelta, no hace falta un easeTo manual acá.
         if (this.state.navegando) {
-            this._navUltimaInteraccionUsuarioTs = 0;
+            this._navSeguimientoPausado = false;
+            return;
         }
+        const zoomVista = 15;
         if (this.posicionVendedor) {
             this.mapboxMap.easeTo({
                 center: [this.posicionVendedor.lng, this.posicionVendedor.lat],
-                zoom: 15,
+                zoom: zoomVista,
                 duration: 800,
             });
             return;
@@ -728,7 +846,7 @@ export class RutaDetalle extends Component {
             if (this.posicionVendedor) {
                 this.mapboxMap.easeTo({
                     center: [this.posicionVendedor.lng, this.posicionVendedor.lat],
-                    zoom: 15,
+                    zoom: zoomVista,
                     duration: 800,
                 });
             } else {
@@ -797,6 +915,11 @@ export class RutaDetalle extends Component {
         this.state.navDistanciaTexto = "";
         this.state.navDuracionTexto = "";
         this.state.navExpandido = false;
+        this._navRumboObjetivo = this._navCamara.rumbo || 0;
+        // Cada navegación nueva arranca siguiendo al vendedor -- no
+        // hereda una pausa de una navegación anterior.
+        this._navSeguimientoPausado = false;
+        this._iniciarLoopCamaraNav();
 
         // Primera ruta: se pide con una sola lectura de GPS (no hace
         // falta esperar a watchPosition para el trazado inicial).
@@ -847,6 +970,38 @@ export class RutaDetalle extends Component {
             return; // mismo criterio que mostrarPosicionVendedor(): descartar lecturas malas
         }
         const punto = {lat: position.coords.latitude, lng: position.coords.longitude};
+        const anterior = this.posicionVendedor;
+
+        // Rumbo para la cámara (hacia dónde apunta la vista mientras
+        // navega): preferir el heading del GPS si viene con movimiento
+        // real, si no calcularlo por diferencia contra la lectura
+        // anterior. Ver comentario grande de constantes NAV_* más
+        // arriba para el porqué del umbral de velocidad.
+        const {heading, speed} = position.coords;
+        if (
+            typeof heading === "number" &&
+            !Number.isNaN(heading) &&
+            typeof speed === "number" &&
+            speed >= NAV_VELOCIDAD_MINIMA_RUMBO_GPS
+        ) {
+            this._navRumboObjetivo = heading;
+        } else if (anterior) {
+            const distanciaDesdeAnterior = distanciaMetros(
+                anterior.lat,
+                anterior.lng,
+                punto.lat,
+                punto.lng
+            );
+            if (distanciaDesdeAnterior >= NAV_DISTANCIA_MINIMA_RUMBO_DELTA_M) {
+                this._navRumboObjetivo = calcularRumbo(
+                    anterior.lat,
+                    anterior.lng,
+                    punto.lat,
+                    punto.lng
+                );
+            }
+        }
+
         this.posicionVendedor = punto;
         this._moverMarcadorVendedor(punto);
 
@@ -929,25 +1084,114 @@ export class RutaDetalle extends Component {
         if (this._marcadorVendedor) {
             this._marcadorVendedor.setLngLat([punto.lng, punto.lat]);
         } else {
-            const el = document.createElement("div");
-            el.className = "shalom-marker-vendedor";
-            el.innerHTML = '<span class="shalom-marker-vendedor-punto"></span>';
-            this._marcadorVendedor = new window.mapboxgl.Marker({element: el})
+            this._marcadorVendedor = new window.mapboxgl.Marker({
+                element: crearElementoMarcadorVendedor(),
+            })
                 .setLngLat([punto.lng, punto.lat])
                 .addTo(this.mapboxMap);
         }
-        // Modo "seguidor": el mapa sigue centrado en el vendedor
-        // mientras navega, como Waze/Maps -- pero NO si el vendedor
-        // panéo el mapa a mano hace poco (ver NAV_PAUSA_SEGUIMIENTO_MS
-        // y el listener "movestart" en dibujarMapa): antes se
-        // recentraba en cada lectura de GPS sin excepción, así que
-        // cualquier intento de mirar el resto de la ruta se sentía
-        // "pegado" -- el mapa volvía solo casi al toque.
-        const pausado =
-            Date.now() - this._navUltimaInteraccionUsuarioTs < NAV_PAUSA_SEGUIMIENTO_MS;
-        if (!pausado) {
-            this.mapboxMap.easeTo({center: [punto.lng, punto.lat], duration: 400});
+        // La cámara (centrado + rotación + inclinación) la maneja
+        // _iniciarLoopCamaraNav() cuadro a cuadro -- acá solo se mueve
+        // el marcador. El "modo seguidor pausado" (_navSeguimientoPausado,
+        // si el vendedor panéo el mapa a mano) también lo respeta ese
+        // loop, no hace falta duplicarlo acá.
+    }
+
+    /**
+     * Loop de animación (requestAnimationFrame, ~60fps) que mueve la
+     * cámara del mapa suavemente hacia la última posición/rumbo
+     * conocidos del vendedor (this.posicionVendedor / this._navRumboObjetivo),
+     * en vez de saltar de golpe cada vez que llega una lectura nueva de
+     * GPS -- así se ve fluido aunque el GPS solo actualice cada 1-2
+     * segundos, estilo Waze. Respeta la pausa de auto-seguimiento si el
+     * vendedor está paneando el mapa a mano (mismo criterio que ya
+     * tenía _moverMarcadorVendedor).
+     */
+    _iniciarLoopCamaraNav() {
+        if (this._navAnimacionCamaraId !== null) {
+            return; // ya había un loop corriendo, no se duplica
         }
+        const paso = () => {
+            if (!this.state.navegando || !this.mapboxMap) {
+                this._navAnimacionCamaraId = null;
+                return;
+            }
+            const pausado = this._navSeguimientoPausado;
+            if (!pausado && this.posicionVendedor) {
+                if (this._navCamara.lat === null) {
+                    // Primer cuadro: arrancar ya en la posición real
+                    // (sin animar desde 0,0) y transición única hacia
+                    // pitch/zoom de navegación.
+                    //
+                    // OJO -- reportado en producción: acá antes se usaba
+                    // easeTo(), que interpola centro y zoom en línea
+                    // recta. Cuando el mapa arranca en el zoom "toda
+                    // Panamá" del fitBounds() de dibujarMapa() (bounds de
+                    // TODOS los clientes de la ruta, no solo el
+                    // objetivo) y hay que llegar hasta un zoom de calle
+                    // (NAV_ZOOM), esa línea recta entre un punto lejísimos
+                    // y un zoom altísimo se veía trabada -- como si
+                    // apenas avanzara. flyTo() es la función de Mapbox
+                    // pensada justo para esto (saltos grandes de
+                    // distancia + zoom): arma una curva de cámara
+                    // (alejarse un poco, viajar, acercarse) en vez de
+                    // una interpolación lineal, y de paso calcula sola
+                    // una duración acorde a la distancia real si no se
+                    // le especifica una -- no hace falta adivinar un
+                    // número fijo de ms.
+                    this._navCamara = {
+                        lat: this.posicionVendedor.lat,
+                        lng: this.posicionVendedor.lng,
+                        rumbo: this._navRumboObjetivo,
+                    };
+                    this.mapboxMap.flyTo({
+                        center: [this._navCamara.lng, this._navCamara.lat],
+                        bearing: this._navCamara.rumbo,
+                        pitch: NAV_PITCH,
+                        zoom: NAV_ZOOM,
+                        essential: true,
+                    });
+                } else {
+                    this._navCamara.lat +=
+                        (this.posicionVendedor.lat - this._navCamara.lat) *
+                        NAV_FACTOR_SUAVIZADO_CAMARA;
+                    this._navCamara.lng +=
+                        (this.posicionVendedor.lng - this._navCamara.lng) *
+                        NAV_FACTOR_SUAVIZADO_CAMARA;
+                    this._navCamara.rumbo = interpolarAngulo(
+                        this._navCamara.rumbo,
+                        this._navRumboObjetivo,
+                        NAV_FACTOR_SUAVIZADO_CAMARA
+                    );
+                    this.mapboxMap.jumpTo({
+                        center: [this._navCamara.lng, this._navCamara.lat],
+                        bearing: this._navCamara.rumbo,
+                        pitch: NAV_PITCH,
+                        // Zoom clavado en NAV_ZOOM en cada cuadro (no
+                        // solo al arrancar) -- así se auto-corrige solo
+                        // si algo lo desajusta (ej. el bug ya arreglado
+                        // de centrarEnVendedor(), o cualquier otro
+                        // easeTo/zoomIn/zoomOut que se cuele). Un
+                        // pellizco de zoom manual del vendedor sigue
+                        // respetándose igual: ya pausa TODO el loop
+                        // (ver "pausado" arriba) porque el listener
+                        // "movestart" de dibujarMapa() marca cualquier
+                        // gesto real, pellizco incluido.
+                        zoom: NAV_ZOOM,
+                    });
+                }
+            }
+            this._navAnimacionCamaraId = requestAnimationFrame(paso);
+        };
+        this._navAnimacionCamaraId = requestAnimationFrame(paso);
+    }
+
+    _detenerLoopCamaraNav() {
+        if (this._navAnimacionCamaraId !== null) {
+            cancelAnimationFrame(this._navAnimacionCamaraId);
+            this._navAnimacionCamaraId = null;
+        }
+        this._navCamara = {lat: null, lng: null, rumbo: 0};
     }
 
     /**
@@ -1080,6 +1324,7 @@ export class RutaDetalle extends Component {
             this._navWatchId = null;
         }
         this._detenerAnimacionFlujo();
+        this._detenerLoopCamaraNav();
         this._navObjetivo = null;
         this._navRouteCoords = null;
         this.state.navegando = false;
@@ -1088,6 +1333,10 @@ export class RutaDetalle extends Component {
         this.state.navDuracionTexto = "";
         this.state.navExpandido = false;
         if (this.mapboxMap) {
+            // Volver a la vista plana norte-arriba de "solo mirando el
+            // mapa" -- duration 500 para que no se sienta un golpe seco
+            // justo al llegar/cortar la navegación.
+            this.mapboxMap.easeTo({pitch: 0, bearing: 0, duration: 500});
             ["shalom-nav-glow", "shalom-nav-base", "shalom-nav-chispa"].forEach((id) => {
                 if (this.mapboxMap.getLayer(id)) {
                     this.mapboxMap.removeLayer(id);

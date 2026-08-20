@@ -1,17 +1,23 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
 """
 fieldservice_geoengine dispara automáticamente un geo_localize() (llamada a
-un servicio externo de geocoding) cada vez que se crea una fsm.location sin
-partner_latitude/partner_longitude. Si ese servicio externo no está
-disponible o falla, la excepción interrumpe toda la operación de creación.
+un servicio externo de geocoding) cada vez que se crea o se edita una
+fsm.location con datos de dirección, si no hay partner_latitude/
+partner_longitude ya cargados. Si ese servicio externo no está disponible
+o falla, la excepción interrumpe toda la operación de creación/guardado
+(por ejemplo, guardar el formulario "Editar cliente" de la app del
+vendedor, aunque el vendedor no haya tocado el botón "Registrar
+coordenadas" para nada).
 
-Esta extensión hace que ese intento automático sea tolerante a fallos:
-si el servicio de geocoding no responde, la Ubicación se crea igual, sin
-coordenadas (no se inventa ningún dato), y el error queda solo registrado
-en el log del servidor en vez de interrumpir la importación o la creación
-manual del registro. El vendedor o el administrador puede completar la
-ubicación real más tarde, a mano o reintentando el geocoding cuando el
-servicio esté disponible.
+Esta extensión hace ese intento tolerante a fallos SIN perder datos: si
+el geocoder externo falla, se registra el error en el log del servidor
+(nunca se interrumpe la operación en curso) y, si el intento fallido
+llegó a limpiar partner_latitude/partner_longitude a mitad de camino
+(patrón típico: primero borra la coordenada vieja, después intenta poner
+la nueva), se restauran las coordenadas que había ANTES de este método,
+en vez de dejarlas en blanco. Nunca se inventa una coordenada nueva --
+solo se evita perder una que ya estaba guardada por culpa de un
+geocoder caído.
 """
 import logging
 import re
@@ -82,16 +88,50 @@ class FSMLocation(models.Model):
             location.x_venta_mas_alta = mejor.amount_total if mejor else 0.0
 
     def geo_localize(self):
+        # OJO: probado en producción -- un intento fallido de geo_localize()
+        # no siempre lanza una excepción. Cuando el geocoder busca la
+        # dirección y no encuentra nada, eso NO es un error para Odoo: es
+        # una búsqueda "exitosa" que simplemente no dio resultado, y deja
+        # partner_latitude/partner_longitude en 0 como si fuera la
+        # respuesta correcta. El primer intento de este fix solo actuaba
+        # dentro de un except, así que nunca se activaba en ese caso -- las
+        # coordenadas seguían quedando en 0 en silencio. Por eso ahora se
+        # compara SIEMPRE el antes/después (haya habido excepción o no):
+        # si había coordenadas válidas y el resultado las dejó vacías, se
+        # restauran. Si el geocoder sí encontró algo nuevo (resultado no
+        # vacío), esa actualización real se respeta -- solo se protege
+        # contra perder un dato bueno por un "no encontrado".
+        coordenadas_previas = {
+            loc.id: (loc.partner_latitude, loc.partner_longitude) for loc in self
+        }
+        resultado = False
         try:
-            return super().geo_localize()
+            resultado = super().geo_localize()
         except Exception:
             _logger.warning(
                 "No se pudo geolocalizar automáticamente fsm.location id=%s "
-                "(servicio de geocoding no disponible). Se deja sin "
-                "coordenadas; se puede completar manualmente más tarde.",
+                "(excepción del geocoder). Se revisan las coordenadas "
+                "previas por si el intento fallido llegó a limpiarlas.",
                 self.ids,
             )
-            return False
+        for loc in self:
+            lat_previa, lng_previa = coordenadas_previas[loc.id]
+            tenia_coordenadas_previas = bool(lat_previa or lng_previa)
+            quedo_sin_coordenadas = not loc.partner_latitude and not loc.partner_longitude
+            if tenia_coordenadas_previas and quedo_sin_coordenadas:
+                _logger.warning(
+                    "geo_localize() dejó fsm.location id=%s sin coordenadas "
+                    "(geocoder sin resultado o con error) -- se restauran "
+                    "las que tenía antes en vez de dejarla en 0.",
+                    loc.id,
+                )
+                loc.write(
+                    {
+                        "partner_latitude": lat_previa,
+                        "partner_longitude": lng_previa,
+                    }
+                )
+        return resultado
 
     def action_migrar_orden_ruta_desde_notas(self):
         """Método ejecutado una sola vez (ver data/migrar_orden_ruta.xml)

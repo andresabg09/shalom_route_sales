@@ -223,8 +223,8 @@
                     t-on-click="confirmarPedido"
                     t-att-disabled="state.confirmando || state.guardandoBorrador || !itemsCarrito.length"
                 >
-                    <t t-if="state.confirmando">Confirmando…</t>
-                    <t t-else="">Confirmar pedido</t>
+                    <t t-if="state.confirmando">Finalizando…</t>
+                    <t t-else="">Finalizar a orden de venta</t>
                 </button>
             </t>
 
