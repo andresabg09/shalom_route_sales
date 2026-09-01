@@ -2,9 +2,16 @@
 <odoo>
     <!--
         Extiende el formulario de fsm.route (Ruta) para agregar el botón
-        "Generar visitas de esta ruta", que crea una fsm.order por cada
-        Ubicación de Servicio de la ruta (respetando el orden ya guardado
-        en las notas de cada Ubicación) sin duplicar visitas ya abiertas.
+        "Generar visitas de esta ruta", que crea SIEMPRE una fsm.order
+        por cada Ubicación de Servicio de la ruta (respetando el orden ya
+        guardado en las notas de cada Ubicación) — cierra sola como "No
+        atendido" cualquier visita vieja que haya quedado abierta, nunca
+        se saltea a nadie por historial (ver action_generar_visitas_ruta
+        en fsm_route.py). Lleva confirmación porque un doble-click sin
+        querer cerraría como "No atendido" trabajo en curso del día. Y el
+        campo x_duracion_dias (Duración típica del ciclo), que solo
+        sugiere la fecha de fin al crear una fsm.route.schedule de esta
+        ruta (ver fsm_route_schedule.py).
     -->
     <record id="fsm_route_form_shalom_generar_visitas" model="ir.ui.view">
         <field name="name">fsm.route.form.shalom.generar.visitas</field>
@@ -18,7 +25,8 @@
                         type="object"
                         string="Generar visitas de esta ruta"
                         class="btn-primary"
-                        help="Crea una Orden de Servicio (visita) por cada cliente de esta ruta que todavía no tenga una visita abierta."
+                        confirm="Esto va a generar una visita para TODOS los clientes de esta ruta. Cualquier visita vieja que haya quedado abierta se va a cerrar sola como 'No atendido'. ¿Continuar?"
+                        help="Crea una Orden de Servicio (visita) por cada cliente de esta ruta. Cierra como 'No atendido' cualquier visita vieja que haya quedado abierta, sin saltearse a nadie."
                     />
                     <button
                         name="action_archivar_visitas_cerradas"
@@ -35,6 +43,11 @@
                         help="Calcula el trazado real (siguiendo calles) de la ruta con Mapbox, uniendo los clientes en el orden de su Orden de Ruta. Requiere hasta 25 clientes con coordenadas GPS cargadas."
                     />
                 </div>
+            </xpath>
+            <xpath expr="//div[hasclass('oe_title')]" position="after">
+                <group>
+                    <field name="x_duracion_dias" />
+                </group>
             </xpath>
         </field>
     </record>

@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.RutaDetalle">
+        <div class="shalom-screen">
+            <div class="topbar">
+                <div class="topbar-row">
+                    <button class="icon-btn" t-on-click="volver" title="Volver a Rutas">←</button>
+                    <div class="topbar-title">
+                        <div class="route-name" t-esc="props.schedule.route_name"/>
+                        <div class="route-sub">
+                            <span class="progress-pill" t-if="!state.cargando" t-esc="resumen"/>
+                        </div>
+                    </div>
+                    <button
+                        t-if="!state.cargando"
+                        class="stock-toggle-btn visited-toggle-btn"
+                        t-att-class="state.mostrarVisitados ? 'active' : ''"
+                        t-on-click="toggleMostrarVisitados"
+                    ><t t-esc="state.mostrarVisitados ? '☰ Pendientes' : '✔ Visitados (' + visitasVisitadas.length + ')'"/></button>
+                </div>
+            </div>
+
+            <div class="search-row" t-if="!state.cargando &amp;&amp; state.visitas.length">
+                <div class="search-box-live">
+                    <span><i class="fa fa-search" aria-hidden="true"/></span>
+                    <input
+                        type="text"
+                        placeholder="Buscar cliente por nombre o dirección…"
+                        t-model="state.busquedaCliente"
+                    />
+                </div>
+            </div>
+
+            <div class="segmented">
+                <button
+                    t-att-class="state.tab === 'lista' ? 'active' : ''"
+                    t-on-click="() => this.cambiarTab('lista')"
+                >☰ Lista de clientes</button>
+                <button
+                    t-att-class="state.tab === 'mapa' ? 'active' : ''"
+                    t-on-click="() => this.cambiarTab('mapa')"
+                ><i class="fa fa-map-o" aria-hidden="true"/> Mapa</button>
+            </div>
+
+            <div t-if="state.cargando" class="shalom-vacio">Cargando visitas…</div>
+
+            <t t-else="">
+                <div class="view" t-if="state.tab === 'lista'">
+                    <div t-if="state.visitas.length === 0" class="shalom-vacio">
+                        Todavía no se generaron las visitas de esta semana.
+                        Pedile a oficina que las genere desde "Programación de
+                        Rutas".
+                    </div>
+                    <div t-elif="!visitasFiltradas.length" class="shalom-vacio">
+                        <t t-if="state.busquedaCliente">No se encontró ningún cliente con ese nombre/dirección.</t>
+                        <t t-elif="state.mostrarVisitados">Todavía no hay clientes visitados.</t>
+                        <t t-else="">No quedan clientes pendientes. 🎉</t>
+                    </div>
+                    <button
+                        t-foreach="visitasFiltradas"
+                        t-as="visita"
+                        t-key="visita.id"
+                        t-attf-class="stop-card st-{{visita.estado}}"
+                        t-on-click="() => this.abrirVisita(visita)"
+                    >
+                        <div class="stop-num" t-esc="visita.orden"/>
+                        <div class="stop-info">
+                            <div class="name" t-esc="visita.nombre"/>
+                            <div class="addr" t-esc="visita.direccion"/>
+                        </div>
+                        <div class="stop-right">
+                            <div class="meta-venta" t-if="visita.metaVenta">
+                                <i class="fa fa-flag" aria-hidden="true"/> <t t-esc="'$' + visita.metaVenta.toFixed(2)"/>
+                            </div>
+                            <div class="stop-badge" t-esc="etiquetaEstado(visita.estado)"/>
+                        </div>
+                        <span
+                            class="quick-icon-btn"
+                            title="Ir con Waze"
+                            t-on-click.stop="() => this.abrirMaps(visita)"
+                        ><i class="fa fa-location-arrow" aria-hidden="true"/></span>
+                        <span
+                            class="quick-icon-btn"
+                            title="Trazar ruta aquí"
+                            t-on-click.stop="() => this.trazarRutaAquiDesdeLista(visita)"
+                        ><i class="fa fa-map-pin" aria-hidden="true"/></span>
+                    </button>
+                </div>
+
+                <div class="map-wrap" t-if="state.tab === 'mapa'">
+                    <div class="shalom-mapa" t-ref="mapa"/>
+
+                    <div
+                        class="nav-barra"
+                        t-if="state.navegando"
+                        t-att-class="state.navExpandido ? 'nav-barra-expandida' : ''"
+                    >
+                        <button
+                            class="nav-barra-handle"
+                            t-on-click="toggleNavExpandido"
+                            title="Ver navegación"
+                        ><i class="fa fa-map-o" aria-hidden="true"/></button>
+                        <div class="nav-barra-info">
+                            <div class="nav-barra-nombre" t-esc="state.navNombreObjetivo"/>
+                            <div class="nav-barra-datos">
+                                <span t-esc="state.navDistanciaTexto"/>
+                                <span t-if="state.navDuracionTexto"> · <t t-esc="state.navDuracionTexto"/></span>
+                            </div>
+                        </div>
+                        <button class="nav-barra-salir" t-on-click="detenerNavegacion" title="Salir de la navegación">✕</button>
+                    </div>
+
+                    <button
+                        t-if="state.paletaVisible"
+                        class="mapa-paleta-siguiente"
+                        t-attf-style="left: {{state.paletaX}}px; top: {{state.paletaY}}px;"
+                        t-on-click="irAlSiguientePendiente"
+                        title="Ir al próximo cliente pendiente"
+                    >
+                        <span
+                            class="mapa-paleta-flecha"
+                            t-attf-style="transform: rotate({{state.paletaAngulo}}deg);"
+                        ><i class="fa fa-long-arrow-up" aria-hidden="true"/></span>
+                    </button>
+
+                    <div class="mapa-controles">
+                        <button class="mapa-control-btn" t-on-click="zoomMapaIn" title="Acercar">+</button>
+                        <button class="mapa-control-btn" t-on-click="zoomMapaOut" title="Alejar">−</button>
+                        <button
+                            class="mapa-control-btn mapa-control-btn-ubicacion"
+                            t-on-click="centrarEnVendedor"
+                            title="Centrar en mi ubicación"
+                        ><i class="fa fa-crosshairs" aria-hidden="true"/></button>
+                    </div>
+                </div>
+            </t>
+
+            <VisitSheet
+                t-if="state.visitaAbiertaId"
+                orderId="state.visitaAbiertaId"
+                onCerrar.bind="cerrarVisita"
+                onCambio.bind="recargarVisitas"
+            />
+
+            <ClienteForm
+                t-if="state.edicionLocationId"
+                modo="'editar'"
+                locationId="state.edicionLocationId"
+                onGuardado.bind="edicionClienteGuardada"
+                onCancelar.bind="cerrarEdicionCliente"
+            />
+        </div>
+    </t>
+</templates>

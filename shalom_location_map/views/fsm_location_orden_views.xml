@@ -30,8 +30,27 @@
                     name="action_abrir_maps"
                     class="oe_stat_button"
                     icon="fa-map-marker"
-                    string="Ir con Maps"
+                    string="Ir con Waze"
                 />
+            </xpath>
+            <!--
+                Borra ÚNICAMENTE esta Ubicación (fsm.location), nunca el
+                contacto: ver action_eliminar_ubicacion() en
+                models/fsm_location.py para el porqué (active delegado al
+                contacto vía _inherits). Solo para managers, con
+                confirmación obligatoria antes de ejecutar.
+            -->
+            <xpath expr="//div[hasclass('oe_button_box')]" position="after">
+                <div name="shalom_eliminar_ubicacion_box" class="mb-2">
+                    <button
+                        type="object"
+                        name="action_eliminar_ubicacion"
+                        string="Eliminar esta Ubicación"
+                        class="btn-danger"
+                        groups="fieldservice.group_fsm_manager"
+                        confirm="Esto borra PERMANENTEMENTE esta Ubicación (fsm.location). El contacto/cliente NO se toca. ¿Confirmás?"
+                    />
+                </div>
             </xpath>
         </field>
     </record>

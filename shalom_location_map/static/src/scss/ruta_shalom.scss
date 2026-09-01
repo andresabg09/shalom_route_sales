@@ -1,0 +1,1913 @@
+// Estilos de la app del vendedor "Ruta Shalom". Todo queda anidado
+// bajo .o_shalom_ruta_app para no filtrar clases genéricas (.view,
+// .topbar, etc.) al resto del backend de Odoo.
+//
+// Paleta y lenguaje visual tomados del artifact de referencia ("Ruta
+// Shalom", ver docs/plan_fase_1_a_4.md) -- variables con prefijo
+// --shalom- para no chocar con las custom properties propias de Odoo.
+// Se deja el bloque de modo oscuro (prefers-color-scheme) aunque el
+// backend de Odoo Community no tiene un toggle propio, para que se
+// vea bien en un Android con "tema oscuro del sistema" activado.
+
+.o_shalom_ruta_app {
+    --shalom-bg: #faf6f4;
+    --shalom-surface: #ffffff;
+    --shalom-surface-2: #f2e8e4;
+    --shalom-ink: #271b22;
+    --shalom-ink-muted: #7a6169;
+    --shalom-line: #e9dad4;
+    --shalom-accent: #b1245a;
+    --shalom-accent-ink: #ffffff;
+    --shalom-accent-soft: #f7dde7;
+    --shalom-pendiente: #c1791d;
+    --shalom-pendiente-soft: #faeacc;
+    --shalom-completado: #2c7a56;
+    --shalom-completado-soft: #d9efe2;
+    --shalom-no_quiso: #8c5060;
+    --shalom-no_quiso-soft: #efe1e6;
+    --shalom-cancelado: #5c6470;
+    --shalom-cancelado-soft: #e3e5e9;
+    --shalom-info: #2461c7;
+    --shalom-info-soft: #dfe9fa;
+    --shalom-shadow: 0 10px 30px -12px rgba(60, 20, 35, 0.28);
+    --shalom-radius-lg: 22px;
+    --shalom-radius-md: 14px;
+    --shalom-radius-sm: 10px;
+
+    @media (prefers-color-scheme: dark) {
+        --shalom-bg: #180f14;
+        --shalom-surface: #241820;
+        --shalom-surface-2: #2e1e28;
+        --shalom-ink: #f5e9ee;
+        --shalom-ink-muted: #b79aa5;
+        --shalom-line: #3d2a34;
+        --shalom-accent: #ec5c92;
+        --shalom-accent-ink: #1a0a10;
+        --shalom-accent-soft: #3a1d2a;
+        --shalom-pendiente: #e3a04a;
+        --shalom-pendiente-soft: #3a2c17;
+        --shalom-completado: #5bc491;
+        --shalom-completado-soft: #153826;
+        --shalom-no_quiso: #c98ca0;
+        --shalom-no_quiso-soft: #33212a;
+        --shalom-cancelado: #9aa2ae;
+        --shalom-cancelado-soft: #2b2e34;
+        --shalom-info: #7aaaf5;
+        --shalom-info-soft: #1c2c47;
+        --shalom-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--shalom-bg);
+    color: var(--shalom-ink);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-variant-numeric: tabular-nums;
+
+    .shalom-body {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .shalom-screen {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .shalom-vacio {
+        color: var(--shalom-ink-muted);
+        font-size: 0.86rem;
+        padding: 20px 18px;
+        line-height: 1.5;
+    }
+
+    .topbar {
+        padding: 14px 18px 10px;
+        flex: 0 0 auto;
+    }
+    .topbar-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .topbar-title {
+        flex: 1;
+        min-width: 0;
+    }
+    .visited-toggle-btn {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+    .route-name {
+        font-size: 1.15rem;
+        font-weight: 800;
+    }
+    .route-sub {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 3px;
+        color: var(--shalom-ink-muted);
+        font-size: 0.82rem;
+        min-height: 1.2em;
+    }
+    .progress-pill {
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+        font-weight: 800;
+        font-size: 0.76rem;
+        padding: 3px 10px;
+        border-radius: 999px;
+    }
+
+    .segmented {
+        display: flex;
+        background: var(--shalom-surface-2);
+        border-radius: 999px;
+        padding: 3px;
+        margin: 4px 18px 0;
+        flex: 0 0 auto;
+    }
+    .segmented button {
+        flex: 1;
+        border: none;
+        background: transparent;
+        color: var(--shalom-ink-muted);
+        font-weight: 700;
+        font-size: 0.86rem;
+        padding: 9px 0;
+        border-radius: 999px;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .segmented button.active {
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+    }
+
+    .view {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 14px 14px 24px;
+    }
+
+    .search-row {
+        padding: 10px 18px;
+        flex: 0 0 auto;
+        display: flex;
+        gap: 8px;
+    }
+    .search-box-live {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--shalom-surface-2);
+        border-radius: 999px;
+        padding: 10px 14px;
+        color: var(--shalom-ink-muted);
+    }
+    .search-box-live input {
+        flex: 1;
+        border: none;
+        background: transparent;
+        outline: none;
+        color: var(--shalom-ink);
+        font-family: inherit;
+        font-size: 0.88rem;
+    }
+    .search-box-live input::placeholder {
+        color: var(--shalom-ink-muted);
+    }
+
+    .groupby-row {
+        padding: 0 18px 10px;
+        flex: 0 0 auto;
+        position: relative;
+    }
+    .groupby-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        border-radius: 999px;
+        padding: 7px 12px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .groupby-btn .chev {
+        color: var(--shalom-ink-muted);
+    }
+    .groupby-menu {
+        position: absolute;
+        left: 18px;
+        top: calc(100% - 2px);
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        box-shadow: var(--shalom-shadow);
+        padding: 6px;
+        z-index: 6;
+        display: flex;
+        flex-direction: column;
+        min-width: 200px;
+    }
+    .groupby-menu button {
+        border: none;
+        background: transparent;
+        text-align: left;
+        padding: 9px 10px;
+        border-radius: 8px;
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: var(--shalom-ink);
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .groupby-menu button.active {
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+        font-weight: 800;
+    }
+
+    // tarjetas de ruta en el hub semanal
+    .route-card {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-lg);
+        padding: 14px 16px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        text-align: left;
+        font-family: inherit;
+        color: var(--shalom-ink);
+        width: 100%;
+    }
+    .route-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .route-card-head .rname {
+        font-weight: 800;
+        font-size: 1.02rem;
+    }
+    .route-card-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        font-size: 0.8rem;
+        color: var(--shalom-ink-muted);
+    }
+    .route-card-stats b {
+        color: var(--shalom-ink);
+        font-weight: 800;
+    }
+
+    // tarjetas de visita en la lista del detalle de ruta
+    .stop-card {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-lg);
+        padding: 12px 14px;
+        margin-bottom: 10px;
+        width: 100%;
+        text-align: left;
+        cursor: pointer;
+        font-family: inherit;
+        color: inherit;
+    }
+    .stop-card.st-cancelado {
+        opacity: 0.72;
+    }
+    .stop-num {
+        flex: 0 0 auto;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 0.88rem;
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
+    }
+    .stop-card.st-pendiente .stop-num {
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-pendiente);
+    }
+    .stop-card.st-completado .stop-num {
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+    }
+    .stop-card.st-no_quiso .stop-num {
+        background: var(--shalom-no_quiso-soft);
+        color: var(--shalom-no_quiso);
+    }
+    .stop-card.st-cancelado .stop-num {
+        background: var(--shalom-cancelado-soft);
+        color: var(--shalom-cancelado);
+    }
+    .stop-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .stop-info .name {
+        font-weight: 700;
+        font-size: 0.98rem;
+        // antes truncaba con "…" -- se reportó que el nombre del
+        // cliente quedaba cortado en la lista (sin siquiera abrir la
+        // hoja de visita); ahora se deja pasar a una segunda línea en
+        // vez de recortarlo.
+        white-space: normal;
+        overflow-wrap: break-word;
+    }
+    .stop-info .addr {
+        color: var(--shalom-ink-muted);
+        font-size: 0.8rem;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    // columna a la derecha de la tarjeta -- meta de venta arriba del
+    // estado de la visita, apilados, SIN tocar el ancho disponible
+    // para el nombre/dirección del cliente (se reportó que compartir
+    // fila con la dirección los apretaba y hacía quedar el nombre casi
+    // vertical).
+    .stop-right {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 5px;
+    }
+    // venta más alta histórica del cliente (meta concreta para el
+    // vendedor), en el listado de clientes de una ruta.
+    .meta-venta {
+        color: var(--shalom-primary, #7c5cff);
+        font-size: 0.72rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .meta-venta .fa {
+        font-size: 0.68rem;
+    }
+    // pestaña Clientes: a qué ruta pertenece cada cliente (un
+    // vendedor puede tener más de una ruta asignada)
+    .route-tag {
+        display: inline-block;
+        margin-top: 4px;
+        font-size: 0.68rem;
+        font-weight: 800;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--shalom-info-soft);
+        color: var(--shalom-info);
+    }
+    .route-tag-sin-asignar {
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
+    }
+    .stop-badge {
+        flex: 0 0 auto;
+        font-size: 0.72rem;
+        font-weight: 800;
+        padding: 4px 9px;
+        border-radius: 999px;
+    }
+    .stop-card.st-pendiente .stop-badge {
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-pendiente);
+    }
+    .stop-card.st-completado .stop-badge {
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+    }
+    .stop-card.st-no_quiso .stop-badge {
+        background: var(--shalom-no_quiso-soft);
+        color: var(--shalom-no_quiso);
+    }
+    .stop-card.st-cancelado .stop-badge {
+        background: var(--shalom-cancelado-soft);
+        color: var(--shalom-cancelado);
+    }
+    .quick-icon-btn {
+        flex: 0 0 auto;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--shalom-ink);
+        cursor: pointer;
+        font-size: 1.05rem;
+    }
+
+    .icon-btn {
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: var(--shalom-ink);
+        flex: 0 0 auto;
+    }
+
+    // mapa real (detalle de ruta)
+    .map-wrap {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+        padding: 0 14px 14px;
+    }
+    .shalom-mapa {
+        width: 100%;
+        height: 100%;
+        min-height: 320px;
+        border-radius: var(--shalom-radius-lg);
+        overflow: hidden;
+    }
+
+    // controles propios de zoom +/- y "centrar en mí" -- en vez de los
+    // controles nativos de Mapbox (cuadrados, sin el look de la app),
+    // botones redondos consistentes con el resto de la UI.
+    .mapa-controles {
+        position: absolute;
+        right: 26px;
+        bottom: 26px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 5;
+    }
+    .mapa-control-btn {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        border: none;
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        font-size: 1.15rem;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--shalom-shadow);
+        cursor: pointer;
+        font-family: inherit;
+        line-height: 1;
+    }
+    .mapa-control-btn-ubicacion {
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        font-size: 1.05rem;
+    }
+
+    // paletita direccional -- apunta hacia el próximo cliente pendiente
+    // cuando queda fuera del encuadre actual del mapa (posición/ángulo
+    // calculados en JS, acá solo el aspecto visual). El "left/top" que
+    // llega por estilo inline es el CENTRO del botón -- por eso el
+    // translate(-50%,-50%).
+    .mapa-paleta-siguiente {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 2px solid var(--shalom-surface);
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--shalom-shadow);
+        cursor: pointer;
+        z-index: 6;
+        font-family: inherit;
+    }
+    .mapa-paleta-flecha {
+        display: inline-block;
+        font-size: 1.15rem;
+        line-height: 1;
+    }
+
+    // pin de cliente en el mapa -- círculo de color por estado (vía
+    // --pin-color, seteada inline desde ruta_detalle.js con
+    // COLOR_MARCADOR) con el número de orden adentro.
+    //
+    // OJO -- historial real en producción: se probaron DOS formas de
+    // gota custom (border-radius+rotate, y después un <svg> con la
+    // forma ya dibujada sin rotate) y las DOS reprodujeron el bug de
+    // "los pines se desubican al hacer zoom". No quedó confirmado qué
+    // lo causa exactamente (sospecha: anchor "bottom" sobre un
+    // elemento no cuadrado, y/o el filter: drop-shadow del SVG mal
+    // sincronizado con el transform que aplica Mapbox durante el
+    // pinch-zoom). Este círculo -- cuadrado, anchor "center", sin
+    // filter/rotate -- es la ÚNICA forma confirmada estable. No
+    // cambiar el diseño del pin sin probar el zoom a fondo en un
+    // celular real antes de darlo por bueno.
+    // Tamaño/borde subidos (30px→34px, 2.5px→3px borde, sombra un
+    // poco más marcada) a pedido -- reportado que costaba distinguir
+    // el punto exacto del cliente. Se tocaron SOLO width/height/border/
+    // box-shadow -- ninguna de las propiedades señaladas como causa
+    // del bug de zoom (filter, transform/rotate); sigue siendo
+    // "cuadrado, anchor center, sin filter/rotate".
+    .shalom-marker-numero {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: var(--pin-color, var(--shalom-accent));
+        border: 3px solid var(--shalom-surface);
+        box-shadow: 0 2px 8px rgba(20, 10, 15, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+    .shalom-marker-numero-txt {
+        color: #fff;
+        font-weight: 800;
+        font-size: 0.82rem;
+        font-family: inherit;
+        line-height: 1;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+
+    // punto pulsante en la posición GPS del vendedor -- color de marca
+    // (--shalom-accent), no un punto azul genérico, pedido explícito.
+    // El pulso anima box-shadow, NO transform -- reportado en
+    // producción: el punto parecía "saltar" al hacer zoom. Mapbox
+    // también usa `transform` para ubicar el marcador en pantalla en
+    // cada frame; tener una animación de `transform` corriendo a la
+    // vez adentro del mismo marcador es una causa conocida de que el
+    // navegador desincronice brevemente la posición visual durante
+    // gestos de zoom en algunos Android. Animando box-shadow en vez de
+    // scale() se logra el mismo efecto de "halo creciendo" sin tocar
+    // esa propiedad para nada.
+    // Subido de 16px a 22px para hacerle lugar a la flecha de
+    // orientación (shalom-marker-vendedor-flecha) sin que quede
+    // apretada -- el círculo/pulso de abajo sigue exactamente igual,
+    // no se tocó ninguna de sus propiedades.
+    .shalom-marker-vendedor {
+        width: 22px;
+        height: 22px;
+        position: relative;
+    }
+    .shalom-marker-vendedor-punto {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: var(--shalom-accent);
+        border: 2px solid var(--shalom-surface);
+        animation: shalom-pulso-vendedor 1.8s ease-out infinite;
+    }
+    // Flecha fija (no rota) que muestra hacia dónde apunta el rumbo de
+    // navegación -- el MAPA es el que gira (bearing), así que esto
+    // siempre queda "mirando arriba" en pantalla. Centrada con flex,
+    // no con transform: translate(-50%,-50%) -- a propósito, mismo
+    // motivo que el punto pulsante de arriba (ver ese comentario):
+    // nada de transform ni filter adentro de un marcador de Mapbox.
+    .shalom-marker-vendedor-flecha {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+    }
+    @keyframes shalom-pulso-vendedor {
+        0% {
+            box-shadow: 0 2px 6px rgba(20, 10, 15, 0.4), 0 0 0 0 rgba(177, 36, 90, 0.5);
+        }
+        100% {
+            box-shadow: 0 2px 6px rgba(20, 10, 15, 0.4), 0 0 0 16px rgba(177, 36, 90, 0);
+        }
+    }
+
+    // popup del mapa (nombre del cliente + botón "Ir con Waze") --
+    // antes era el popup por defecto de Mapbox sin ningún estilo
+    // propio (fondo blanco con texto casi ilegible, reportado). Estas
+    // reglas .mapboxgl-popup-* pisan el CSS que trae la librería.
+    .mapboxgl-popup-content {
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        border-radius: var(--shalom-radius-md);
+        box-shadow: var(--shalom-shadow);
+        padding: 12px 14px;
+        font-family: inherit;
+    }
+    .mapboxgl-popup-tip {
+        border-top-color: var(--shalom-surface) !important;
+        border-bottom-color: var(--shalom-surface) !important;
+    }
+    .mapboxgl-popup-close-button {
+        color: var(--shalom-ink-muted);
+        font-size: 1.05rem;
+        padding: 4px 8px;
+    }
+    .shalom-map-popup-name {
+        font-weight: 800;
+        font-size: 0.92rem;
+        margin-bottom: 8px;
+        padding-right: 14px; // no chocar con el botón de cerrar (×)
+        color: var(--shalom-ink);
+    }
+    // el nombre es tocable -- abre la ficha de edición del cliente
+    // (mismo ClienteForm que la pestaña Clientes). Reset de estilos de
+    // <button> + subrayado punteado como affordance de que se puede
+    // tocar (antes era un <div> de solo lectura).
+    .shalom-map-popup-name-btn {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: transparent;
+        padding: 0 14px 8px 0;
+        cursor: pointer;
+        font-family: inherit;
+        text-decoration: underline dotted;
+        text-underline-offset: 3px;
+    }
+    .shalom-map-popup-acciones {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .shalom-map-popup-btn {
+        display: block;
+        width: 100%;
+        border: none;
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+        font-weight: 800;
+        font-size: 0.8rem;
+        padding: 8px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        font-family: inherit;
+        white-space: nowrap;
+    }
+    // "Trazar ruta aquí" -- sólido en el color de marca en vez del
+    // fondo suave de "Ir con Waze", para distinguir de un vistazo cuál
+    // de los dos abre la navegación en vivo dentro de la app.
+    .shalom-map-popup-btn-nav {
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+    }
+
+    // barra de navegación en vivo ("Trazar ruta aquí") -- arranca
+    // COLAPSADA (solo el ícono 🧭, pedido explícito para no taparle la
+    // vista del mapa) y se expande al tocarla, mostrando nombre del
+    // cliente + distancia/tiempo restante (los llena Mapbox Directions
+    // en cada recálculo) + botón para cortar la navegación. Toda la
+    // animación es CSS puro (max-width + opacity con transition) --
+    // nada de mostrar/ocultar con t-if, que cortaría en seco la
+    // transición.
+    .nav-barra {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 6;
+        display: flex;
+        align-items: center;
+        overflow: hidden;
+        background: var(--shalom-surface);
+        opacity: 0.96;
+        border-radius: 999px;
+        box-shadow: var(--shalom-shadow);
+        max-width: 42px; // colapsada: solo el ancho del handle
+        transition: max-width 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .nav-barra-expandida {
+        max-width: 230px;
+    }
+    .nav-barra-handle {
+        flex: 0 0 auto;
+        width: 42px;
+        height: 42px;
+        border: none;
+        background: transparent;
+        color: var(--shalom-accent);
+        font-size: 1.05rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .nav-barra-info {
+        flex: 1;
+        min-width: 0;
+        line-height: 1.25;
+        opacity: 0;
+        // el delay hace que el texto aparezca recién cuando la
+        // píldora ya casi terminó de abrirse, en vez de verse
+        // "achicado" mientras todavía no hay lugar -- mismo motivo
+        // del delay en .nav-barra-salir de abajo.
+        transition: opacity 0.18s ease 0.12s;
+    }
+    .nav-barra-expandida .nav-barra-info {
+        opacity: 1;
+    }
+    .nav-barra-nombre {
+        font-weight: 800;
+        font-size: 0.74rem;
+        color: var(--shalom-ink);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .nav-barra-datos {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: var(--shalom-accent);
+        white-space: nowrap;
+    }
+    .nav-barra-salir {
+        flex: 0 0 auto;
+        width: 24px;
+        height: 24px;
+        margin-right: 8px;
+        border-radius: 50%;
+        border: none;
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
+        font-weight: 800;
+        font-size: 0.72rem;
+        cursor: pointer;
+        font-family: inherit;
+        opacity: 0;
+        transition: opacity 0.18s ease 0.12s;
+    }
+    .nav-barra-expandida .nav-barra-salir {
+        opacity: 1;
+    }
+
+    // nav inferior
+    .bottomnav {
+        flex: 0 0 auto;
+        display: flex;
+        border-top: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+    }
+    .bottomnav button {
+        flex: 1;
+        border: none;
+        background: transparent;
+        padding: 10px 0 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        color: var(--shalom-ink-muted);
+        font-size: 0.68rem;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .bottomnav button.active {
+        color: var(--shalom-accent);
+    }
+    .bottomnav button span {
+        font-size: 1.1rem;
+    }
+
+    // -- Animación de apertura/cierre de TODOS los popups y pantallas
+    // de la app (hoja de visita, ficha de cliente, catálogo+carrito,
+    // avisos de confirmación, escáner) -- pedido explícito: rápida y
+    // sólida, no un efecto largo/decorativo, y pareja en los 5. Fondo:
+    // fade. Contenido: entra deslizando/escalando con la curva "sheet"
+    // de iOS (cubic-bezier(0.32, 0.72, 0, 1) -- rápida, sin rebote). El
+    // cierre usa la MISMA curva en reversa pero más corto (ver
+    // DURACION_CIERRE_MS en animacion_utils.js, tiene que coincidir con
+    // la duración de las keyframes "-out" de acá abajo). La clase
+    // "closing" la agregan los componentes (ver cerrarConAnimacion en
+    // animacion_utils.js) antes de desmontarse de verdad.
+    $shalom-curva-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+
+    @keyframes shalom-fondo-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    @keyframes shalom-fondo-out {
+        from { opacity: 1; }
+        to { opacity: 0; }
+    }
+    @keyframes shalom-hoja-in {
+        from { transform: translateY(100%); opacity: 0.4; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+    @keyframes shalom-tarjeta-in {
+        from { opacity: 0; transform: scale(0.9) translateY(14px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    @keyframes shalom-tarjeta-out {
+        from { opacity: 1; transform: scale(1) translateY(0); }
+        to { opacity: 0; transform: scale(0.96) translateY(4px); }
+    }
+    @keyframes shalom-pantalla-in {
+        from { opacity: 0; transform: translateX(28px); }
+        to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes shalom-pantalla-out {
+        from { opacity: 1; transform: translateX(0); }
+        to { opacity: 0; transform: translateX(16px); }
+    }
+
+    // hoja de visita (Fase 2)
+    .sheet-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(20, 10, 15, 0.42);
+        z-index: 50;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        animation: shalom-fondo-in 0.15s ease both;
+    }
+    .sheet-overlay.closing {
+        animation: shalom-fondo-out 0.15s ease both;
+    }
+    .sheet {
+        width: 100%;
+        max-width: 520px;
+        max-height: 86vh;
+        overflow-y: auto;
+        background: var(--shalom-surface);
+        border-radius: 24px 24px 0 0;
+        padding: 10px 20px 26px;
+        box-shadow: 0 -12px 30px -10px rgba(0, 0, 0, 0.3);
+        // El CIERRE reusa esta misma transición (ver cerrar() en
+        // visit_sheet.js, que empuja arrastreY hasta abajo del todo) --
+        // es el mismo mecanismo que ya existía para el arrastre, a
+        // propósito: pedido explícito de no reemplazarlo por una
+        // animación nueva. La APERTURA usa una keyframe aparte, más
+        // notoria (con fade además del deslizamiento).
+        //
+        // OJO con "both" acá: sin querer quedó puesto en cd8ac44 y
+        // rompía el arrastre -- con fill-mode "both"/"forwards", una vez
+        // terminada la animación de apertura el navegador sigue
+        // "congelando" el transform en su valor final con más prioridad
+        // que la transition/el style en línea de arrastreY, así que el
+        // dedo dejaba de mover la hoja (quedaba pasmada) y el cierre no
+        // se veía. Sin "both", al terminar la animación de apertura deja
+        // de pisar transform y vuelve a mandar la transition + el
+        // arrastreY en línea, como era antes de cd8ac44.
+        transition: transform 0.2s ease;
+        animation: shalom-hoja-in 0.32s $shalom-curva-sheet;
+    }
+    .sheet.sin-transicion {
+        transition: none;
+    }
+    .sheet-handle {
+        width: 56px;
+        height: 5px;
+        border-radius: 99px;
+        background: var(--shalom-line);
+        margin: 8px auto 14px;
+        touch-action: none; // si no, el navegador se roba el gesto como scroll
+    }
+    .name-btn {
+        border: none;
+        background: transparent;
+        padding: 0;
+        text-align: left;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-family: inherit;
+        color: var(--shalom-ink);
+        max-width: 100%;
+    }
+    .name-btn .name {
+        font-size: 1.25rem;
+        font-weight: 800;
+    }
+    .name-btn .edit-hint {
+        color: var(--shalom-ink-muted);
+        flex: 0 0 auto;
+    }
+
+    .status-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        margin-top: 16px;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-surface-2);
+        border-radius: 999px;
+        padding: 10px 14px;
+        font-weight: 800;
+        font-size: 0.86rem;
+        cursor: pointer;
+        font-family: inherit;
+        color: var(--shalom-ink);
+    }
+    .status-pill .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex: 0 0 auto;
+    }
+    .status-pill .lbl {
+        flex: 1;
+        text-align: left;
+    }
+    .status-pill .chev {
+        color: var(--shalom-ink-muted);
+        transition: transform 0.18s ease;
+    }
+    .status-pill.open .chev {
+        transform: rotate(180deg);
+    }
+    .status-pill.st-pendiente .dot {
+        background: var(--shalom-pendiente);
+    }
+    .status-pill.st-completado .dot {
+        background: var(--shalom-completado);
+    }
+    .status-pill.st-no_quiso .dot {
+        background: var(--shalom-no_quiso);
+    }
+    .status-pill.st-cancelado .dot {
+        background: var(--shalom-cancelado);
+    }
+
+    .status-options {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 8px;
+    }
+    .status-chip {
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink-muted);
+        border-radius: 999px;
+        padding: 10px 4px;
+        font-weight: 800;
+        font-size: 0.76rem;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .status-chip.sel-pendiente {
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-pendiente);
+        border-color: var(--shalom-pendiente);
+    }
+    .status-chip.sel-completado {
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+        border-color: var(--shalom-completado);
+    }
+    .status-chip.sel-no_quiso {
+        background: var(--shalom-no_quiso-soft);
+        color: var(--shalom-no_quiso);
+        border-color: var(--shalom-no_quiso);
+    }
+    .status-chip.sel-cancelado {
+        background: var(--shalom-cancelado-soft);
+        color: var(--shalom-cancelado);
+        border-color: var(--shalom-cancelado);
+    }
+
+    .obs-label {
+        display: block;
+        margin-top: 16px;
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: var(--shalom-ink-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .obs-input {
+        width: 100%;
+        margin-top: 6px;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        border-radius: var(--shalom-radius-md);
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 0.88rem;
+        resize: vertical;
+        min-height: 56px;
+    }
+
+    .action-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 18px;
+    }
+    .action-tile {
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface-2);
+        border-radius: var(--shalom-radius-md);
+        padding: 14px 10px;
+        text-align: center;
+        cursor: pointer;
+        font-family: inherit;
+        color: var(--shalom-ink);
+    }
+    .action-tile .lbl {
+        font-size: 0.8rem;
+        font-weight: 700;
+        display: block;
+    }
+    .cta-order {
+        width: 100%;
+        margin-top: 16px;
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        border: none;
+        border-radius: var(--shalom-radius-lg);
+        padding: 18px;
+        font-size: 1.02rem;
+        font-weight: 800;
+        cursor: pointer;
+        font-family: inherit;
+    }
+
+    // modal chico de editar cliente
+    .edit-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(20, 10, 15, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 60;
+        animation: shalom-fondo-in 0.15s ease both;
+    }
+    .edit-overlay.closing {
+        animation: shalom-fondo-out 0.15s ease both;
+    }
+    .edit-card {
+        animation: shalom-tarjeta-in 0.3s $shalom-curva-sheet both;
+        width: 100%;
+        max-width: 320px;
+        background: var(--shalom-surface);
+        border-radius: var(--shalom-radius-lg);
+        padding: 20px;
+        box-shadow: var(--shalom-shadow);
+    }
+    .edit-card.closing {
+        animation: shalom-tarjeta-out 0.22s $shalom-curva-sheet both;
+    }
+    .edit-card h3 {
+        font-size: 1.05rem;
+        font-weight: 800;
+        margin: 0;
+        // explícito: se reportó casi ilegible (probablemente el <h3>
+        // heredaba un color/opacidad más apagado de los estilos base
+        // de Odoo, con más especificidad que nuestro color heredado).
+        color: var(--shalom-ink);
+    }
+    .edit-field {
+        margin-top: 14px;
+    }
+    .edit-field label {
+        display: block;
+        font-size: 0.74rem;
+        font-weight: 800;
+        color: var(--shalom-ink-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        margin-bottom: 5px;
+    }
+    .edit-field input {
+        width: 100%;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-bg);
+        color: var(--shalom-ink);
+        border-radius: var(--shalom-radius-sm);
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 0.9rem;
+    }
+    .edit-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 18px;
+    }
+
+    // formulario ampliado de cliente (cliente_form.js) -- más alto que
+    // el resto de los modales chicos (foto + varios campos + los dos
+    // selectores), así que necesita su propio ancho/alto y scroll.
+    .cliente-form-card {
+        max-width: 380px;
+        max-height: 88vh;
+        overflow-y: auto;
+    }
+    .cliente-form-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .cliente-form-header .icon-btn {
+        flex: 0 0 auto;
+    }
+    .cliente-form-header h3 {
+        flex: 1;
+        min-width: 0;
+    }
+    .edit-field-row {
+        display: flex;
+        gap: 10px;
+        margin-top: 14px;
+    }
+    .edit-field-row .edit-field {
+        flex: 1;
+        min-width: 0;
+        margin-top: 0;
+    }
+    .foto-picker {
+        margin-top: 6px;
+        display: flex;
+        justify-content: center;
+    }
+    .foto-picker-label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 140px;
+        height: 100px;
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-surface-2);
+        border: 1.5px dashed var(--shalom-line);
+        cursor: pointer;
+        overflow: hidden;
+    }
+    .foto-picker-placeholder {
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--shalom-ink-muted);
+        text-align: center;
+        padding: 0 8px;
+    }
+    .foto-preview {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .foto-picker-input {
+        // el <input type=file> nativo se reemplaza visualmente por el
+        // label de arriba -- se mantiene accesible (no display:none)
+        // pero fuera de la vista.
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        overflow: hidden;
+    }
+    .gps-btn {
+        display: block;
+        width: 100%;
+        margin-top: 14px;
+        text-align: center;
+    }
+
+    // botones base (usados en el modal de editar cliente)
+    .btn {
+        border: none;
+        border-radius: var(--shalom-radius-md);
+        font-weight: 800;
+        font-size: 0.9rem;
+        padding: 12px 14px;
+        cursor: pointer;
+        font-family: inherit;
+        flex: 1;
+    }
+    .btn-primary {
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+    }
+    .btn-secondary {
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink);
+    }
+    .btn-ghost {
+        background: transparent;
+        color: var(--shalom-ink-muted);
+        border: 1px solid var(--shalom-line);
+    }
+
+    // catálogo + carrito (Fase 3) -- pantalla completa, no una tarjeta
+    // chica: entra/sale como si se "empujara" desde la derecha (patrón
+    // nativo de pantalla nueva), no con el escalado de un modal.
+    .order-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 70;
+        background: var(--shalom-bg);
+        color: var(--shalom-ink);
+        display: flex;
+        flex-direction: column;
+        animation: shalom-pantalla-in 0.3s $shalom-curva-sheet both;
+    }
+    .order-overlay.closing {
+        animation: shalom-pantalla-out 0.22s $shalom-curva-sheet both;
+    }
+    .order-topbar {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 18px 10px;
+        border-bottom: 1px solid var(--shalom-line);
+    }
+    .order-topbar-title {
+        flex: 1;
+        min-width: 0;
+    }
+    .order-topbar-title .route-sub {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .icon-btn-spacer {
+        width: 38px;
+        flex: 0 0 auto;
+    }
+
+    // selector de categoría (botón único + panel con buscador, en vez
+    // de una fila de chips que había que deslizar) + toggle de stock
+    .categ-bar {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 0 18px 10px;
+    }
+    .categ-selector-wrap {
+        position: relative;
+        min-width: 0;
+        flex: 1;
+    }
+    .categ-selector-btn {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        border-radius: 999px;
+        padding: 8px 14px;
+        font-weight: 700;
+        font-size: 0.82rem;
+        cursor: pointer;
+        font-family: inherit;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .categ-selector-btn .chev {
+        flex: 0 0 auto;
+        color: var(--shalom-ink-muted);
+    }
+    .categ-menu {
+        position: absolute;
+        left: 0;
+        top: calc(100% + 4px);
+        // evitar min()/max(): el compilador de Sass que usa Odoo los
+        // toma como su propia función (no como CSS puro) y con
+        // unidades mezcladas (px/vw) rompe la compilación de TODO el
+        // bundle de estilos del backend, no solo esta pantalla (bug
+        // real, encontrado en producción).
+        width: 320px;
+        max-width: 86vw;
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        box-shadow: var(--shalom-shadow);
+        padding: 8px;
+        z-index: 10;
+    }
+    .categ-menu-search {
+        width: 100%;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-bg);
+        color: var(--shalom-ink);
+        border-radius: var(--shalom-radius-sm);
+        padding: 8px 10px;
+        font-family: inherit;
+        font-size: 0.86rem;
+        margin-bottom: 6px;
+    }
+    .categ-menu-list {
+        max-height: 260px;
+        overflow-y: auto;
+    }
+    .categ-menu-item {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: transparent;
+        padding: 9px 10px;
+        border-radius: 8px;
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: var(--shalom-ink);
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .categ-menu-item.active {
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+        font-weight: 800;
+    }
+    // botón que se ilumina cuando el filtro está activo (en vez de un
+    // checkbox aparte) -- pedido explícito: todo el botón (con el
+    // texto) cambia de aspecto al tocarlo, no solo un tilde chiquito.
+    .stock-toggle-btn {
+        flex: 0 0 auto;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink-muted);
+        border-radius: 999px;
+        padding: 8px 14px;
+        font-weight: 800;
+        font-size: 0.78rem;
+        cursor: pointer;
+        font-family: inherit;
+        white-space: nowrap;
+    }
+    .stock-toggle-btn.active {
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        border-color: var(--shalom-accent);
+    }
+
+    .catalog-list {
+        padding-bottom: 90px; // deja lugar para el cart-footer flotante
+    }
+    .product-card {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-lg);
+        padding: 12px 14px;
+        margin-bottom: 10px;
+    }
+    // sombreado leve para distinguir de un vistazo lo que el cliente
+    // ya pidió de lo que todavía no
+    .product-card-en-carrito {
+        background: var(--shalom-accent-soft);
+        border-color: var(--shalom-accent);
+    }
+
+    // paginado del catálogo (+700 productos -- renderizarlos todos de
+    // una disparaba cientos de pedidos de imagen simultáneos, causa
+    // real de una caída de la base de datos)
+    .paginador {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 10px 0 4px;
+    }
+    .paginador .btn {
+        flex: 0 0 auto;
+        padding: 8px 14px;
+    }
+    .paginador .btn[disabled] {
+        opacity: 0.4;
+        cursor: default;
+    }
+    .paginador-info {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--shalom-ink-muted);
+        white-space: nowrap;
+    }
+    // 120x180px pedido explícitamente por el usuario -- buena
+    // resolución en pantalla sin pesar tanto como el original en una
+    // conexión de datos móviles/satelital en la calle (ver
+    // imagenUrl() en order_screen.js, usa image_1024 como fuente).
+    .product-thumb-wrap {
+        position: relative;
+        flex: 0 0 auto;
+        width: 120px;
+        height: 180px;
+        border-radius: var(--shalom-radius-sm);
+        overflow: hidden;
+        background: var(--shalom-surface-2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .product-thumb {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    // Columna de texto: en fila junto a una foto de 120px de ancho, el
+    // espacio que le queda ya es angosto -- antes los controles
+    // (Agregar/stepper, cantidad/basura) iban COMO HERMANOS de esta
+    // columna, apretándola todavía más y forzando que los nombres
+    // largos partieran letra por letra ("sopa de letras", reportado).
+    // Ahora esos controles viven ADENTRO de esta columna, apilados
+    // debajo del nombre, así el nombre usa todo el ancho disponible.
+    .product-info {
+        flex: 1;
+        min-width: 0;
+        padding-top: 2px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .product-info .name {
+        font-weight: 700;
+        font-size: 0.95rem;
+        line-height: 1.3;
+        // antes truncaba con "…" -- se reportó que el nombre del
+        // producto quedaba cortado; ahora pasa a una segunda línea
+        // (word-break normal, no break-word/break-all -- eso último
+        // era lo que partía cada palabra letra por letra apenas no
+        // entraba entera).
+        white-space: normal;
+    }
+    .product-info .addr {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .stock-badge {
+        font-size: 0.68rem;
+        font-weight: 800;
+        padding: 2px 8px;
+        border-radius: 999px;
+    }
+    .stock-badge.stock-low {
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-pendiente);
+    }
+    .stock-badge.stock-out {
+        background: var(--shalom-cancelado-soft);
+        color: var(--shalom-cancelado);
+    }
+
+    // estado de promoción "comprar X llevar Y" (mismo criterio que ya
+    // muestra el módulo de Ventas, custom_promo_status) -- reemplica
+    // los colores éxito/pendiente que ya usa esa vista
+    .promo-badge {
+        align-self: flex-start;
+        display: inline-block;
+        margin-top: 2px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 3px 9px;
+        border-radius: 999px;
+        white-space: normal;
+        line-height: 1.3;
+    }
+    .promo-badge.promo-completa {
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+    }
+    .promo-badge.promo-pendiente {
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-pendiente);
+    }
+
+    .qty-add-btn {
+        // .product-info es un flex column: sin esto, el botón se
+        // estiraría a todo el ancho de la columna (stretch es el
+        // default en el eje transversal de un flex column).
+        align-self: flex-start;
+        border: none;
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+        font-weight: 800;
+        font-size: 0.82rem;
+        border-radius: 999px;
+        padding: 9px 14px;
+        cursor: pointer;
+        font-family: inherit;
+        white-space: nowrap;
+    }
+    .qty-stepper {
+        align-self: flex-start;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--shalom-surface-2);
+        border-radius: 999px;
+        padding: 4px 6px;
+    }
+    .qty-stepper button {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: none;
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        font-weight: 800;
+        font-size: 1rem;
+        cursor: pointer;
+        font-family: inherit;
+        line-height: 1;
+    }
+    .qty-stepper span {
+        min-width: 1.4em;
+        text-align: center;
+        font-weight: 800;
+        font-size: 0.9rem;
+    }
+    // cantidad editable con el teclado (no solo tocando +/-) -- pedido
+    // explícito para pedidos grandes (ej. 100 unidades)
+    .qty-input {
+        width: 2.6em;
+        text-align: center;
+        font-weight: 800;
+        font-size: 0.9rem;
+        border: none;
+        background: transparent;
+        color: var(--shalom-ink);
+        font-family: inherit;
+        // saca las flechitas nativas del input number -- ya están el
+        // +/- propios al lado
+        -moz-appearance: textfield;
+        &::-webkit-outer-spin-button,
+        &::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+    }
+    .qty-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        align-self: flex-start;
+    }
+    // basura directo en el catálogo -- antes solo se podía sacar un
+    // producto del carrito bajando el stepper hasta 0, tedioso para
+    // cantidades grandes
+    .qty-trash-btn {
+        flex: 0 0 auto;
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink-muted);
+        border-radius: 999px;
+        padding: 7px 12px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+        white-space: nowrap;
+    }
+
+    .cart-footer {
+        position: fixed;
+        left: 14px;
+        right: 14px;
+        bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        border-radius: var(--shalom-radius-lg);
+        padding: 14px 18px;
+        box-shadow: var(--shalom-shadow);
+        cursor: pointer;
+        font-weight: 800;
+        font-size: 0.9rem;
+    }
+    .cart-footer-total {
+        flex: 1;
+        text-align: right;
+    }
+
+    .cart-list {
+        padding-bottom: 4px;
+    }
+    .cart-line {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-lg);
+        padding: 12px 14px;
+        margin-bottom: 10px;
+    }
+    // cantidad/subtotal/quitar quedan apilados debajo del nombre
+    // (adentro de .product-info), mismo motivo que en el catálogo: la
+    // foto de 120x180 ya ocupa buena parte del ancho de la fila.
+    .cart-line-bottom-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .cart-line-subtotal {
+        font-weight: 800;
+        font-size: 0.88rem;
+    }
+    .cart-total-row {
+        flex: 0 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 14px 18px 0;
+        font-weight: 800;
+        font-size: 1.1rem;
+    }
+    .order-overlay .cta-order {
+        margin: 12px 18px calc(18px + env(safe-area-inset-bottom, 0px));
+        width: auto;
+    }
+    .order-overlay .cta-order[disabled] {
+        opacity: 0.6;
+        cursor: default;
+    }
+    // "Revisar cotización": sigue siendo la opción principal para
+    // pasar a Ventas, pero más chico que el bloque grande de Confirmar
+    // pedido (se reportó que se veía "exageradamente grande").
+    .cart-review-btn {
+        display: block;
+        width: auto;
+        margin: 12px 18px 0;
+        padding: 11px 16px;
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+        border: 1.5px solid var(--shalom-accent);
+        font-weight: 800;
+        font-size: 0.84rem;
+        text-align: center;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .cart-review-btn[disabled] {
+        opacity: 0.6;
+        cursor: default;
+    }
+
+    // botón/popup de recompensa (regalo de una promo "comprar X llevar
+    // Y" ya completa) -- misma lógica que el módulo de Ventas: se
+    // canjea una promo a la vez.
+    .reward-cta {
+        display: block;
+        width: auto;
+        margin: 4px 18px 0;
+        padding: 11px 16px;
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+        border: 1.5px solid var(--shalom-completado);
+        font-weight: 800;
+        font-size: 0.86rem;
+        text-align: center;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .reward-icon {
+        font-size: 2rem;
+    }
+    .reward-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 14px;
+        max-height: 40vh;
+        overflow-y: auto;
+    }
+    .reward-option {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        border-radius: var(--shalom-radius-md);
+        padding: 10px 12px;
+        cursor: pointer;
+        font-family: inherit;
+        color: var(--shalom-ink);
+    }
+    .reward-option-nombre {
+        font-weight: 800;
+        font-size: 0.9rem;
+    }
+    .reward-option-detalle {
+        font-size: 0.76rem;
+        color: var(--shalom-ink-muted);
+        margin-top: 2px;
+    }
+
+    // aviso propio (no confirm() nativo) al intentar salir de
+    // OrderScreen con productos en el carrito sin guardar
+    .confirm-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 95;
+        background: rgba(20, 10, 15, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: shalom-fondo-in 0.12s ease both;
+    }
+    .confirm-card {
+        width: 100%;
+        max-width: 340px;
+        background: var(--shalom-surface);
+        border-radius: var(--shalom-radius-lg);
+        padding: 20px;
+        box-shadow: var(--shalom-shadow);
+        animation: shalom-tarjeta-in 0.16s $shalom-curva-sheet both;
+    }
+    .confirm-card h3 {
+        font-size: 1.05rem;
+        font-weight: 800;
+        margin: 0;
+        // mismo fix que .edit-card h3: sin esto se veía casi
+        // ilegible (heredaba un color/opacidad apagado).
+        color: var(--shalom-ink);
+    }
+    .confirm-card p {
+        margin: 10px 0 0;
+        font-size: 0.86rem;
+        color: var(--shalom-ink-muted);
+        line-height: 1.5;
+    }
+    .confirm-card .edit-actions {
+        margin-top: 18px;
+    }
+
+    // escáner de código de barras -- solo animación de entrada (el
+    // cierre pasa por detenerEscaneo(), que se llama desde varios
+    // lugares distintos, incluido el cierre de toda la pantalla del
+    // pedido -- animarlo ahí reintroduciría el retraso que ya se evitó
+    // a propósito en cerrarDeVerdad(), ver order_screen.js).
+    .scan-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        background: #000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        animation: shalom-fondo-in 0.15s ease both;
+    }
+    .scan-video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .scan-frame {
+        position: relative;
+        width: 74%;
+        max-width: 320px;
+        aspect-ratio: 5 / 3;
+        border: 3px solid var(--shalom-accent);
+        border-radius: var(--shalom-radius-md);
+        box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.45);
+    }
+    .scan-hint {
+        position: relative;
+        margin-top: 18px;
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    }
+    .scan-cancel {
+        position: relative;
+        // .btn trae flex: 1 (pensado para pares de botones lado a lado
+        // en el modal de editar cliente) -- acá, siendo hijo directo de
+        // un flex column, eso lo hacía estirarse para ocupar el alto
+        // sobrante y quedar visualmente desplazado. flex: 0 0 auto lo
+        // deja del tamaño de su contenido, como corresponde a un botón
+        // suelto.
+        flex: 0 0 auto;
+        margin-top: 22px;
+        padding: 12px 28px;
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    // pestaña Cotizaciones (Fase 4)
+    .quote-card {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        width: 100%;
+        text-align: left;
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-lg);
+        padding: 12px 14px;
+        margin-bottom: 10px;
+        cursor: pointer;
+        font-family: inherit;
+        color: inherit;
+    }
+    .quote-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .quote-name {
+        font-weight: 800;
+        font-size: 0.98rem;
+    }
+    .badge-confirmada {
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+    }
+    .badge-borrador {
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-pendiente);
+    }
+    .quote-card-foot {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        color: var(--shalom-ink-muted);
+        font-size: 0.8rem;
+        margin-top: 2px;
+    }
+    .quote-total {
+        font-weight: 800;
+        font-size: 0.92rem;
+        color: var(--shalom-ink);
+    }
+
+    // pestaña Clientes (Fase 4): botón flotante de alta rápida
+    .clientes-screen {
+        position: relative;
+    }
+    .fab-add {
+        position: absolute;
+        right: 18px;
+        bottom: 18px;
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        border: none;
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        font-size: 1.6rem;
+        font-weight: 700;
+        line-height: 1;
+        box-shadow: var(--shalom-shadow);
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .alta-hint {
+        margin: 8px 0 0;
+        font-size: 0.8rem;
+        color: var(--shalom-ink-muted);
+        line-height: 1.4;
+    }
+}

@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.RutasHub">
+        <div class="shalom-screen">
+            <div class="topbar">
+                <div class="route-name">Rutas</div>
+                <div class="route-sub"><span>Las que te asignaron</span></div>
+            </div>
+
+            <div class="search-row">
+                <div class="search-box-live">
+                    <span class="search-icon"><i class="fa fa-search" aria-hidden="true"/></span>
+                    <input
+                        type="text"
+                        placeholder="Buscar ruta por nombre…"
+                        t-model="state.busqueda"
+                        autocomplete="off"
+                    />
+                </div>
+            </div>
+
+            <div class="groupby-row">
+                <button class="groupby-btn" t-on-click="toggleMenuPeriodo">
+                    <span>Periodo: <b t-esc="etiquetaPeriodo(state.periodo)"/></span>
+                    <span class="chev">▾</span>
+                </button>
+                <div class="groupby-menu" t-if="state.menuPeriodoAbierto">
+                    <button
+                        t-att-class="state.periodo === 'todos' ? 'active' : ''"
+                        t-on-click="() => this.elegirPeriodo('todos')"
+                    >Todo el periodo</button>
+                    <t t-foreach="semanas" t-as="semana" t-key="semana.date_start">
+                        <button
+                            t-att-class="state.periodo === semana.date_start ? 'active' : ''"
+                            t-on-click="() => this.elegirPeriodo(semana.date_start)"
+                            t-esc="etiquetaPeriodo(semana.date_start)"
+                        />
+                    </t>
+                </div>
+            </div>
+
+            <div class="view">
+                <div t-if="state.cargando" class="shalom-vacio">Cargando tus rutas…</div>
+                <t t-elif="schedulesFiltrados.length === 0">
+                    <div class="shalom-vacio" t-if="state.schedules.length === 0">
+                        Todavía no tenés rutas programadas. Pedile a oficina que te
+                        asignen una desde "Programación de Rutas".
+                    </div>
+                    <div class="shalom-vacio" t-else="">
+                        Ninguna ruta coincide con la búsqueda.
+                    </div>
+                </t>
+                <t t-else="">
+                    <button
+                        class="route-card"
+                        t-foreach="schedulesFiltrados"
+                        t-as="schedule"
+                        t-key="schedule.id"
+                        t-on-click="() => this.abrir(schedule)"
+                    >
+                        <div class="route-card-head">
+                            <span class="rname" t-esc="schedule.route_name"/>
+                            <span
+                                class="stop-badge"
+                                t-attf-style="background: var(--shalom-{{claseEstado(schedule.estado)}}-soft); color: var(--shalom-{{claseEstado(schedule.estado)}});"
+                                t-esc="etiquetaEstado(schedule.estado)"
+                            />
+                        </div>
+                        <div class="route-card-stats">
+                            <span>👥 <b t-esc="schedule.cantidad_clientes"/> clientes</span>
+                            <span>⏱ <b t-esc="formatoHoras(schedule.tiempo_estimado)"/> estimadas</span>
+                            <span>💵 <b t-esc="'$' + schedule.capacidad.toFixed(2)"/> capacidad</span>
+                        </div>
+                        <div class="addr" t-esc="etiquetaPeriodo(schedule.date_start)"/>
+                    </button>
+                </t>
+            </div>
+        </div>
+    </t>
+</templates>

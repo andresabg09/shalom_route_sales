@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.Cotizaciones">
+        <div class="shalom-screen">
+            <div class="topbar">
+                <div class="route-name">Mis cotizaciones</div>
+                <div class="route-sub"><span>Todos tus clientes, no solo la ruta de hoy</span></div>
+            </div>
+
+            <div class="search-row">
+                <div class="search-box-live">
+                    <span class="search-icon"><i class="fa fa-search" aria-hidden="true"/></span>
+                    <input
+                        type="text"
+                        placeholder="Buscar por cliente o número…"
+                        t-model="state.busqueda"
+                        autocomplete="off"
+                    />
+                </div>
+            </div>
+
+            <div class="view">
+                <div t-if="state.cargando" class="shalom-vacio">Cargando tus cotizaciones…</div>
+                <t t-elif="cotizacionesFiltradas.length === 0">
+                    <div class="shalom-vacio" t-if="state.cotizaciones.length === 0">
+                        Todavía no tenés cotizaciones. Se crean al confirmar o revisar
+                        un pedido desde el carrito de una visita.
+                    </div>
+                    <div class="shalom-vacio" t-else="">
+                        Ninguna cotización coincide con la búsqueda.
+                    </div>
+                </t>
+                <t t-else="">
+                    <button
+                        class="quote-card"
+                        t-foreach="cotizacionesFiltradas"
+                        t-as="cotizacion"
+                        t-key="cotizacion.id"
+                        t-on-click="() => this.abrir(cotizacion)"
+                    >
+                        <div class="quote-card-head">
+                            <span class="quote-name" t-esc="cotizacion.name"/>
+                            <span
+                                class="stop-badge"
+                                t-att-class="cotizacion.confirmada ? 'badge-confirmada' : 'badge-borrador'"
+                                t-esc="cotizacion.confirmada ? 'Orden de Venta' : 'Cotización'"
+                            />
+                        </div>
+                        <div class="addr" t-esc="cotizacion.partner_name"/>
+                        <div class="quote-card-foot">
+                            <span t-esc="formatoFecha(cotizacion.date_order)"/>
+                            <span class="quote-total" t-esc="'$' + cotizacion.amount_total.toFixed(2)"/>
+                        </div>
+                    </button>
+                </t>
+            </div>
+        </div>
+    </t>
+</templates>

@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Vistas de administración de fsm.route.schedule (programación de
+        rutas por ciclo). Las usa oficina para armar el calendario que
+        alimenta la pestaña "Rutas" de la app del vendedor: el
+        vendedor solo lee esto, nunca lo edita. Los dos botones de
+        generar visitas llevan confirmación porque ambos cierran como
+        "No atendido" (nunca archivan) cualquier visita vieja que haya
+        quedado abierta, para poder generar SIEMPRE a todos los
+        clientes de la ruta sin saltearse a nadie — un doble-click sin
+        querer podría resetear trabajo en curso del día si no hubiera
+        confirmación.
+    -->
+    <record id="fsm_route_schedule_view_list" model="ir.ui.view">
+        <field name="name">fsm.route.schedule.list</field>
+        <field name="model">fsm.route.schedule</field>
+        <field name="arch" type="xml">
+            <list string="Programación de Rutas">
+                <field name="route_id" />
+                <field name="fsm_person_id" />
+                <field name="date_start" />
+                <field name="date_end" />
+                <field name="cantidad_clientes" />
+                <field name="x_tiempo_estimado" widget="float_time" />
+                <field name="capacidad" widget="monetary" />
+                <field name="estado" widget="badge" decoration-info="estado == 'en_curso'" decoration-success="estado == 'completada'" />
+            </list>
+        </field>
+    </record>
+
+    <record id="fsm_route_schedule_view_form" model="ir.ui.view">
+        <field name="name">fsm.route.schedule.form</field>
+        <field name="model">fsm.route.schedule</field>
+        <field name="arch" type="xml">
+            <form string="Programación de Ruta">
+                <header>
+                    <button
+                        name="action_generar_visitas"
+                        type="object"
+                        string="Generar visitas de esta ocurrencia"
+                        class="btn-primary"
+                        confirm="Esto va a generar una visita para TODOS los clientes de esta ruta, vinculadas a esta ocurrencia. Cualquier visita vieja que haya quedado abierta se va a cerrar sola como 'No atendido'. ¿Continuar?"
+                        help="Igual que 'Generar visitas de esta ruta', pero vinculando cada visita nueva a esta ocurrencia y copiándole el rango de fechas del ciclo."
+                    />
+                    <button
+                        name="action_generar_proximo_ciclo"
+                        type="object"
+                        string="Generar próximo ciclo"
+                        class="btn-secondary"
+                        confirm="Esto va a crear el ciclo siguiente de esta ruta (arranca hoy, misma duración que este ciclo) y generar visita para TODOS sus clientes. Cualquier visita vieja que haya quedado abierta se va a cerrar sola como 'No atendido'. ¿Continuar?"
+                        help="Arranca el ciclo siguiente de esta misma ruta: fecha de inicio = hoy, misma duración que este ciclo, todos los clientes con visita nueva."
+                    />
+                    <button
+                        name="action_abrir_agregar_visita_wizard"
+                        type="object"
+                        string="Agregar cliente a esta ocurrencia"
+                        class="btn-secondary"
+                        help="Genera la visita de UN cliente puntual dentro de esta ocurrencia, sin tocar ninguna de las demás -- para el caso de un cliente agregado a la ruta después de generar el ciclo, o que hay que sumar a mitad de camino."
+                    />
+                    <field name="estado" widget="statusbar" statusbar_visible="por_iniciar,en_curso,completada" />
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button
+                            type="object"
+                            name="action_generar_visitas"
+                            class="oe_stat_button"
+                            icon="fa-calendar-check-o"
+                        >
+                            <field name="cantidad_clientes" widget="statinfo" string="Clientes" />
+                        </button>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="route_id" />
+                            <field name="fsm_person_id" readonly="1" />
+                        </group>
+                        <group>
+                            <field name="date_start" />
+                            <field name="date_end" />
+                        </group>
+                    </group>
+                    <group>
+                        <group>
+                            <field name="x_tiempo_estimado" widget="float_time" />
+                        </group>
+                        <group>
+                            <field name="capacidad" widget="monetary" />
+                            <field name="currency_id" invisible="1" />
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Visitas generadas" name="visitas">
+                            <!--
+                                Colores por etapa de CADA visita (distinto
+                                del statusbar de arriba, que es el avance
+                                de la ocurrencia completa). Usa stage_name
+                                (campo nativo de fsm.order, texto plano del
+                                nombre de la etapa) porque decoration-* no
+                                puede evaluar sub-campos de un many2one
+                                directamente.
+
+                                create="0"/delete="0" van en la propia
+                                etiqueta list, no en el field que lo envuelve
+                                (probado en producción: puestos en el field,
+                                el ícono nativo de papelera seguía
+                                apareciendo igual, solo que sin hacer nada,
+                                bloqueado en silencio, porque fsm.order
+                                (igual que fsm.location) no tiene
+                                perm_unlink habilitado para ningún grupo en
+                                el módulo nativo fieldservice. En su lugar
+                                hay un botón propio, última columna a la
+                                derecha (misma posición que ocuparía el
+                                ícono nativo, para que se sienta coherente
+                                con el resto de Odoo) que llama a
+                                action_shalom_archivar_visita (fsm_order.py)
+                                y ARCHIVA la visita puntual: mismo efecto
+                                visual que un borrado (la fila desaparece)
+                                pero sin pelear contra esa restricción, y
+                                el historial queda recuperable con el
+                                filtro de archivados. Cada columna de datos
+                                queda con readonly="1" propio para que la
+                                lista no se pueda editar inline, solo ver
+                                + archivar.
+                            -->
+                            <field name="fsm_order_ids">
+                                <list
+                                    create="0"
+                                    delete="0"
+                                    decoration-success="stage_name == 'Completado'"
+                                    decoration-danger="stage_name == 'Cancelado'"
+                                    decoration-warning="stage_name == 'No quiso'"
+                                    decoration-info="stage_name == 'No atendido'"
+                                    decoration-muted="stage_name == 'New'"
+                                >
+                                    <field name="location_id" readonly="1" />
+                                    <field name="x_cliente_orden_ruta" readonly="1" />
+                                    <field name="stage_name" invisible="1" />
+                                    <field name="stage_id" widget="badge" readonly="1" />
+                                    <button
+                                        name="action_shalom_archivar_visita"
+                                        type="object"
+                                        icon="fa-trash-o"
+                                        string="Eliminar"
+                                        confirm="¿Sacar esta visita de la lista? Se archiva (no se borra del todo) -- si te equivocaste, se puede recuperar buscándola con el filtro de archivados en fsm.order. No afecta a ninguna otra visita de esta ocurrencia."
+                                    />
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="fsm_route_schedule_action" model="ir.actions.act_window">
+        <field name="name">Programación de Rutas</field>
+        <field name="res_model">fsm.route.schedule</field>
+        <field name="view_mode">list,form</field>
+        <field name="help">
+            Crea una fila por cada ciclo en que se recorre una ruta (no
+            todas duran una semana). Esto es lo que alimenta la pestaña
+            "Rutas" de la app del vendedor, agrupada/filtrada por ciclo o
+            mes. Usá "Generar próximo ciclo" en una ocurrencia existente
+            para no tener que armar cada ciclo siguiente a mano.
+        </field>
+    </record>
+
+    <!--
+        Vive DENTRO del menú "Operaciones" del propio módulo Field
+        Service (fieldservice.operations), junto a "Rutas del Día" y
+        "Todas las Órdenes": no es una app aparte. Confirmado por
+        consulta directa a ir.model.data/ir.ui.menu en el servidor:
+        fieldservice.root > fieldservice.operations > (Rutas del Día,
+        ESTE menú, Todas las Órdenes).
+    -->
+    <menuitem
+        id="fsm_route_schedule_menu"
+        name="Programación de Rutas"
+        parent="fieldservice.operations"
+        action="fsm_route_schedule_action"
+        sequence="20"
+    />
+</odoo>

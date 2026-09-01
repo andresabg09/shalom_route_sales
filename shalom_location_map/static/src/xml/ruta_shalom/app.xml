@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.RutaShalomApp">
+        <div class="o_shalom_ruta_app">
+            <div class="shalom-body">
+                <RutasHub t-if="state.screen === 'rutas'" onAbrirRuta.bind="abrirRuta"/>
+                <RutaDetalle
+                    t-if="state.screen === 'ruta-detalle'"
+                    schedule="state.scheduleActivo"
+                    onVolver.bind="volverARutas"
+                />
+                <Cotizaciones t-if="state.screen === 'cotizaciones'"/>
+                <Clientes t-if="state.screen === 'clientes'"/>
+            </div>
+
+            <div class="bottomnav">
+                <button
+                    t-att-class="(state.screen === 'rutas' || state.screen === 'ruta-detalle') ? 'active' : ''"
+                    t-on-click="() => this.irA('rutas')"
+                ><span><i class="fa fa-map-o" aria-hidden="true"/></span>Rutas</button>
+                <button
+                    t-att-class="state.screen === 'cotizaciones' ? 'active' : ''"
+                    t-on-click="() => this.irA('cotizaciones')"
+                ><span><i class="fa fa-file-text-o" aria-hidden="true"/></span>Cotizaciones</button>
+                <button
+                    t-att-class="state.screen === 'clientes' ? 'active' : ''"
+                    t-on-click="() => this.irA('clientes')"
+                ><span><i class="fa fa-user" aria-hidden="true"/></span>Clientes</button>
+            </div>
+        </div>
+    </t>
+</templates>

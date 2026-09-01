@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Wizard de administración "Buscar GPS por nombre": lista de
+        clientes pendientes de revisar, con botones por fila para
+        buscar en Google a pedido (popup con hasta 3 opciones a
+        elegir), dejar como está, o borrar la coordenada actual. Ver
+        wizards/shalom_buscar_gps_wizard.py.
+    -->
+    <record id="shalom_buscar_gps_wizard_form" model="ir.ui.view">
+        <field name="name">shalom.buscar.gps.wizard.form</field>
+        <field name="model">shalom.buscar.gps.wizard</field>
+        <field name="arch" type="xml">
+            <form>
+                <p>
+                    Por defecto muestra clientes SIN coordenadas. Por cada
+                    cliente: "Buscar opciones en Google" busca EN EL MOMENTO
+                    (solo para ese cliente) y abre un popup con hasta 3
+                    resultados para elegir, con su propio mapa para chequear
+                    cada uno. "Dejar como está" saca al cliente de esta lista
+                    para siempre. "Borrar coordenada actual" vacía su GPS pero
+                    lo deja en la lista, para seguir buscándole una coordenada
+                    real más adelante.
+                </p>
+                <group>
+                    <field name="route_id" />
+                    <field name="mostrar_solo_sin_gps" />
+                    <field name="busqueda_nombre" placeholder="Nombre del cliente..." />
+                    <button
+                        name="action_cargar_ubicaciones"
+                        type="object"
+                        string="Buscar / recargar lista"
+                        icon="fa-refresh"
+                        class="btn-secondary"
+                        help="Aplica la Ruta, el toggle 'Solo sin GPS' y/o el nombre buscado, y recarga la lista de abajo."
+                    />
+                    <button
+                        name="action_abrir_captura_mi_ubicacion"
+                        type="object"
+                        string="Capturar mi ubicación"
+                        icon="fa-crosshairs"
+                        class="btn-secondary"
+                        help="Guarda tu posición actual para mostrar a cuántos km está cada opción que te sugiera Google."
+                    />
+                    <field name="mi_lat" invisible="1" />
+                    <span invisible="not mi_lat">Tu ubicación ya está guardada -- las próximas búsquedas van a mostrar distancia.</span>
+                </group>
+                <field name="line_ids" nolabel="1">
+                    <list create="0" delete="0">
+                        <field name="location_id" readonly="1" force_save="1" />
+                        <field name="location_direccion_actual" readonly="1" string="Dirección actual" />
+                        <button
+                            name="action_buscar_opciones"
+                            type="object"
+                            string="Buscar opciones en Google"
+                            class="btn-primary"
+                        />
+                        <button
+                            name="action_dejar_como_esta"
+                            type="object"
+                            string="Dejar como está"
+                            confirm="Este cliente no va a volver a aparecer en este wizard. ¿Confirmás?"
+                        />
+                        <button
+                            name="action_borrar_coordenada"
+                            type="object"
+                            string="Borrar coordenada actual"
+                            class="btn-danger"
+                            confirm="Esto vacía el GPS de este cliente (sigue en la lista para buscarle otra). ¿Confirmás?"
+                        />
+                    </list>
+                </field>
+                <footer>
+                    <button string="Cerrar" special="cancel" />
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="shalom_buscar_gps_wizard_action" model="ir.actions.act_window">
+        <field name="name">Buscar GPS por nombre</field>
+        <field name="res_model">shalom.buscar.gps.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+        <field name="binding_model_id" ref="fieldservice.model_fsm_location" />
+        <field name="binding_view_types">list</field>
+    </record>
+
+    <menuitem
+        id="shalom_buscar_gps_wizard_menu"
+        name="Buscar GPS por nombre"
+        parent="fieldservice.operations"
+        action="shalom_buscar_gps_wizard_action"
+        groups="fieldservice.group_fsm_manager"
+        sequence="30"
+    />
+
+    <!--
+        Popup de opciones: se abre desde el botón "Buscar opciones en
+        Google" de una fila. Muestra hasta 3 candidatos con su propio
+        "Ver mapa" + "Usar esta opción", y repite acá los mismos
+        atajos "Dejar como está" / "Borrar coordenada actual" para no
+        tener que volver a la lista.
+    -->
+    <record id="shalom_buscar_gps_wizard_opcion_form" model="ir.ui.view">
+        <field name="name">shalom.buscar.gps.wizard.opcion.form</field>
+        <field name="model">shalom.buscar.gps.wizard.opcion</field>
+        <field name="arch" type="xml">
+            <form>
+                <field name="location_id" readonly="1" />
+                <group>
+                    <field name="location_direccion_actual" readonly="1" string="Dirección guardada en Odoo" invisible="not location_direccion_actual" />
+                    <field name="location_lat" readonly="1" string="Coordenada actual guardada (lat)" invisible="not location_lat" />
+                    <field name="location_lng" readonly="1" string="Coordenada actual guardada (lng)" invisible="not location_lng" />
+                    <button
+                        name="action_ver_mapa_actual"
+                        type="object"
+                        string="Ver en mapa la coordenada actual"
+                        icon="fa-map-marker"
+                        class="btn-secondary"
+                        invisible="not location_lat and not location_lng"
+                        help="Abre Google Maps con la coordenada que este cliente tiene guardada AHORA en Odoo, para comparar contra las opciones de abajo."
+                    />
+                </group>
+                <group>
+                    <field name="query_busqueda" string="Buscar en Google Maps" />
+                    <button
+                        name="action_buscar_de_nuevo"
+                        type="object"
+                        string="Buscar"
+                        icon="fa-search"
+                        class="btn-primary"
+                        help="Si el nombre guardado del cliente no encontró el local correcto, reescribí la búsqueda acá (calle, alias, otro nombre...) y volvé a buscar sin salir de este popup."
+                    />
+                </group>
+                <p invisible="candidato_ids">
+                    Google no devolvió ninguna opción para esta búsqueda.
+                </p>
+                <field name="candidato_ids" nolabel="1">
+                    <list create="0" delete="0">
+                        <field name="nombre" readonly="1" />
+                        <field name="direccion" readonly="1" />
+                        <field name="distancia_km" readonly="1" string="Distancia (km)" />
+                        <button
+                            name="action_ver_mapa"
+                            type="object"
+                            string="Ver mapa"
+                            icon="fa-map-marker"
+                        />
+                        <button
+                            name="action_usar_esta"
+                            type="object"
+                            string="Usar esta opción"
+                            class="btn-primary"
+                            confirm="Esto guarda esta coordenada en el cliente. ¿Confirmás?"
+                        />
+                    </list>
+                </field>
+                <footer>
+                    <button
+                        name="action_dejar_como_esta"
+                        type="object"
+                        string="Ninguna es correcta: dejar como está"
+                        confirm="Este cliente no va a volver a aparecer en este wizard. ¿Confirmás?"
+                    />
+                    <button
+                        name="action_borrar_coordenada"
+                        type="object"
+                        string="Borrar coordenada actual"
+                        class="btn-danger"
+                        confirm="Esto vacía el GPS de este cliente (sigue en la lista para buscarle otra). ¿Confirmás?"
+                    />
+                    <button
+                        name="action_cerrar_popup"
+                        type="object"
+                        string="Cerrar sin elegir"
+                        help="Vuelve a la lista principal del wizard sin cambiar nada de este cliente."
+                    />
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

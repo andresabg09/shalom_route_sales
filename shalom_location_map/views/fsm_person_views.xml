@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        fieldservice.fsm_person_form no expone user_id en el
+        formulario: el campo existe en el modelo, sin restricción de
+        grupos (confirmado por consulta directa en producción), pero
+        no está en el XML de la vista nativa. Por eso oficina no podía
+        vincular una Persona de Servicio de Campo con su cuenta de
+        login de Odoo desde la pantalla.
+
+        Ese vínculo es justo lo que usa
+        fsm.person.shalom_mis_rutas_programadas (y el resto de los
+        "mis datos" de Fase 0) para resolver "asignado a mí": sin este
+        campo visible, la app del vendedor nunca puede saber qué rutas
+        le corresponden a quién.
+
+        Reetiquetado como "Usuario de Odoo (login)" en vez de la
+        etiqueta nativa "Vendedor": en este formulario esa etiqueta ya
+        se presta a confusión, porque la Persona en sí ES el vendedor;
+        este campo es solo su cuenta de acceso.
+    -->
+    <record id="fsm_person_view_form_agregar_usuario" model="ir.ui.view">
+        <field name="name">fsm.person.form.agregar.usuario</field>
+        <field name="model">fsm.person</field>
+        <field name="inherit_id" ref="fieldservice.fsm_person_form"/>
+        <field name="arch" type="xml">
+            <field name="calendar_id" position="after">
+                <field name="user_id" string="Usuario de Odoo (login)"/>
+            </field>
+        </field>
+    </record>
+</odoo>

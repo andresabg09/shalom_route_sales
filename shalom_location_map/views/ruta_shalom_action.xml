@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        App del vendedor "Ruta Shalom" (Fases 1-4, ver
+        docs/plan_fase_1_a_4.md): client action Owl nuevo, NO reemplaza
+        ninguna vista nativa: las vistas admin de Fase 0 (Programación
+        de Rutas, etc.) siguen existiendo para que oficina arme rutas,
+        clientes y planificación. Esta app es exclusivamente el flujo
+        diario del vendedor.
+
+        Vive DENTRO del menú "Operaciones" del propio módulo Field
+        Service (fieldservice.operations), igual que "Programación de
+        Rutas": decisión de producto ya confirmada, nunca como app
+        aparte.
+    -->
+    <record id="ruta_shalom_client_action" model="ir.actions.client">
+        <field name="name">Ruta Shalom</field>
+        <field name="tag">shalom_ruta_app</field>
+    </record>
+
+    <menuitem
+        id="ruta_shalom_app_menu"
+        name="Ruta Shalom (App del Vendedor)"
+        parent="fieldservice.operations"
+        action="ruta_shalom_client_action"
+        sequence="5"
+    />
+
+    <!--
+        Decisión de producto: abrir la app "Servicio de Campo" (para
+        cualquier rol, no solo vendedores) tiene que caer directo en
+        Ruta Shalom, no en el tablero nativo. La raíz del menú
+        (fieldservice.root) no tenía acción propia: Odoo bajaba por
+        el primer hijo con acción que encontrara (Tablero, secuencia
+        10, antes que Operaciones en 20) y nunca llegaba hasta acá.
+        Setearle la acción directo a la raíz resuelve esto sin mover
+        ningún menú nativo de lugar: todo el árbol de menús (Tablero,
+        Operaciones, Data Maestra, Informes, Ajustes) sigue existiendo
+        y accesible igual que siempre desde la barra lateral.
+    -->
+    <record id="fieldservice.root" model="ir.ui.menu">
+        <field name="action" ref="ruta_shalom_client_action"/>
+    </record>
+</odoo>

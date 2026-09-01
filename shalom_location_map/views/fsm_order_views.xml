@@ -19,28 +19,32 @@
                 <button
                     name="shalom_abrir_captura_gps"
                     type="object"
-                    string="📍 Capturar mi ubicación GPS"
+                    string="Capturar mi ubicación GPS"
+                    icon="fa-crosshairs"
                     class="btn-secondary"
                     help="Captura la ubicación real de este cliente usando el GPS del dispositivo. Pide confirmación antes de guardar, ya que sobreescribe la ubicación existente."
                 />
                 <button
                     name="action_crear_cotizacion"
                     type="object"
-                    string="💰 Crear cotización"
+                    string="Crear cotización"
+                    icon="fa-file-text-o"
                     class="btn-secondary"
                     help="Crea (o abre, si ya existe) una cotización de venta para el cliente de esta visita."
                 />
                 <button
                     name="action_abrir_maps"
                     type="object"
-                    string="📍 Ir con Maps"
+                    string="Ir con Waze"
+                    icon="fa-location-arrow"
                     class="btn-secondary"
-                    help="Abre Google Maps con la ruta hacia este cliente."
+                    help="Abre Waze con la ruta hacia este cliente."
                 />
                 <button
                     name="action_ver_historial_cotizaciones"
                     type="object"
-                    string="🧾 Historial de cotizaciones"
+                    string="Historial de cotizaciones"
+                    icon="fa-file-text-o"
                     class="btn-secondary"
                     help="Ver todas las cotizaciones confirmadas anteriores de este cliente."
                 />
@@ -65,6 +69,13 @@
             <xpath expr="//field[@name='fsm_route_id']" position="after">
                 <field name="x_jornada" />
                 <field name="x_cliente_orden_ruta" />
+                <field name="x_route_schedule_id" />
+            </xpath>
+
+            <!-- Observaciones cargadas por el vendedor durante la visita
+                 (app del vendedor), junto a los demás datos de la Ubicación. -->
+            <xpath expr="//field[@name='location_id']" position="after">
+                <field name="x_observaciones_visita" />
             </xpath>
 
             <!-- Datos del último GPS capturado en esta visita, y el GPS ya

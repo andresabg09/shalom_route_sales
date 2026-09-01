@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.VisitSheet">
+        <div class="sheet-overlay open" t-att-class="state.cerrando ? 'closing' : ''" t-on-click.self="cerrar">
+            <div
+                class="sheet"
+                t-ref="sheet"
+                t-att-class="state.arrastrando ? 'sin-transicion' : ''"
+                t-attf-style="transform: translateY({{state.arrastreY}}px);"
+                t-on-touchstart="iniciarArrastre"
+            >
+                <div class="sheet-handle"/>
+
+                <div t-if="state.cargando" class="shalom-vacio">Cargando…</div>
+
+                <t t-elif="state.visita">
+                    <button class="name-btn" t-on-click="abrirEdicion" title="Editar datos del cliente">
+                        <span class="name" t-esc="state.visita.nombre"/>
+                        <span class="edit-hint"><i class="fa fa-pencil" aria-hidden="true"/></span>
+                    </button>
+                    <div class="addr" t-esc="state.visita.direccion"/>
+                    <div class="addr" t-esc="'Orden de ruta: ' + (state.visita.orden || '-')"/>
+
+                    <button
+                        t-attf-class="status-pill st-{{state.visita.estado}} {{state.panelEstadoAbierto ? 'open' : ''}}"
+                        t-on-click="toggleEstado"
+                    >
+                        <span class="dot"/>
+                        <span class="lbl" t-esc="etiquetaEstado(state.visita.estado)"/>
+                        <span class="chev">▾</span>
+                    </button>
+                    <div class="status-options" t-if="state.panelEstadoAbierto">
+                        <button
+                            t-attf-class="status-chip {{state.visita.estado === 'pendiente' ? 'sel-pendiente' : ''}}"
+                            t-on-click="() => this.elegirEstado('pendiente')"
+                        >Pendiente</button>
+                        <button
+                            t-attf-class="status-chip {{state.visita.estado === 'completado' ? 'sel-completado' : ''}}"
+                            t-on-click="() => this.elegirEstado('completado')"
+                        >Completada</button>
+                        <button
+                            t-attf-class="status-chip {{state.visita.estado === 'no_quiso' ? 'sel-no_quiso' : ''}}"
+                            t-on-click="() => this.elegirEstado('no_quiso')"
+                        >No quiso</button>
+                        <button
+                            t-attf-class="status-chip {{state.visita.estado === 'cancelado' ? 'sel-cancelado' : ''}}"
+                            t-on-click="() => this.elegirEstado('cancelado')"
+                        >Cancelado</button>
+                    </div>
+
+                    <label class="obs-label" for="shalom-obs-input">Observaciones de esta visita</label>
+                    <textarea
+                        id="shalom-obs-input"
+                        class="obs-input"
+                        t-on-change="guardarObservaciones"
+                        placeholder="Ej: pedir que dejen la entrada libre, prefiere visitas por la mañana…"
+                    ><t t-esc="state.visita.observaciones"/></textarea>
+
+                    <div class="action-grid">
+                        <button class="action-tile" t-on-click="llamar">
+                            <span class="lbl"><i class="fa fa-phone" aria-hidden="true"/> Llamar</span>
+                        </button>
+                        <button class="action-tile" t-on-click="irConMaps">
+                            <span class="lbl"><i class="fa fa-location-arrow" aria-hidden="true"/> Ir con Waze</span>
+                        </button>
+                        <button class="action-tile" t-on-click="capturarGps">
+                            <span class="lbl"><i class="fa fa-crosshairs" aria-hidden="true"/> Capturar GPS</span>
+                        </button>
+                        <button class="action-tile" t-on-click="verHistorial">
+                            <span class="lbl"><i class="fa fa-history" aria-hidden="true"/> Historial</span>
+                        </button>
+                    </div>
+                    <button t-if="!state.visita.saleId" class="cta-order" t-on-click="tomarPedido"><i class="fa fa-shopping-cart" aria-hidden="true"/> Tomar pedido</button>
+                    <button t-else="" class="cta-order" t-on-click="examinarCotizacion"><i class="fa fa-file-text-o" aria-hidden="true"/> Examinar cotización</button>
+                </t>
+            </div>
+        </div>
+
+        <ClienteForm
+            t-if="state.editando"
+            modo="'editar'"
+            locationId="state.visita.locationId"
+            onGuardado.bind="edicionGuardada"
+            onCancelar.bind="cerrarEdicion"
+        />
+
+        <OrderScreen
+            t-if="state.tomandoPedido"
+            orderId="props.orderId"
+            clienteNombre="state.visita.nombre"
+            onCerrar.bind="cerrarPedido"
+            onConfirmado.bind="pedidoConfirmado"
+            onRevisado.bind="pedidoRevisado"
+        />
+    </t>
+</templates>

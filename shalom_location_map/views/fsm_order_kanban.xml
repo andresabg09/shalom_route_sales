@@ -6,8 +6,20 @@
             por Etapa, ya que con muchas rutas la vista por etapa mezclaba
             todos los clientes de todas las rutas en una sola columna
             "Nuevo" gigante.
-          - Cada tarjeta se pinte de fondo según su etapa: gris =
-            pendiente, verde = completada, rojo = cancelada.
+          - Cada tarjeta se pinte de fondo según el NOMBRE de su etapa
+            (stage_name, campo nativo de texto) con colores fijos y
+            reconocibles: verde = Completado, rojo = Cancelado, ámbar =
+            No quiso, azul grisáceo = No atendido, gris = pendiente/New.
+            Antes se pintaba con clases
+            CSS atadas a IDs de etapa fijos (shalom-stage-1/2/3),
+            asumiendo que New/Completado/Cancelado siempre tenían esos
+            IDs; en esta instalación en realidad son 7/2/3, así que
+            "New" nunca se pintaba. Comparar por nombre no depende de
+            qué ID le toque en cada base. (Se probó primero usando el
+            custom_color real de cada etapa a baja opacidad, pero con
+            "No quiso" — un tono mauve — quedaba un rosado apenas
+            visible en vez de un color reconocible a simple vista, así
+            que se pasó a esta paleta fija.)
           - Muestre el nombre del cliente (location_id) de forma más
             prominente en la tarjeta.
     -->
@@ -24,11 +36,15 @@
                 <field name="x_cliente_lat" invisible="1" />
                 <field name="x_cliente_lng" invisible="1" />
                 <field name="x_cliente_orden_ruta" invisible="1" />
+                <field name="stage_name" invisible="1" />
             </xpath>
 
             <xpath expr="//t[@t-name='card']/div" position="attributes">
                 <attribute name="t-attf-class">
-                    #{kanban_color(record.color.raw_value)} oe_kanban_global_click shalom-stage-#{record.stage_id.raw_value}
+                    #{kanban_color(record.color.raw_value)} oe_kanban_global_click
+                </attribute>
+                <attribute name="t-attf-style">
+                    background-color: #{record.stage_name.raw_value == 'Completado' ? '#BBF7D0' : record.stage_name.raw_value == 'Cancelado' ? '#FECACA' : record.stage_name.raw_value == 'No quiso' ? '#FDE68A' : record.stage_name.raw_value == 'No atendido' ? '#CBD5E1' : '#E5E7EB'};
                 </attribute>
             </xpath>
 
@@ -43,11 +59,11 @@
 
             <xpath expr="//div[hasclass('oe_kanban_bottom_left')]" position="inside">
                 <a
-                    t-attf-href="https://www.google.com/maps/dir/?api=1&amp;destination=#{record.x_cliente_lat.raw_value},#{record.x_cliente_lng.raw_value}"
+                    t-attf-href="https://waze.com/ul?ll=#{record.x_cliente_lat.raw_value},#{record.x_cliente_lng.raw_value}&amp;navigate=yes"
                     target="_blank"
                     role="button"
                     class="btn btn-sm btn-outline-primary ms-2 oe_kanban_action"
-                >📍 Ir con Maps</a>
+                ><i class="fa fa-location-arrow" aria-hidden="true"/> Ir con Waze</a>
             </xpath>
         </field>
     </record>

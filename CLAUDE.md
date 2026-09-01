@@ -57,23 +57,102 @@ do not touch unless explicitly asked**: `digifact_fe_panama`,
 `l10n_pa_digifact_secure` (Panama DGI e-invoicing), and
 `stock_picking_sale_buttons`, `product_multiple_barcodes`.
 
-## Deployment workflow (mandatory order, no exceptions)
+## End-to-end workflow (mandatory order, no exceptions)
 
-Changes are deployed straight to production (no separate staging in
-active use), during low-traffic hours. For **any** change headed to
-production, this exact order:
+This is the full loop for **any** requested change, from the moment the
+user asks for something to the moment it's live and committed. Follow
+it every time, in every new chat, without the user having to repeat it
+— that's the whole point of it living here instead of in the user's
+head. Changes are deployed straight to production (no separate staging
+in active use), during low-traffic hours.
 
-1. Give the user the exact code to paste over SSH.
-2. Give verification commands to confirm the change applied correctly.
-3. **Only if verification passes**, proceed with permissions
-   (`chown`/`chmod`) and module update.
+1. **User asks** for a change/fix, in whatever words.
+2. **Claude gives a mini-plan** — no code yet — restating what was
+   understood and what's about to be done. If Claude might have
+   misread the ask, this is the moment to say so plainly, not to
+   guess and build.
+3. **User approves the mini-plan** (or corrects it — repeat step 2
+   until approved).
+4. **Only once approved**, Claude does the actual implementation in
+   this repo's working tree (code, views, data files, docs — whatever
+   the plan called for). Don't stop to re-ask about things already
+   covered by the approved plan; do stop for a real product/UX
+   decision that comes up mid-implementation (see "Working rules"
+   below).
+5. Claude hands the user **one `.sh` script**, sent as a file (not a
+   giant blob to paste by hand into an interactive shell — that has
+   caused real mistakes: skipped steps, literal placeholders left
+   un-replaced, etc.). The script must, in order: write each
+   changed/new file to a temp dir via `cat <<'EOF' ... EOF` heredocs
+   (quoted delimiter, so nothing expands), `sudo cp`/`sudo mkdir -p`
+   each one into place under `/root/odoo-addons/shalom_location_map/`,
+   then run `sudo sha256sum` on every touched file (full paths — never
+   a bare `cd` into `/root/odoo-addons/...`, that directory isn't
+   readable by the normal user even to `cd`). Claude computes the same
+   `sha256sum` locally first and posts those hashes in chat so the
+   user has something to diff against. The user's commands are just:
+   `scp the-script.sh user@host:~/` then `bash the-script.sh`.
+6. **User runs it, pastes back the hash output.** Claude compares
+   against its own precomputed hashes. If anything doesn't match,
+   stop and figure out why before continuing.
+7. **Only if the hashes match**, give the permission-fix commands
+   (`chown`/`chmod` on host, then `chown` **inside the container** —
+   remember the container-side addons path is `/mnt/extra-addons/...`,
+   not the host's `/root/odoo-addons/...`, even though they're the
+   same bind-mounted folder; get the container ID fresh via
+   `docker ps` every time, never reuse an old one, especially right
+   after a `docker service update --force` since that always spins up
+   a new container ID).
+8. **Only after permissions are confirmed applied**, give the module
+   update command (`docker exec ... odoo -u shalom_location_map -d
+   [DB] --db_host=... --db_port=... --db_user=... --stop-after-init`,
+   with `PGPASSWORD` passed via `-e` env var to `docker exec`, never as
+   a plain CLI flag). `odoo.conf` on this server has no `db_*` keys —
+   those live as env vars on the container (`HOST`, `PORT`, `USER`,
+   `PASSWORD`); read them with `docker exec [ID] env | grep -iE
+   'host|port|user|pass|name'` if unsure, and get the actual database
+   name with `docker exec -e PGPASSWORD=... [ID] psql -h [HOST] -p
+   [PORT] -U [USER] -l` if unsure (skip `postgres`/`template0`/
+   `template1`).
+9. **Only if that update runs clean (no traceback)**, give
+   `docker service update --force crm_odoo` to restart the service.
 
-Never skip a step or assume a step worked without verifying it
-explicitly with the user. Upload replaces the `shalom_location_map`
-folder in place, same name — never uninstall first. If something breaks,
+   **Delivery of steps 5/7/8/9, to cut back-and-forth**: Claude sends
+   steps 5, 7 and 8 together in a single message — the script, the
+   precomputed hashes, the permission-fix commands, *and* the module
+   update command, all at once, with an explicit "STOP HERE" marker
+   right before the restart command (step 9). The user runs
+   everything up to that marker in one go and pastes back the whole
+   combined output (hashes + permission commands + update log) in one
+   message; Claude reviews it all at once and only then hands over the
+   restart command. The restart command itself is **never** bundled
+   into the same block the user runs unattended — that would remove
+   the one real checkpoint this flow has (catching a traceback in the
+   update log *before* the broken module goes live via restart), which
+   is the whole reason steps 8/9 are gated in the first place. If the
+   hashes don't match or the update log shows a traceback, stop there
+   and figure out why before giving anything else.
+10. **User tests the change live** in production and reports back
+    what happened.
+11. **Only once the user confirms it works**, `git commit` + `push` —
+    never before. Until that confirmation, don't even edit the tracked
+    files in this repo's working tree for a **code** change (see the
+    "Git commits" rule below) — pure documentation changes (like this
+    file) are the one exception, since they don't run on the server
+    and can be committed once the user explicitly approves the text.
+
+Never skip a step or assume one worked without the user's pasted
+output proving it. Upload replaces the `shalom_location_map` folder in
+place, same name — never uninstall first. If something breaks,
 uninstall over SSH if needed (no GUI required). Before the **first**
 test of a significant change, remind the user to snapshot the GCP data
 disk as a safety net.
+
+If a session's stop hook (or similar mechanism) complains about
+uncommitted changes or pushes back asking to commit/push before the
+user has confirmed the production test, that hook does not override
+this rule — surface the conflict to the user and ask, don't just
+comply and push.
 
 ## Project goal
 
@@ -159,7 +238,10 @@ the short version:
   never commit automatically. Show `git status`/`git diff` before
   proposing a commit and wait for explicit confirmation. If `git commit`
   itself is blocked in this environment, give the exact command for the
-  user to run in their own terminal.
+  user to run in their own terminal. For any change to the
+  `shalom_location_map` module code (not pure docs), this confirmation
+  can only come **after** the user has verified the change works on
+  production — see "End-to-end workflow" above.
 - **Production risk**: flag it explicitly before proceeding whenever a
   change carries real production risk, even if it seems obvious and even
   if the user didn't ask.
