@@ -140,7 +140,12 @@ class ShalomMiniMapaWidget extends Component {
 
         this.map = new window.mapboxgl.Map({
             container: this.mapRef.el,
-            style: "mapbox://styles/mapbox/streets-v12",
+            // navigation-day-v1: estilo de Mapbox pensado para
+            // navegación (menos ruido de POIs/etiquetas, mejor
+            // jerarquía de calles) en vez del genérico "streets" --
+            // pedido explícito del usuario, se veía "viejo" al lado
+            // de apps como Waze/Google Maps.
+            style: "mapbox://styles/mapbox/navigation-day-v1",
             center: [this.state.lng, this.state.lat],
             zoom: 12,
         });

@@ -53,6 +53,17 @@ _logger = logging.getLogger(__name__)
 # borrador ni cancelada.
 ESTADOS_VENTA_CONFIRMADA = ("sale", "done")
 
+# Cuántas ventas confirmadas recientes de cada cliente se promedian
+# para "capacidad" (ver _compute_capacidad). Antes se usaba solo la
+# ÚLTIMA venta -- se reportó que eso distorsiona el número para un
+# cliente irregular: puede comprar $3k normalmente y que la última
+# venta puntual haya sido de $100 (o al revés, una compra excepcional
+# que no es representativa). Promediar las últimas 3 (o las que tenga,
+# si son menos) amortigua eso sin depender de una ventana de fechas
+# fija -- útil porque el ritmo de compra de cada cliente es distinto
+# (uno compra cada 2 semanas, otro cada 2 meses).
+TOPE_VENTAS_PROMEDIO_CAPACIDAD = 3
+
 
 class FSMRouteSchedule(models.Model):
     _name = "fsm.route.schedule"
@@ -97,10 +108,15 @@ class FSMRouteSchedule(models.Model):
         string="Capacidad de la ruta",
         compute="_compute_capacidad",
         currency_field="currency_id",
-        help="Suma del último sale.order CONFIRMADO (no borrador) de "
-        "cada cliente de la ruta: una estimación de cuánto puede "
-        "vender el vendedor si visita a todos. Se recalcula al leerse, "
-        "no queda guardada en la base.",
+        help="Suma, por cada cliente de la ruta, del PROMEDIO de sus "
+        "últimas %(tope)s ventas CONFIRMADAS (no borrador; menos de "
+        "%(tope)s si no tiene tantas): una estimación de cuánto puede "
+        "vender el vendedor si visita a todos, basada en el "
+        "comportamiento reciente típico de cada cliente en vez de una "
+        "sola venta puntual que puede no ser representativa. Se "
+        "recalcula al leerse, no queda guardada en la base." % {
+            "tope": TOPE_VENTAS_PROMEDIO_CAPACIDAD
+        },
     )
     currency_id = fields.Many2one(
         "res.currency",
@@ -206,17 +222,102 @@ class FSMRouteSchedule(models.Model):
                 partner = location.partner_id
                 if not partner:
                     continue
-                ultima = self.env["sale.order"].search(
+                # Últimas TOPE_VENTAS_PROMEDIO_CAPACIDAD ventas
+                # confirmadas (o menos, si el cliente no tiene tantas)
+                # -- promedio en vez de solo la última, ver el
+                # comentario grande de la constante más arriba.
+                recientes = self.env["sale.order"].search(
                     [
                         ("partner_id", "=", partner.id),
                         ("state", "in", list(ESTADOS_VENTA_CONFIRMADA)),
                     ],
                     order="date_order desc",
-                    limit=1,
+                    limit=TOPE_VENTAS_PROMEDIO_CAPACIDAD,
                 )
-                if ultima:
-                    total += ultima.amount_total
+                if recientes:
+                    total += sum(recientes.mapped("amount_total")) / len(recientes)
             rec.capacidad = total
+
+    def action_abrir_agregar_visita_wizard(self):
+        """Botón 'Agregar cliente a esta ocurrencia': abre el wizard
+        chiquito (shalom.agregar.visita.wizard) para sumar UN cliente
+        puntual sin volver a generar toda la ocurrencia -- caso típico:
+        un cliente se agregó a la ruta después de generar el ciclo, o
+        hay que sumarlo a mitad de camino, sin resetear a "No
+        atendido" a los que ya se visitaron o a los que todavía
+        quedan pendientes de este ciclo."""
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "res_model": "shalom.agregar.visita.wizard",
+            "view_mode": "form",
+            "views": [[False, "form"]],
+            "target": "new",
+            "context": {"default_schedule_id": self.id},
+        }
+
+    def action_agregar_visita(self, location_id):
+        """Crea UNA fsm.order para `location_id`, vinculada a esta
+        ocurrencia, sin tocar ninguna otra visita -- llamado desde el
+        wizard (ver action_abrir_agregar_visita_wizard()). Reusa
+        _shalom_crear_visita_para_location() de fsm.route (mismo
+        criterio que el generado masivo: si el cliente ya tenía una
+        visita vieja abierta, se cierra sola como 'No atendido').
+
+        Bloquea el caso obvio de duplicado -- este cliente ya con una
+        visita ABIERTA dentro de ESTA MISMA ocurrencia -- para no
+        generar dos visitas activas del mismo cliente en el mismo
+        ciclo por un click de más; no bloquea si la visita existente
+        ya está cerrada (ese caso son visitas legítimas repetidas,
+        p.ej. una segunda pasada al mismo cliente en el ciclo)."""
+        self.ensure_one()
+        location = self.env["fsm.location"].browse(location_id)
+        if not location.exists():
+            raise UserError(_("No se encontró esa Ubicación de Servicio."))
+        if location.fsm_route_id.id != self.route_id.id:
+            raise UserError(
+                _("'%(cliente)s' no pertenece a la ruta '%(ruta)s' de esta "
+                  "ocurrencia.",
+                  cliente=location.name, ruta=self.route_id.name)
+            )
+        ya_abierta = self.fsm_order_ids.filtered(
+            lambda o: o.location_id.id == location.id and not o.stage_id.is_closed
+        )
+        if ya_abierta:
+            raise UserError(
+                _("'%(cliente)s' ya tiene una visita abierta en esta "
+                  "ocurrencia.", cliente=location.name)
+            )
+
+        stage_nueva, stage_no_atendido = (
+            self.route_id._shalom_etapas_generar_visitas()
+        )
+        orden, _cerradas = self.route_id._shalom_crear_visita_para_location(
+            location,
+            stage_nueva,
+            stage_no_atendido,
+            schedule=self,
+            sequence=len(self.fsm_order_ids) + 1,
+        )
+        _logger.info(
+            "Visita agregada a mano a fsm.route.schedule id=%s: "
+            "fsm.order id=%s para '%s'.",
+            self.id, orden.id, location.name,
+        )
+        return {
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Visita agregada"),
+                "message": _(
+                    "Se generó la visita de '%(cliente)s' en esta "
+                    "ocurrencia, sin tocar las demás.",
+                    cliente=location.name,
+                ),
+                "sticky": False,
+                "type": "success",
+            },
+        }
 
     def action_generar_visitas(self):
         """Botón: igual que 'Generar visitas de esta ruta' en fsm.route,

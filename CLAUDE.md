@@ -116,6 +116,22 @@ in active use), during low-traffic hours.
    `template1`).
 9. **Only if that update runs clean (no traceback)**, give
    `docker service update --force crm_odoo` to restart the service.
+
+   **Delivery of steps 5/7/8/9, to cut back-and-forth**: Claude sends
+   steps 5, 7 and 8 together in a single message — the script, the
+   precomputed hashes, the permission-fix commands, *and* the module
+   update command, all at once, with an explicit "STOP HERE" marker
+   right before the restart command (step 9). The user runs
+   everything up to that marker in one go and pastes back the whole
+   combined output (hashes + permission commands + update log) in one
+   message; Claude reviews it all at once and only then hands over the
+   restart command. The restart command itself is **never** bundled
+   into the same block the user runs unattended — that would remove
+   the one real checkpoint this flow has (catching a traceback in the
+   update log *before* the broken module goes live via restart), which
+   is the whole reason steps 8/9 are gated in the first place. If the
+   hashes don't match or the update log shows a traceback, stop there
+   and figure out why before giving anything else.
 10. **User tests the change live** in production and reports back
     what happened.
 11. **Only once the user confirms it works**, `git commit` + `push` —

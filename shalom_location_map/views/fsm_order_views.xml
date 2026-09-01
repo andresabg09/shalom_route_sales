@@ -35,10 +35,10 @@
                 <button
                     name="action_abrir_maps"
                     type="object"
-                    string="Ir con Maps"
+                    string="Ir con Waze"
                     icon="fa-location-arrow"
                     class="btn-secondary"
-                    help="Abre Google Maps con la ruta hacia este cliente."
+                    help="Abre Waze con la ruta hacia este cliente."
                 />
                 <button
                     name="action_ver_historial_cotizaciones"

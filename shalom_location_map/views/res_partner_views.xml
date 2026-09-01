@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Agrega el botón "Crear Ubicación de Servicio" a la ficha
+        nativa de Contactos: ver models/res_partner.py para el
+        porqué hace falta (el formulario nativo de "Nuevo" en
+        Ubicaciones de Servicio siempre crea un Contacto nuevo, nunca
+        deja reusar uno ya existente).
+    -->
+    <record id="res_partner_form_shalom_crear_ubicacion" model="ir.ui.view">
+        <field name="name">res.partner.form.shalom.crear.ubicacion</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//div[hasclass('oe_button_box')]" position="inside">
+                <button
+                    type="object"
+                    name="action_crear_ubicacion_servicio"
+                    class="oe_stat_button"
+                    icon="fa-map-marker"
+                    string="Crear Ubicación de Servicio"
+                    groups="fieldservice.group_fsm_manager"
+                    confirm="¿Crear una nueva Ubicación de Servicio para este contacto? Si ya le creaste una antes, revisá primero en Ubicaciones de Servicio (filtrando por este contacto) para no duplicar."
+                    help="Crea una fsm.location nueva vinculada a ESTE contacto (sin duplicarlo) -- para el caso de un contacto viejo que nunca tuvo Ubicación de Servicio."
+                />
+            </xpath>
+        </field>
+    </record>
+</odoo>

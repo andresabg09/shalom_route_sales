@@ -21,10 +21,11 @@ Extiende fsm.order (la tarea/orden de visita a un cliente) con:
    visitar primero, y solo si el cliente compra, generar la venta desde
    la misma visita.
 
-4. Botón "Ir con Maps": abre Google Maps (en pestaña/app nueva) con la
-   ruta hacia las coordenadas guardadas del cliente. No se construye un
+4. Botón "Ir con Waze": abre Waze (en pestaña/app nueva) con la ruta
+   hacia las coordenadas guardadas del cliente. No se construye un
    mapa propio dentro de Odoo -- se apoya en la app externa que la
-   gente ya conoce y usa a diario.
+   gente ya conoce y usa a diario (antes era Google Maps; cambiado por
+   decisión explícita del usuario).
 
 5. Historial de cotizaciones del cliente: contador + botón que abre
    todas las sale.order CONFIRMADAS (state in sale/done) del cliente
@@ -723,9 +724,31 @@ class FSMOrder(models.Model):
 
         return res
 
+    def action_shalom_archivar_visita(self):
+        """Botón 'Eliminar' (papelera) en la lista de 'Visitas
+        generadas' de fsm.route.schedule: archiva ESTA visita puntual
+        (active=False), no la borra de verdad. fsm.order (igual que
+        fsm.location, ver action_eliminar_ubicacion() en
+        fsm_location.py) no tiene perm_unlink habilitado para ningún
+        grupo en el módulo nativo fieldservice -- el ícono de borrado
+        nativo de una lista embebida no hace nada real ahí, bloqueado
+        en silencio. Archivar consigue el mismo efecto visual (la fila
+        desaparece de la lista) sin pelear contra esa restricción, y
+        de paso deja el historial recuperable con el filtro de
+        archivados en vez de perderlo del todo -- para el caso típico
+        de un cliente que se coló por error en una ocurrencia."""
+        self.ensure_one()
+        _logger.info(
+            "Visita archivada a mano desde 'Visitas generadas': "
+            "fsm.order id=%s ('%s').", self.id, self.name,
+        )
+        self.write({"active": False})
+        return True
+
     def action_abrir_maps(self):
-        """Botón 'Ir con Maps': abre Google Maps en pestaña/app nueva
-        con la ruta hacia las coordenadas guardadas del cliente."""
+        """Botón 'Ir con Waze': abre Waze en pestaña/app nueva con la
+        ruta hacia las coordenadas guardadas del cliente. Antes abría
+        Google Maps -- cambiado por decisión explícita del usuario."""
         self.ensure_one()
         lat = self.location_id.partner_latitude
         lng = self.location_id.partner_longitude
@@ -734,7 +757,7 @@ class FSMOrder(models.Model):
                 _("Este cliente todavía no tiene coordenadas guardadas. "
                   "Capturá primero su ubicación GPS.")
             )
-        url = f"https://www.google.com/maps/dir/?api=1&destination={lat},{lng}"
+        url = f"https://waze.com/ul?ll={lat},{lng}&navigate=yes"
         return {
             "type": "ir.actions.act_url",
             "url": url,

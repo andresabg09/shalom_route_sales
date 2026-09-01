@@ -61,7 +61,7 @@
                             <span class="lbl"><i class="fa fa-phone" aria-hidden="true"/> Llamar</span>
                         </button>
                         <button class="action-tile" t-on-click="irConMaps">
-                            <span class="lbl"><i class="fa fa-location-arrow" aria-hidden="true"/> Ir con Maps</span>
+                            <span class="lbl"><i class="fa fa-location-arrow" aria-hidden="true"/> Ir con Waze</span>
                         </button>
                         <button class="action-tile" t-on-click="capturarGps">
                             <span class="lbl"><i class="fa fa-crosshairs" aria-hidden="true"/> Capturar GPS</span>

@@ -5,6 +5,7 @@ import {useService} from "@web/core/utils/hooks";
 import {cargarMapboxGl, getMapboxToken, parseWktLineString} from "./mapbox_utils";
 import {
     distanciaMetros,
+    extrapolarPosicion,
     obtenerDirecciones,
     recortarPolilineaDesde,
 } from "./navegacion_utils";
@@ -82,13 +83,28 @@ const NAV_COLOR_CHISPA = "#ff9dc2"; // tono claro sobre el color de marca, efect
 // estuviera paneando para mirar el resto de la ruta, así que el mapa se
 // sentía "pegado"/imposible de mover.
 //
-// Antes esta pausa era temporizada (60s y volvía sola) -- también
-// reportado como molesto: el vendedor quería mover el mapa libremente
-// y que se quedara así hasta que ÉL decidiera volver, no que el
-// seguimiento se reactivara solo a mitad de camino. Ahora es indefinida:
-// una vez que el vendedor toca el mapa, el seguimiento automático de
-// cámara queda pausado hasta que vuelva a tocar "Centrar en mí" (ver
-// _navSeguimientoPausado, centrarEnVendedor() e iniciarNavegacion()).
+// Antes esta pausa era temporizada (60s y volvía sola), se sacó por
+// reportarse molesta (el vendedor quería mover el mapa libremente y
+// que se quedara así hasta decidir volver, no que se reactivara solo a
+// mitad de camino) y quedó indefinida (solo "Centrar en mí" la
+// reactivaba). Ahora vuelve a ser temporizada, pero mucho más corta
+// (NAV_INACTIVIDAD_RESUME_MS, 10s) y SOLO cuenta desde el último toque
+// real (no desde que arrancó a pausarse) -- pedido explícito de nuevo,
+// distinto del caso anterior: durante una navegación en vivo (manejando
+// o caminando) alcanza con mirar el mapa un instante y que solo vuelva a
+// seguir sin tener que acordarse de tocar "Centrar en mí" en medio de la
+// calle. Cada toque nuevo reprograma el contador de cero (ver
+// _reprogramarResumenAutomatico(), enganchado a "moveend" -- solo
+// dispara con gestos reales, ver el comentario del listener "movestart"
+// más abajo en dibujarMapa()).
+const NAV_INACTIVIDAD_RESUME_MS = 10000;
+
+// Techo de cuánto se extrapola hacia adelante la posición del vendedor
+// ENTRE dos lecturas reales de GPS (ver _posicionVendedorExtrapolada) --
+// pasado este tiempo sin una lectura nueva, se deja de proyectar (mejor
+// quedarse quieto que seguir "caminando" solo con una estimación vieja
+// si el GPS se cortó o el vendedor paró).
+const NAV_EXTRAPOLACION_MAX_S = 3;
 
 // -- Cámara estilo Waze durante "Trazar ruta aquí" -------------------
 // La cámara del mapa (bearing/pitch/center) la maneja un loop de
@@ -246,6 +262,9 @@ export class RutaDetalle extends Component {
         this._navToken = null; // token público de Mapbox, cacheado para no volver a pedirlo en cada recálculo
         this._navWatchId = null; // id de navigator.geolocation.watchPosition
         this._navUltimoRecalculoTs = 0;
+        this._navUltimaLecturaTs = null; // Date.now() de la última lectura REAL de GPS (para extrapolar)
+        this._navVelocidadEstimMs = 0; // m/s -- coords.speed si viene, si no estimada por distancia/tiempo entre lecturas
+        this._navResumeTimeoutId = null; // setTimeout de "reanudar seguimiento tras 10s sin tocar"
         this._navRumboObjetivo = 0; // último rumbo calculado (heading GPS o por delta)
         this._navCamara = {lat: null, lng: null, rumbo: 0}; // estado suavizado que dibuja el loop de cámara
         this._navAnimacionCamaraId = null; // id de requestAnimationFrame del loop de cámara
@@ -467,6 +486,9 @@ export class RutaDetalle extends Component {
     }
 
     abrirMaps(visita) {
+        // Antes abría Google Maps -- cambiado a Waze por decisión
+        // explícita del usuario. El nombre del método se deja igual
+        // por lo mismo que en visit_sheet.js/clientes.js.
         if (!visita.lat && !visita.lng) {
             this.notification.add(
                 "Este cliente todavía no tiene coordenadas GPS guardadas.",
@@ -475,7 +497,7 @@ export class RutaDetalle extends Component {
             return;
         }
         window.open(
-            `https://www.google.com/maps/dir/?api=1&destination=${visita.lat},${visita.lng}`,
+            `https://waze.com/ul?ll=${visita.lat},${visita.lng}&navigate=yes`,
             "_blank"
         );
     }
@@ -513,10 +535,38 @@ export class RutaDetalle extends Component {
 
         this.mapboxMap = new window.mapboxgl.Map({
             container: this.mapaRef.el,
-            style: "mapbox://styles/mapbox/streets-v12",
+            // navigation-day-v1: estilo de Mapbox pensado para
+            // navegación (menos ruido de POIs/etiquetas, mejor
+            // jerarquía de calles) en vez del genérico "streets" --
+            // pedido explícito del usuario, se veía "viejo" al lado
+            // de apps como Waze/Google Maps.
+            style: "mapbox://styles/mapbox/navigation-day-v1",
             center: centro,
             zoom: 12,
         });
+
+        // Pausa el auto-seguimiento de cámara EN EL INSTANTE del primer
+        // toque (pointerdown), no cuando Mapbox confirma que "ya hay un
+        // movimiento" (evento "movestart", más abajo) -- reportado en
+        // producción: el loop de _iniciarLoopCamaraNav corre 60 veces
+        // por segundo y sigue empujando el mapa hacia la posición del
+        // vendedor MIENTRAS se espera esa confirmación, así que el
+        // primer arrastre "peleaba" contra el loop y hacían falta
+        // varios intentos para que el gesto ganara. Guardado como
+        // pointerdown nativo (no un t-on de Owl) porque tiene que
+        // dispararse ANTES que el próximo requestAnimationFrame del
+        // loop, no en el siguiente ciclo de render de Owl. Solo importa
+        // durante una navegación en vivo -- fuera de eso el loop ni
+        // corre, así que esto no hace nada.
+        this.mapaRef.el.addEventListener(
+            "pointerdown",
+            () => {
+                if (this.state.navegando) {
+                    this._navSeguimientoPausado = true;
+                }
+            },
+            {passive: true}
+        );
 
         this.mapboxMap.on("load", () => {
             const bounds = new window.mapboxgl.LngLatBounds();
@@ -553,7 +603,7 @@ export class RutaDetalle extends Component {
 
                 // Popup: nombre tocable (abre la ficha de edición del
                 // cliente, mismo ClienteForm que la pestaña Clientes) +
-                // "Ir con Maps" + "Trazar ruta aquí" (navegación en
+                // "Ir con Waze" + "Trazar ruta aquí" (navegación en
                 // vivo con Mapbox). setDOMContent en vez de setHTML
                 // para poder colgar los listeners directo.
                 const popupEl = document.createElement("div");
@@ -576,7 +626,7 @@ export class RutaDetalle extends Component {
                 const btnMapsEl = document.createElement("button");
                 btnMapsEl.type = "button";
                 btnMapsEl.className = "shalom-map-popup-btn";
-                btnMapsEl.innerHTML = '<i class="fa fa-location-arrow" aria-hidden="true"></i> Ir con Maps';
+                btnMapsEl.innerHTML = '<i class="fa fa-location-arrow" aria-hidden="true"></i> Ir con Waze';
                 btnMapsEl.addEventListener("click", () => this.abrirMaps(v));
                 accionesEl.appendChild(btnMapsEl);
                 const btnNavEl = document.createElement("button");
@@ -640,13 +690,28 @@ export class RutaDetalle extends Component {
             // zoom, rueda del mouse) de un movimiento programático
             // nuestro (easeTo/flyTo/jumpTo, ej. el auto-seguimiento
             // durante "Trazar ruta aquí") -- Mapbox solo llena
-            // `originalEvent` en el primer caso. Un gesto real pausa el
-            // auto-seguimiento INDEFINIDAMENTE (no por un tiempo fijo)
-            // -- se queda pausado hasta que el vendedor toque "Centrar
-            // en mí" (ver centrarEnVendedor(), _iniciarLoopCamaraNav()).
+            // `originalEvent` en el primer caso. Redundante con el
+            // pointerdown de más arriba para gestos táctiles/mouse (ese
+            // ya pausa antes), pero necesario para gestos que no
+            // disparan pointerdown en el contenedor -- la rueda del
+            // mouse en desktop, por ejemplo.
             this.mapboxMap.on("movestart", (e) => {
                 if (e.originalEvent) {
                     this._navSeguimientoPausado = true;
+                }
+            });
+
+            // Reprograma "reanudar seguimiento a los 10s" cada vez que
+            // un gesto real TERMINA (no cuando empieza) -- así los 10s
+            // son de verdad "inactividad sin toques" y no se cortan a
+            // mitad de un arrastre largo. Solo importa mientras está
+            // pausado por un gesto durante una navegación en vivo: si
+            // no está pausado, este moveend puede venir de nuestro
+            // propio flyTo/jumpTo (el loop de cámara no dispara
+            // gestos, así que en ese caso no hay nada que reprogramar).
+            this.mapboxMap.on("moveend", () => {
+                if (this.state.navegando && this._navSeguimientoPausado) {
+                    this._reprogramarResumenAutomatico();
                 }
             });
 
@@ -778,7 +843,7 @@ export class RutaDetalle extends Component {
      * Click en la paletita: viaje SUAVE (no salto instantáneo, pedido
      * explícito) hacia el próximo cliente pendiente, y al terminar de
      * moverse le abre el popup -- así el vendedor decide ahí mismo si
-     * usar "Ir con Maps" o seguir solo porque ya conoce el camino.
+     * usar "Ir con Waze" o seguir solo porque ya conoce el camino.
      */
     irAlSiguientePendiente() {
         const objetivo = this._clienteObjetivoActual;
@@ -919,6 +984,9 @@ export class RutaDetalle extends Component {
         // Cada navegación nueva arranca siguiendo al vendedor -- no
         // hereda una pausa de una navegación anterior.
         this._navSeguimientoPausado = false;
+        this._navUltimaLecturaTs = null;
+        this._navVelocidadEstimMs = 0;
+        this._limpiarResumenAutomatico();
         this._iniciarLoopCamaraNav();
 
         // Primera ruta: se pide con una sola lectura de GPS (no hace
@@ -971,6 +1039,8 @@ export class RutaDetalle extends Component {
         }
         const punto = {lat: position.coords.latitude, lng: position.coords.longitude};
         const anterior = this.posicionVendedor;
+        const tsAnterior = this._navUltimaLecturaTs;
+        const ahoraFix = Date.now();
 
         // Rumbo para la cámara (hacia dónde apunta la vista mientras
         // navega): preferir el heading del GPS si viene con movimiento
@@ -1002,8 +1072,29 @@ export class RutaDetalle extends Component {
             }
         }
 
+        // Velocidad para extrapolar la posición ENTRE lecturas (ver
+        // _posicionVendedorExtrapolada, usada por el loop de cámara) --
+        // preferir coords.speed (m/s) del propio GPS; si no viene (pasa
+        // en algunos dispositivos/navegadores), estimarla por distancia
+        // recorrida sobre tiempo transcurrido desde la lectura anterior.
+        let velocidadEstimMs = typeof speed === "number" && !Number.isNaN(speed) && speed >= 0 ? speed : 0;
+        if (!velocidadEstimMs && anterior && tsAnterior) {
+            const segundosTranscurridos = (ahoraFix - tsAnterior) / 1000;
+            if (segundosTranscurridos > 0) {
+                velocidadEstimMs =
+                    distanciaMetros(anterior.lat, anterior.lng, punto.lat, punto.lng) /
+                    segundosTranscurridos;
+            }
+        }
+        this._navVelocidadEstimMs = velocidadEstimMs;
+        this._navUltimaLecturaTs = ahoraFix;
         this.posicionVendedor = punto;
-        this._moverMarcadorVendedor(punto);
+        // El marcador y la cámara YA NO se mueven acá directo -- los
+        // actualiza el loop de _iniciarLoopCamaraNav en cada cuadro,
+        // usando _posicionVendedorExtrapolada() en vez del punto crudo,
+        // para que el movimiento se vea fluido entre lecturas de GPS en
+        // vez de quedarse quieto y saltar (ver comentario grande de
+        // NAV_EXTRAPOLACION_MAX_S más arriba).
 
         const objetivo = this._navObjetivo;
         const distanciaAlDestinoM = distanciaMetros(
@@ -1118,6 +1209,13 @@ export class RutaDetalle extends Component {
             }
             const pausado = this._navSeguimientoPausado;
             if (!pausado && this.posicionVendedor) {
+                // Posición "real" para este cuadro: la lectura de GPS
+                // más una proyección hacia adelante por velocidad/rumbo
+                // si pasó tiempo desde esa lectura (ver
+                // _posicionVendedorExtrapolada) -- así el punto avanza
+                // solo entre lecturas de GPS en vez de quedarse quieto
+                // y saltar cuando llega la próxima.
+                const posicionEstimada = this._posicionVendedorExtrapolada();
                 if (this._navCamara.lat === null) {
                     // Primer cuadro: arrancar ya en la posición real
                     // (sin animar desde 0,0) y transición única hacia
@@ -1140,10 +1238,11 @@ export class RutaDetalle extends Component {
                     // le especifica una -- no hace falta adivinar un
                     // número fijo de ms.
                     this._navCamara = {
-                        lat: this.posicionVendedor.lat,
-                        lng: this.posicionVendedor.lng,
+                        lat: posicionEstimada.lat,
+                        lng: posicionEstimada.lng,
                         rumbo: this._navRumboObjetivo,
                     };
+                    this._moverMarcadorVendedor(this._navCamara);
                     this.mapboxMap.flyTo({
                         center: [this._navCamara.lng, this._navCamara.lat],
                         bearing: this._navCamara.rumbo,
@@ -1153,16 +1252,17 @@ export class RutaDetalle extends Component {
                     });
                 } else {
                     this._navCamara.lat +=
-                        (this.posicionVendedor.lat - this._navCamara.lat) *
+                        (posicionEstimada.lat - this._navCamara.lat) *
                         NAV_FACTOR_SUAVIZADO_CAMARA;
                     this._navCamara.lng +=
-                        (this.posicionVendedor.lng - this._navCamara.lng) *
+                        (posicionEstimada.lng - this._navCamara.lng) *
                         NAV_FACTOR_SUAVIZADO_CAMARA;
                     this._navCamara.rumbo = interpolarAngulo(
                         this._navCamara.rumbo,
                         this._navRumboObjetivo,
                         NAV_FACTOR_SUAVIZADO_CAMARA
                     );
+                    this._moverMarcadorVendedor(this._navCamara);
                     this.mapboxMap.jumpTo({
                         center: [this._navCamara.lng, this._navCamara.lat],
                         bearing: this._navCamara.rumbo,
@@ -1174,9 +1274,10 @@ export class RutaDetalle extends Component {
                         // easeTo/zoomIn/zoomOut que se cuele). Un
                         // pellizco de zoom manual del vendedor sigue
                         // respetándose igual: ya pausa TODO el loop
-                        // (ver "pausado" arriba) porque el listener
-                        // "movestart" de dibujarMapa() marca cualquier
-                        // gesto real, pellizco incluido.
+                        // (ver "pausado" arriba) porque el pointerdown y
+                        // el listener "movestart" de dibujarMapa()
+                        // marcan cualquier gesto real, pellizco
+                        // incluido.
                         zoom: NAV_ZOOM,
                     });
                 }
@@ -1184,6 +1285,54 @@ export class RutaDetalle extends Component {
             this._navAnimacionCamaraId = requestAnimationFrame(paso);
         };
         this._navAnimacionCamaraId = requestAnimationFrame(paso);
+    }
+
+    /**
+     * Posición estimada del vendedor EN ESTE INSTANTE, proyectando
+     * hacia adelante desde la última lectura real de GPS
+     * (this.posicionVendedor) según el tiempo transcurrido y la
+     * velocidad/rumbo estimados (this._navVelocidadEstimMs /
+     * this._navRumboObjetivo) -- ver el comentario grande de
+     * NAV_EXTRAPOLACION_MAX_S más arriba para el porqué. Si no hay
+     * suficiente info para proyectar (recién arrancando, vendedor
+     * quieto, o pasó demasiado tiempo sin lectura nueva), devuelve la
+     * última posición real tal cual, sin inventar movimiento.
+     */
+    _posicionVendedorExtrapolada() {
+        if (!this._navUltimaLecturaTs || !this.posicionVendedor) {
+            return this.posicionVendedor;
+        }
+        const segundosTranscurridos = Math.min(
+            (Date.now() - this._navUltimaLecturaTs) / 1000,
+            NAV_EXTRAPOLACION_MAX_S
+        );
+        if (segundosTranscurridos <= 0 || this._navVelocidadEstimMs < NAV_VELOCIDAD_MINIMA_RUMBO_GPS) {
+            return this.posicionVendedor;
+        }
+        return extrapolarPosicion(
+            this.posicionVendedor,
+            this._navRumboObjetivo,
+            this._navVelocidadEstimMs * segundosTranscurridos
+        );
+    }
+
+    /** Ver comentario grande de NAV_INACTIVIDAD_RESUME_MS más arriba:
+     * reprograma el contador de "reanudar seguimiento" desde cero. Se
+     * llama en cada "moveend" que llega de un gesto real mientras está
+     * pausado (ver dibujarMapa()). */
+    _reprogramarResumenAutomatico() {
+        this._limpiarResumenAutomatico();
+        this._navResumeTimeoutId = setTimeout(() => {
+            this._navSeguimientoPausado = false;
+            this._navResumeTimeoutId = null;
+        }, NAV_INACTIVIDAD_RESUME_MS);
+    }
+
+    _limpiarResumenAutomatico() {
+        if (this._navResumeTimeoutId) {
+            clearTimeout(this._navResumeTimeoutId);
+            this._navResumeTimeoutId = null;
+        }
     }
 
     _detenerLoopCamaraNav() {
@@ -1325,8 +1474,11 @@ export class RutaDetalle extends Component {
         }
         this._detenerAnimacionFlujo();
         this._detenerLoopCamaraNav();
+        this._limpiarResumenAutomatico();
         this._navObjetivo = null;
         this._navRouteCoords = null;
+        this._navUltimaLecturaTs = null;
+        this._navVelocidadEstimMs = 0;
         this.state.navegando = false;
         this.state.navNombreObjetivo = "";
         this.state.navDistanciaTexto = "";

@@ -30,7 +30,7 @@
                     name="action_abrir_maps"
                     class="oe_stat_button"
                     icon="fa-map-marker"
-                    string="Ir con Maps"
+                    string="Ir con Waze"
                 />
             </xpath>
             <!--

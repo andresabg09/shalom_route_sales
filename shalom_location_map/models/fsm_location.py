@@ -157,17 +157,19 @@ class FSMLocation(models.Model):
         return True
 
     def action_abrir_maps(self):
-        """Botón 'Ir con Maps' en la ficha de Ubicación: abre Google
-        Maps en pestaña/app nueva con la ruta hacia las coordenadas
-        guardadas de este cliente."""
+        """Botón 'Ir con Waze' en la ficha de Ubicación: abre Waze en
+        pestaña/app nueva con la ruta hacia las coordenadas guardadas
+        de este cliente. Antes abría Google Maps -- se cambió por
+        decisión explícita del usuario (prefiere que el equipo
+        navegue con Waze)."""
         self.ensure_one()
         if not self.partner_latitude and not self.partner_longitude:
             raise UserError(
                 _("Este cliente todavía no tiene coordenadas guardadas.")
             )
         url = (
-            f"https://www.google.com/maps/dir/?api=1"
-            f"&destination={self.partner_latitude},{self.partner_longitude}"
+            f"https://waze.com/ul?ll={self.partner_latitude},{self.partner_longitude}"
+            f"&navigate=yes"
         )
         return {
             "type": "ir.actions.act_url",

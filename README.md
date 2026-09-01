@@ -294,6 +294,21 @@ ser casi todos este mismo patrón -- mismo contacto, Ubicación de más --,
 resuelto con este botón más una limpieza puntual por script, no con un
 wizard de fusión manual grupo por grupo.)
 
+### `models/res_partner.py` -- hereda `res.partner`, botón "Crear Ubicación de Servicio"
+Caso inverso al de `action_eliminar_ubicacion()`: un contacto viejo
+(activo, con historial) que nunca tuvo ninguna `fsm.location` asociada.
+El formulario nativo de "Nuevo" en Ubicaciones de Servicio no sirve
+para este caso -- por cómo funciona `_inherits` (`fsm.location`
+delegando en `res.partner` vía `partner_id`), ese formulario SIEMPRE
+crea un Contacto nuevo al guardar; el campo "Contacto Relacionado"
+queda de solo lectura ahí a propósito y no hay forma de elegir uno ya
+existente. `action_crear_ubicacion_servicio()` agrega un botón
+(`fieldservice.group_fsm_manager`, con confirmación) en la ficha
+nativa de Contactos que crea la `fsm.location` pasando `partner_id`/
+`owner_id` = el contacto YA EXISTENTE (nunca crea un Contacto nuevo) y
+abre esa Ubicación recién creada para completar el resto (Ruta, Orden
+de Ruta, GPS) a mano.
+
 ### `controllers/mapbox_token.py`
 Endpoint JSON (`/shalom_location_map/mapbox_public_token`, `auth="user"`)
 que expone el mismo token público de Mapbox al JS del navegador para

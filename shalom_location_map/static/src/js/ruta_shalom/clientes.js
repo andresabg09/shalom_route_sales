@@ -66,8 +66,11 @@ export class Clientes extends Component {
     abrirMaps(cliente) {
         // No tenemos lat/lng en esta lista liviana -- se abre una
         // búsqueda por dirección/nombre en vez de coordenadas exactas.
+        // Antes abría Google Maps -- cambiado a Waze por decisión
+        // explícita del usuario (query de texto, Waze también la
+        // soporta con el parámetro "q").
         const consulta = encodeURIComponent(`${cliente.name} ${cliente.street || ""}`.trim());
-        window.open(`https://www.google.com/maps/search/?api=1&query=${consulta}`, "_blank");
+        window.open(`https://waze.com/ul?q=${consulta}&navigate=yes`, "_blank");
     }
 
     abrirAlta() {

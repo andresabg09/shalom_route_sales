@@ -17,7 +17,7 @@ const UMBRAL_ARRASTRE_CIERRE = 90;
  * Hoja de visita (Fase 2): se abre al tocar una parada en la Lista del
  * detalle de ruta. Muestra los datos del cliente, permite cambiar el
  * estado de la visita, cargar observaciones, acciones rápidas (llamar,
- * Ir con Maps, capturar GPS, ver historial de cotizaciones) y editar
+ * Ir con Waze, capturar GPS, ver historial de cotizaciones) y editar
  * los datos del cliente.
  *
  * "Tomar pedido" abre OrderScreen (catálogo + carrito, Fase 3) de
@@ -185,6 +185,10 @@ export class VisitSheet extends Component {
     }
 
     irConMaps() {
+        // Antes abría Google Maps -- cambiado a Waze por decisión
+        // explícita del usuario. El nombre del método se deja igual
+        // (irConMaps) para no tocar el t-on-click del template por un
+        // simple cambio de proveedor de navegación.
         const {lat, lng} = this.state.visita;
         if (!lat && !lng) {
             this.notification.add(
@@ -193,7 +197,7 @@ export class VisitSheet extends Component {
             );
             return;
         }
-        window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, "_blank");
+        window.open(`https://waze.com/ul?ll=${lat},${lng}&navigate=yes`, "_blank");
     }
 
     async capturarGps() {

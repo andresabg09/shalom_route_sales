@@ -77,39 +77,12 @@ class FSMRoute(models.Model):
         "editar a mano si ese mes es distinto.",
     )
 
-    def action_generar_visitas_ruta(self, schedule=None):
-        """Botón: crea SIEMPRE una fsm.order por cada fsm.location
-        activa de esta ruta -- no se saltea a nadie por historial. Si
-        un cliente ya tiene una fsm.order abierta (de este ciclo, de
-        otro, o de antes de que existiera este sistema), esa visita
-        vieja se cierra sola como "No atendido" antes de crear la
-        nueva: así queda explícito para administración quién no fue
-        atendido, sin que eso bloquee la generación del ciclo nuevo.
-
-        schedule: fsm.route.schedule opcional (una ocurrencia
-        programada) -- si se pasa, cada fsm.order creada queda
-        vinculada a esa ocurrencia via x_route_schedule_id, y se le
-        copia el rango de fechas del ciclo a scheduled_date_start/
-        scheduled_date_end (para que el calendario nativo de Field
-        Service la ubique bien). Llamado desde fsm.route.schedule.
-        action_generar_visitas(); el botón nativo del formulario de
-        Ruta sigue llamando a este mismo método sin schedule."""
-        self.ensure_one()
-
-        locations = self.env["fsm.location"].search(
-            [("fsm_route_id", "=", self.id)]
-        )
-        if not locations:
-            raise UserError(
-                _("Esta ruta no tiene ninguna Ubicación de Servicio asignada.")
-            )
-
-        # Ordenar por x_orden_ruta; los que están en 0 (sin dato real
-        # cargado todavía) quedan al final, no al principio.
-        locations = locations.sorted(
-            key=lambda loc: loc.x_orden_ruta if loc.x_orden_ruta else 999999
-        )
-
+    def _shalom_etapas_generar_visitas(self):
+        """Etapas 'Nueva' y 'No atendido' que necesita tanto
+        action_generar_visitas_ruta() (masivo) como
+        _shalom_crear_visita_para_location() (una sola, ver
+        fsm_route_schedule.py / shalom_agregar_visita_wizard.py) --
+        extraído para no duplicar esta búsqueda en los dos lados."""
         stage_nueva = self.env.ref(
             "shalom_location_map.shalom_fsm_stage_order_new", raise_if_not_found=False
         )
@@ -134,41 +107,105 @@ class FSMRoute(models.Model):
                 _("No se encontró la etapa 'No atendido'. Revisá que el "
                   "módulo esté actualizado (data/fsm_stage_no_atendido.xml).")
             )
+        return stage_nueva, stage_no_atendido
 
-        scheduled_start = scheduled_end = False
-        if schedule and schedule.date_start:
-            scheduled_start = datetime.combine(schedule.date_start, time.min)
-        if schedule and schedule.date_end:
-            scheduled_end = datetime.combine(schedule.date_end, time.max)
+    def _shalom_crear_visita_para_location(
+        self, location, stage_nueva, stage_no_atendido, schedule=None, sequence=1
+    ):
+        """Núcleo compartido: crea UNA fsm.order para `location`,
+        cerrando primero como 'No atendido' cualquier visita vieja que
+        haya quedado abierta para ese mismo cliente (mismo criterio
+        que el generado masivo, acotado acá a un solo cliente). Usado
+        por action_generar_visitas_ruta() (bucle sobre todos los
+        clientes de la ruta) y por
+        fsm.route.schedule.action_agregar_visita() (un cliente
+        puntual agregado a una ocurrencia ya generada, ver
+        shalom_agregar_visita_wizard.py) -- así las dos vías quedan
+        con exactamente la misma lógica, sin duplicarla.
+
+        Devuelve (fsm.order creada, cantidad de visitas viejas
+        cerradas como 'No atendido')."""
+        abiertas = self.env["fsm.order"].search(
+            [
+                ("location_id", "=", location.id),
+                ("stage_id.is_closed", "=", False),
+            ]
+        )
+        if abiertas:
+            abiertas.write({"stage_id": stage_no_atendido.id})
+
+        vals = {
+            "name": f"{self.name} - {location.name}",
+            "location_id": location.id,
+            "fsm_route_id": self.id,
+            "stage_id": stage_nueva.id,
+            "sequence": sequence,
+        }
+        if schedule:
+            vals["x_route_schedule_id"] = schedule.id
+            if schedule.date_start:
+                vals["scheduled_date_start"] = datetime.combine(
+                    schedule.date_start, time.min
+                )
+            if schedule.date_end:
+                vals["scheduled_date_end"] = datetime.combine(
+                    schedule.date_end, time.max
+                )
+        orden = self.env["fsm.order"].create(vals)
+        return orden, len(abiertas)
+
+    def action_generar_visitas_ruta(self, schedule=None):
+        """Botón: crea SIEMPRE una fsm.order por cada fsm.location
+        activa de esta ruta -- no se saltea a nadie por historial. Si
+        un cliente ya tiene una fsm.order abierta (de este ciclo, de
+        otro, o de antes de que existiera este sistema), esa visita
+        vieja se cierra sola como "No atendido" antes de crear la
+        nueva: así queda explícito para administración quién no fue
+        atendido, sin que eso bloquee la generación del ciclo nuevo.
+
+        schedule: fsm.route.schedule opcional (una ocurrencia
+        programada) -- si se pasa, cada fsm.order creada queda
+        vinculada a esa ocurrencia via x_route_schedule_id, y se le
+        copia el rango de fechas del ciclo a scheduled_date_start/
+        scheduled_date_end (así el calendario nativo de Field Service
+        la ubica bien). Llamado desde fsm.route.schedule.
+        action_generar_visitas(); el botón nativo del formulario de
+        Ruta sigue llamando a este mismo método sin schedule.
+
+        Para agregar (o sacar) UN cliente puntual a una ocurrencia YA
+        generada sin volver a tocar a los demás -- caso típico: un
+        cliente se agregó a la ruta después de generar el ciclo, o hay
+        que sumarlo a mitad de camino -- ver
+        fsm.route.schedule.action_agregar_visita() en
+        fsm_route_schedule.py, que reusa
+        _shalom_crear_visita_para_location() de acá abajo en vez de
+        pasar por este método masivo."""
+        self.ensure_one()
+
+        locations = self.env["fsm.location"].search(
+            [("fsm_route_id", "=", self.id)]
+        )
+        if not locations:
+            raise UserError(
+                _("Esta ruta no tiene ninguna Ubicación de Servicio asignada.")
+            )
+
+        # Ordenar por x_orden_ruta; los que están en 0 (sin dato real
+        # cargado todavía) quedan al final, no al principio.
+        locations = locations.sorted(
+            key=lambda loc: loc.x_orden_ruta if loc.x_orden_ruta else 999999
+        )
+
+        stage_nueva, stage_no_atendido = self._shalom_etapas_generar_visitas()
 
         creadas = 0
         cerradas_como_no_atendido = 0
         for idx, location in enumerate(locations, start=1):
-            abiertas = self.env["fsm.order"].search(
-                [
-                    ("location_id", "=", location.id),
-                    ("stage_id.is_closed", "=", False),
-                ]
+            _orden, cantidad_cerradas = self._shalom_crear_visita_para_location(
+                location, stage_nueva, stage_no_atendido, schedule=schedule, sequence=idx
             )
-            if abiertas:
-                abiertas.write({"stage_id": stage_no_atendido.id})
-                cerradas_como_no_atendido += len(abiertas)
-
-            vals = {
-                "name": f"{self.name} - {location.name}",
-                "location_id": location.id,
-                "fsm_route_id": self.id,
-                "stage_id": stage_nueva.id,
-                "sequence": idx,
-            }
-            if schedule:
-                vals["x_route_schedule_id"] = schedule.id
-            if scheduled_start:
-                vals["scheduled_date_start"] = scheduled_start
-            if scheduled_end:
-                vals["scheduled_date_end"] = scheduled_end
-            self.env["fsm.order"].create(vals)
             creadas += 1
+            cerradas_como_no_atendido += cantidad_cerradas
 
         mensaje = _(
             "Ruta '%(ruta)s': %(creadas)s visita(s) generada(s) (todos "

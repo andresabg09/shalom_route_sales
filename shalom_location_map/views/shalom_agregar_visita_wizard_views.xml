@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Wizard "Agregar cliente a esta ocurrencia": ver el docstring de
+        wizards/shalom_agregar_visita_wizard.py para el porqué existe.
+    -->
+    <record id="shalom_agregar_visita_wizard_view_form" model="ir.ui.view">
+        <field name="name">shalom.agregar.visita.wizard.form</field>
+        <field name="model">shalom.agregar.visita.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Agregar cliente a esta ocurrencia">
+                <group>
+                    <field name="schedule_id" readonly="1" />
+                    <field name="route_id" invisible="1" />
+                    <field
+                        name="location_id"
+                        domain="[('fsm_route_id', '=', route_id)]"
+                        options="{'no_create': True}"
+                    />
+                </group>
+                <footer>
+                    <button
+                        name="action_agregar"
+                        type="object"
+                        string="Agregar visita"
+                        class="btn-primary"
+                    />
+                    <button string="Cancelar" special="cancel" class="btn-secondary" />
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

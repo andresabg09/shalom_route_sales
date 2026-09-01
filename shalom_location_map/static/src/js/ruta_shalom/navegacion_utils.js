@@ -103,6 +103,40 @@ export function proyectarSobrePolilinea(punto, coordenadas) {
 }
 
 /**
+ * Punto que resulta de avanzar `distanciaM` metros desde `origen`
+ * ({lat,lng}) en dirección `rumboDeg` (0-360, ver calcularRumbo en
+ * ruta_detalle.js) -- fórmula estándar de "punto destino" de
+ * navegación esférica. Se usa para estimar dónde está el vendedor
+ * ENTRE dos lecturas reales de GPS (ver _posicionVendedorExtrapolada
+ * en ruta_detalle.js): el navegador del celular no entrega una
+ * lectura por segundo, así que sin esto el punto en el mapa se queda
+ * quieto esperando la próxima lectura y después salta -- se siente
+ * "a trompicones" en vez de fluido. Con distanciaM=0 devuelve el
+ * mismo origen sin hacer ninguna cuenta.
+ */
+export function extrapolarPosicion(origen, rumboDeg, distanciaM) {
+    if (!distanciaM) {
+        return {lat: origen.lat, lng: origen.lng};
+    }
+    const rad = Math.PI / 180;
+    const rumboRad = rumboDeg * rad;
+    const distanciaAngular = distanciaM / RADIO_TIERRA_M;
+    const lat1 = origen.lat * rad;
+    const lng1 = origen.lng * rad;
+    const lat2 = Math.asin(
+        Math.sin(lat1) * Math.cos(distanciaAngular) +
+            Math.cos(lat1) * Math.sin(distanciaAngular) * Math.cos(rumboRad)
+    );
+    const lng2 =
+        lng1 +
+        Math.atan2(
+            Math.sin(rumboRad) * Math.sin(distanciaAngular) * Math.cos(lat1),
+            Math.cos(distanciaAngular) - Math.sin(lat1) * Math.sin(lat2)
+        );
+    return {lat: lat2 / rad, lng: (((lng2 / rad + 180) % 360) + 360) % 360 - 180};
+}
+
+/**
  * Recorta `coordenadas` al tramo que falta recorrer desde `punto`: el
  * punto proyectado sobre la línea, seguido del resto de vértices
  * después de ese segmento -- efecto "la línea se va comiendo detrás

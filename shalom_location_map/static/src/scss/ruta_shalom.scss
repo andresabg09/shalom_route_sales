@@ -615,7 +615,7 @@
         }
     }
 
-    // popup del mapa (nombre del cliente + botón "Ir con Maps") --
+    // popup del mapa (nombre del cliente + botón "Ir con Waze") --
     // antes era el popup por defecto de Mapbox sin ningún estilo
     // propio (fondo blanco con texto casi ilegible, reportado). Estas
     // reglas .mapboxgl-popup-* pisan el CSS que trae la librería.
@@ -679,7 +679,7 @@
         white-space: nowrap;
     }
     // "Trazar ruta aquí" -- sólido en el color de marca en vez del
-    // fondo suave de "Ir con Maps", para distinguir de un vistazo cuál
+    // fondo suave de "Ir con Waze", para distinguir de un vistazo cuál
     // de los dos abre la navegación en vivo dentro de la app.
     .shalom-map-popup-btn-nav {
         background: var(--shalom-accent);

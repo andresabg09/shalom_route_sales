@@ -59,11 +59,11 @@
 
             <xpath expr="//div[hasclass('oe_kanban_bottom_left')]" position="inside">
                 <a
-                    t-attf-href="https://www.google.com/maps/dir/?api=1&amp;destination=#{record.x_cliente_lat.raw_value},#{record.x_cliente_lng.raw_value}"
+                    t-attf-href="https://waze.com/ul?ll=#{record.x_cliente_lat.raw_value},#{record.x_cliente_lng.raw_value}&amp;navigate=yes"
                     target="_blank"
                     role="button"
                     class="btn btn-sm btn-outline-primary ms-2 oe_kanban_action"
-                ><i class="fa fa-location-arrow" aria-hidden="true"/> Ir con Maps</a>
+                ><i class="fa fa-location-arrow" aria-hidden="true"/> Ir con Waze</a>
             </xpath>
         </field>
     </record>

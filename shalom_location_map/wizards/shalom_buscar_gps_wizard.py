@@ -11,11 +11,14 @@ chicos en Panamá.
 La búsqueda es POR CLIENTE, a pedido -- no hay un botón que busque
 todo de una. Cada fila de la lista tiene:
 - "Buscar opciones en Google": llama a Google en el momento SOLO para
-  ese cliente y abre un popup con hasta 3 resultados para elegir
-  (Google no siempre acierta con el primero -- puede haber un cliente
-  que cambió de nombre o de local). Cada opción del popup tiene su
-  propio botón "Ver mapa" para chequear en un mapa real antes de
-  elegirla, y "Usar esta opción" para guardarla de una.
+  ese cliente y abre un popup con hasta TOPE_OPCIONES_POR_CLIENTE (20)
+  resultados para elegir (Google no siempre acierta con el primero --
+  puede haber un cliente que cambió de nombre o de local). Antes el
+  tope era 3 -- se reportó que Google podía tener más candidatos
+  válidos y esas opciones de más nunca se veían, ni volviendo a
+  buscar el mismo cliente. Cada opción del popup tiene su propio
+  botón "Ver mapa" para chequear en un mapa real antes de elegirla, y
+  "Usar esta opción" para guardarla de una.
 - "Dejar como está": no busca nada, pero saca a este cliente de la
   cola (no vuelve a aparecer) -- para los casos que ya se sabe que no
   van a aparecer en Google.
@@ -69,8 +72,14 @@ _logger = logging.getLogger(__name__)
 LIMITE_UBICACIONES_POR_CORRIDA = 200
 
 # Cuántos resultados de Google se muestran como opciones al buscar un
-# cliente puntual.
-TOPE_OPCIONES_POR_CLIENTE = 3
+# cliente puntual. Antes era 3 -- se reportó que Google Places Text
+# Search puede devolver más candidatos válidos que eso, y con el tope
+# viejo esas opciones de más nunca se veían (ni volviendo a buscar el
+# mismo cliente). Google Places Text Search devuelve hasta 20
+# resultados en UNA sola llamada (sin costo ni llamada extra) -- 20
+# es el tope real de esa llamada, así que ponerlo acá no trunca nada
+# que Google no haya truncado ya solo.
+TOPE_OPCIONES_POR_CLIENTE = 20
 
 # Contexto que se agrega a cada búsqueda para que Google priorice
 # resultados en Panamá, igual que se escribiría a mano "nombre del
@@ -86,8 +95,9 @@ def _buscar_en_google(nombre_cliente, token):
     """Llama a Google Places API (Text Search) buscando el nombre del
     cliente + contexto de Panamá -- es literalmente el mismo motor que
     Waze/Google Maps. Devuelve hasta TOPE_OPCIONES_POR_CLIENTE
-    candidatos (nombre, dirección, lat, lng), o [] si no hay
-    resultados o falla la llamada."""
+    candidatos (nombre, dirección, lat, lng) de los que trae esa única
+    llamada (Google ya trae como máximo 20 en una llamada de Text
+    Search), o [] si no hay resultados o falla la llamada."""
     if not nombre_cliente:
         return []
     query = f"{nombre_cliente}, {CONTEXTO_BUSQUEDA}"
