@@ -117,6 +117,7 @@ class FSMPerson(models.Model):
                 "name": loc.name,
                 "phone": loc.phone,
                 "street": loc.street,
+                "street2": loc.street2,
                 "partner_id": loc.partner_id.id if loc.partner_id else False,
                 "x_orden_ruta": loc.x_orden_ruta,
                 "fsm_route_id": loc.fsm_route_id.id if loc.fsm_route_id else False,

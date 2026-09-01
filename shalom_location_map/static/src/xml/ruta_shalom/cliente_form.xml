@@ -36,6 +36,14 @@
                     <div class="edit-field">
                         <label for="shalom-cf-street">Dirección</label>
                         <input id="shalom-cf-street" type="text" t-model="state.campos.street" t-on-input="marcarModificado"/>
+                        <input
+                            id="shalom-cf-street2"
+                            type="text"
+                            class="street2-input"
+                            placeholder="Calle 2 / referencia (opcional)"
+                            t-model="state.campos.street2"
+                            t-on-input="marcarModificado"
+                        />
                     </div>
                     <div class="edit-field-row">
                         <div class="edit-field">
@@ -61,6 +69,9 @@
                     <button class="btn btn-secondary gps-btn" t-on-click="capturarGps">
                         <i class="fa fa-crosshairs" aria-hidden="true"/> Registrar coordenadas
                         <t t-if="state.lat"> (capturadas)</t>
+                        <span class="gps-warning" t-if="!state.lat and !state.lng">
+                            <i class="fa fa-exclamation-triangle" aria-hidden="true"/> Este cliente no tiene ubicación GPS
+                        </span>
                     </button>
 
                     <div class="edit-field">

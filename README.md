@@ -409,6 +409,31 @@ Widgets Owl inyectados en `web.assets_backend`:
   porque `order_screen.js` matchea ese texto literal
   (`.includes("✅")`) para decidir el color del badge -- cambiarlo es un
   refactor aparte, no un swap de ícono.
+- Aviso "sin GPS" (`fa-exclamation-triangle`, rojo con halo de texto vía
+  `text-shadow` del color de la superficie detrás) debajo de los dos
+  botones que capturan el GPS del cliente en el que está parado el
+  vendedor -- "Capturar GPS" (`visit_sheet.xml`, hoja de visita) y
+  "Registrar coordenadas" (`cliente_form.xml`, alta/edición de cliente).
+  Se calcula en el cliente (Owl), sin campo nuevo: aparece cuando
+  `partner_latitude`/`partner_longitude` todavía están vacíos. El halo de
+  texto (no solo el color) es a propósito, para que siga siendo legible
+  tanto en tile claro como oscuro. Mismo criterio de íconos que el resto
+  de esta sección: Font Awesome monocromo, nunca un emoji de librería.
+- `street2` (campo nativo de `res.partner`, ya mostrado en los popups
+  geoengine nativos) faltaba en toda la app del vendedor, que solo leía
+  `street`: se agregó a `visit_sheet.js`/`.xml` (hoja de visita),
+  `clientes.js`/`.xml` (listado), `ruta_detalle.js`/`.xml` (mapa/lista
+  de una ruta), la búsqueda por texto de `clientes.js`/`ruta_detalle.js`
+  y el query de Waze de `clientes.js`. En `cliente_form.js`/`.xml`
+  (alta/edición) se agregó como un segundo `<input>` sin etiqueta propia,
+  pegado justo debajo del de "Dirección" -- para el vendedor se ve/usa
+  como una sola dirección de dos líneas, aunque por detrás sean
+  `street`/`street2` en columnas separadas; `shalom_crear_cliente_rapido()`
+  (`fsm_location.py`) ahora recibe `address2` además de `address`. Los
+  dos campos "Dirección actual/guardada en Odoo" de
+  `shalom_buscar_gps_wizard.py` pasaron de `related` a `compute`, por el
+  mismo motivo: un `related` solo puede apuntar a un campo, y hacía
+  falta combinar `street` + `street2` en el mismo texto.
   `history.pushState`/`popstate` para que el botón Atrás de Android
   cerrara un nivel a la vez, pero choca con el router propio del web
   client de Odoo 18 (rompía la redirección de "Revisar cotización");

@@ -67,6 +67,7 @@
                         <div class="stop-info">
                             <div class="name" t-esc="visita.nombre"/>
                             <div class="addr" t-esc="visita.direccion"/>
+                            <div class="addr" t-if="visita.direccion2" t-esc="visita.direccion2"/>
                         </div>
                         <div class="stop-right">
                             <div class="meta-venta" t-if="visita.metaVenta">

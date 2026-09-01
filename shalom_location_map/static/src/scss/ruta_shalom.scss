@@ -29,6 +29,11 @@
     --shalom-cancelado-soft: #e3e5e9;
     --shalom-info: #2461c7;
     --shalom-info-soft: #dfe9fa;
+    // Rojo de alerta para el aviso "sin GPS" -- deliberadamente más
+    // vivo que --shalom-no_quiso (que es un rosa apagado, pensado para
+    // un badge de estado, no para un texto de advertencia que tiene
+    // que saltar a la vista).
+    --shalom-alerta: #c62828;
     --shalom-shadow: 0 10px 30px -12px rgba(60, 20, 35, 0.28);
     --shalom-radius-lg: 22px;
     --shalom-radius-md: 14px;
@@ -54,6 +59,9 @@
         --shalom-cancelado-soft: #2b2e34;
         --shalom-info: #7aaaf5;
         --shalom-info-soft: #1c2c47;
+        // Más claro que el rojo de modo día -- un rojo oscuro se hunde
+        // contra un fondo ya oscuro y deja de leerse como alerta.
+        --shalom-alerta: #ff6b5e;
         --shalom-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
     }
 
@@ -1048,6 +1056,32 @@
         font-weight: 700;
         display: block;
     }
+    // Aviso "este cliente no tiene GPS" bajo el botón de captura --
+    // rojo con un halo del color de superficie detrás de la letra
+    // (en vez de depender solo del color) para que se siga leyendo
+    // nítido tanto en el tile claro como en el oscuro.
+    .action-tile .gps-warning {
+        display: block;
+        margin-top: 6px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        line-height: 1.25;
+        color: var(--shalom-alerta);
+        text-shadow:
+            0 0 1px var(--shalom-surface-2),
+            0 0 5px var(--shalom-surface-2);
+    }
+    .gps-btn .gps-warning {
+        display: block;
+        margin-top: 8px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: var(--shalom-alerta);
+        // el fondo real del botón es --shalom-surface-2 (.btn-secondary)
+        text-shadow:
+            0 0 1px var(--shalom-surface-2),
+            0 0 5px var(--shalom-surface-2);
+    }
     .cta-order {
         width: 100%;
         margin-top: 16px;
@@ -1145,6 +1179,14 @@
     .cliente-form-header h3 {
         flex: 1;
         min-width: 0;
+    }
+    // Segundo input de dirección (street2) pegado justo debajo del de
+    // "Dirección" (street) -- a propósito sin su propia etiqueta ni el
+    // margen de un .edit-field nuevo, para que se lea como una sola
+    // dirección de dos líneas y no como un campo aparte, aunque por
+    // detrás sean dos columnas separadas (street/street2).
+    .edit-field .street2-input {
+        margin-top: 6px;
     }
     .edit-field-row {
         display: flex;

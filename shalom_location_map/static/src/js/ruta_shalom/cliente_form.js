@@ -55,7 +55,7 @@ export class ClienteForm extends Component {
             cargando: this.props.modo === "editar",
             guardando: false,
             partnerId: false,
-            campos: {name: "", phone: "", mobile: "", email: "", vat: "", street: ""},
+            campos: {name: "", phone: "", mobile: "", email: "", vat: "", street: "", street2: ""},
             rutas: [],
             rutaId: RUTA_SIN_ASIGNAR,
             rutaMenuAbierto: false,
@@ -103,6 +103,7 @@ export class ClienteForm extends Component {
                     "name",
                     "phone",
                     "street",
+                    "street2",
                     "partner_id",
                     "fsm_route_id",
                     "partner_latitude",
@@ -112,6 +113,7 @@ export class ClienteForm extends Component {
             this.state.campos.name = loc.name || "";
             this.state.campos.phone = loc.phone || "";
             this.state.campos.street = loc.street || "";
+            this.state.campos.street2 = loc.street2 || "";
             this.state.rutaId = loc.fsm_route_id ? loc.fsm_route_id[0] : RUTA_SIN_ASIGNAR;
             // Se cargan las coordenadas YA guardadas del cliente -- son
             // las que este mismo formulario va a reenviar en guardar()
@@ -340,6 +342,7 @@ export class ClienteForm extends Component {
                     nombre,
                     this.state.campos.phone.trim() || false,
                     this.state.campos.street.trim() || false,
+                    this.state.campos.street2.trim() || false,
                     this.state.campos.vat.trim() || false,
                     this.state.campos.mobile.trim() || false,
                     this.state.campos.email.trim() || false,
@@ -376,6 +379,7 @@ export class ClienteForm extends Component {
                     name: nombre,
                     phone: this.state.campos.phone.trim() || false,
                     street: this.state.campos.street.trim() || false,
+                    street2: this.state.campos.street2.trim() || false,
                     partner_latitude: this.state.lat || 0,
                     partner_longitude: this.state.lng || 0,
                 });

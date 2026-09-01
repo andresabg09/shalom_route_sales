@@ -277,9 +277,19 @@ class ShalomBuscarGpsWizardLine(models.TransientModel):
     # cliente web no reenvía el valor al guardar un registro nuevo
     # armado por default_get -- causaba un NOT NULL al abrir el wizard.
     location_id = fields.Many2one("fsm.location", required=True)
+    # Compute en vez de related directo a location_id.street: así entra
+    # también street2 (calle 2), que muchos clientes tienen cargada con
+    # el resto de la referencia real de la dirección -- un related
+    # simple solo puede apuntar a un campo.
     location_direccion_actual = fields.Char(
-        related="location_id.street", string="Dirección actual"
+        compute="_compute_location_direccion_actual", string="Dirección actual"
     )
+
+    @api.depends("location_id.street", "location_id.street2")
+    def _compute_location_direccion_actual(self):
+        for linea in self:
+            partes = [linea.location_id.street, linea.location_id.street2]
+            linea.location_direccion_actual = ", ".join(p for p in partes if p)
 
     def action_buscar_opciones(self):
         """Botón 'Buscar opciones en Google': busca EN EL MOMENTO,
@@ -372,14 +382,22 @@ class ShalomBuscarGpsWizardOpcion(models.TransientModel):
     location_lng = fields.Float(
         related="location_id.partner_longitude", string="Longitud actual", readonly=True
     )
+    # Compute en vez de related directo a location_id.street: así entra
+    # también street2 (calle 2) en la comparación, ver el mismo criterio
+    # en ShalomBuscarGpsWizardLine._compute_location_direccion_actual.
     location_direccion_actual = fields.Char(
-        related="location_id.street",
+        compute="_compute_location_direccion_actual",
         string="Dirección guardada en Odoo",
-        readonly=True,
         help="La dirección que este cliente tiene guardada en Odoo AHORA "
         "-- para comparar de un vistazo contra la dirección de cada "
         "opción de Google, no solo el nombre.",
     )
+
+    @api.depends("location_id.street", "location_id.street2")
+    def _compute_location_direccion_actual(self):
+        for opcion in self:
+            partes = [opcion.location_id.street, opcion.location_id.street2]
+            opcion.location_direccion_actual = ", ".join(p for p in partes if p)
     query_busqueda = fields.Char(
         string="Buscar en Google Maps",
         help="Precargado con el nombre guardado del cliente. Si Google "

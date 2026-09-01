@@ -183,6 +183,7 @@ class FSMLocation(models.Model):
         name,
         phone=False,
         address=False,
+        address2=False,
         vat=False,
         mobile=False,
         email=False,
@@ -213,6 +214,7 @@ class FSMLocation(models.Model):
                 "name": name.strip(),
                 "phone": phone or False,
                 "street": address or False,
+                "street2": address2 or False,
                 "vat": vat or False,
                 "mobile": mobile or False,
                 "email": email or False,
@@ -232,6 +234,7 @@ class FSMLocation(models.Model):
             "owner_id": partner.id,
             "phone": phone or False,
             "street": address or False,
+            "street2": address2 or False,
         }
         if latitude and longitude:
             location_vals["partner_latitude"] = latitude

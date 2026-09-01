@@ -51,7 +51,8 @@ export class Clientes extends Component {
         return this.state.clientes.filter(
             (c) =>
                 (c.name || "").toLowerCase().includes(texto) ||
-                (c.street || "").toLowerCase().includes(texto)
+                (c.street || "").toLowerCase().includes(texto) ||
+                (c.street2 || "").toLowerCase().includes(texto)
         );
     }
 
@@ -69,7 +70,8 @@ export class Clientes extends Component {
         // Antes abría Google Maps -- cambiado a Waze por decisión
         // explícita del usuario (query de texto, Waze también la
         // soporta con el parámetro "q").
-        const consulta = encodeURIComponent(`${cliente.name} ${cliente.street || ""}`.trim());
+        const direccion = `${cliente.street || ""} ${cliente.street2 || ""}`.trim();
+        const consulta = encodeURIComponent(`${cliente.name} ${direccion}`.trim());
         window.open(`https://waze.com/ul?q=${consulta}&navigate=yes`, "_blank");
     }
 

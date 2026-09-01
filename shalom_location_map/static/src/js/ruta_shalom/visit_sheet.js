@@ -94,6 +94,7 @@ export class VisitSheet extends Component {
                     "name",
                     "phone",
                     "street",
+                    "street2",
                     "partner_id",
                 ]);
                 locacion = loc;
@@ -103,6 +104,7 @@ export class VisitSheet extends Component {
                 locationId: orden.location_id ? orden.location_id[0] : false,
                 nombre: locacion ? locacion.name : orden.location_id ? orden.location_id[1] : "Sin cliente",
                 direccion: locacion ? locacion.street : "",
+                direccion2: locacion ? locacion.street2 : "",
                 telefono: locacion ? locacion.phone : "",
                 orden: orden.x_cliente_orden_ruta,
                 estado: estadoDesdeStageName(orden.stage_name),

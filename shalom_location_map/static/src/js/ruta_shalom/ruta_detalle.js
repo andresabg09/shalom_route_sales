@@ -346,6 +346,7 @@ export class RutaDetalle extends Component {
                 const locaciones = await this.orm.read("fsm.location", locationIds, [
                     "phone",
                     "street",
+                    "street2",
                     "x_venta_mas_alta",
                 ]);
                 datosPorLocation = Object.fromEntries(locaciones.map((l) => [l.id, l]));
@@ -363,6 +364,7 @@ export class RutaDetalle extends Component {
                     lng: o.x_cliente_lng,
                     telefono: loc ? loc.phone : "",
                     direccion: loc ? loc.street : "",
+                    direccion2: loc ? loc.street2 : "",
                     metaVenta: loc ? loc.x_venta_mas_alta : 0,
                 };
             });
@@ -416,7 +418,8 @@ export class RutaDetalle extends Component {
         return base.filter(
             (v) =>
                 (v.nombre || "").toLowerCase().includes(texto) ||
-                (v.direccion || "").toLowerCase().includes(texto)
+                (v.direccion || "").toLowerCase().includes(texto) ||
+                (v.direccion2 || "").toLowerCase().includes(texto)
         );
     }
 

@@ -19,6 +19,7 @@
                         <span class="edit-hint"><i class="fa fa-pencil" aria-hidden="true"/></span>
                     </button>
                     <div class="addr" t-esc="state.visita.direccion"/>
+                    <div class="addr" t-if="state.visita.direccion2" t-esc="state.visita.direccion2"/>
                     <div class="addr" t-esc="'Orden de ruta: ' + (state.visita.orden || '-')"/>
 
                     <button
@@ -65,6 +66,9 @@
                         </button>
                         <button class="action-tile" t-on-click="capturarGps">
                             <span class="lbl"><i class="fa fa-crosshairs" aria-hidden="true"/> Capturar GPS</span>
+                            <span class="gps-warning" t-if="!state.visita.lat and !state.visita.lng">
+                                <i class="fa fa-exclamation-triangle" aria-hidden="true"/> Sin ubicación GPS
+                            </span>
                         </button>
                         <button class="action-tile" t-on-click="verHistorial">
                             <span class="lbl"><i class="fa fa-history" aria-hidden="true"/> Historial</span>

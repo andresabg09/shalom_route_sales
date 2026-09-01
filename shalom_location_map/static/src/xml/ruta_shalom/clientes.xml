@@ -41,6 +41,7 @@
                         <div class="stop-info">
                             <div class="name" t-esc="cliente.name"/>
                             <div class="addr" t-esc="cliente.street"/>
+                            <div class="addr" t-if="cliente.street2" t-esc="cliente.street2"/>
                             <div class="route-tag" t-if="cliente.fsm_route_name" t-esc="cliente.fsm_route_name"/>
                             <div class="route-tag route-tag-sin-asignar" t-else="">Sin ruta asignada</div>
                         </div>
