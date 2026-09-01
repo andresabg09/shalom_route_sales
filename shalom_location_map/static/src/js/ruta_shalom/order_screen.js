@@ -4,6 +4,7 @@ import {Component, onWillStart, onWillUnmount, useEffect, useRef, useState} from
 import {useService} from "@web/core/utils/hooks";
 import {normalizarAccionActWindow} from "./action_utils";
 import {cerrarConAnimacion} from "./animacion_utils";
+import {ClienteForm} from "./cliente_form";
 
 /**
  * Catálogo + carrito (Fase 3): se abre de pantalla completa desde el
@@ -101,6 +102,7 @@ function claveBorradorCarrito(orderId) {
 
 export class OrderScreen extends Component {
     static template = "shalom_location_map.OrderScreen";
+    static components = {ClienteForm};
     static props = {
         orderId: Number,
         clienteNombre: String,
@@ -139,11 +141,26 @@ export class OrderScreen extends Component {
             guardandoBorrador: false,
             confirmandoSalida: false,
             cerrando: false,
+            // Aviso "a este cliente le faltan datos" (punto 4, no
+            // bloqueante) -- ver el docstring grande al principio del
+            // archivo. locationId se resuelve junto con datosFaltantes
+            // porque hace falta para abrir ClienteForm.
+            locationId: false,
+            datosFaltantes: [],
+            avisoDatosFaltantesCerrado: false,
+            editandoCliente: false,
+            mostrandoAvisoConfirmar: false,
+            omitirAvisoDatosFaltantes: false,
+            // Qué acción retomar si en el interstitial de arriba se
+            // elige seguir igual -- "confirmar" (Finalizar a orden de
+            // venta) o "revisar" (Revisar cotización): las dos pasan
+            // por el mismo aviso, ver confirmarPedido()/revisarCotizacion().
+            accionPendienteAvisoDatos: null,
         });
 
         this._restaurarBorradorCarritoSiCorresponde();
 
-        onWillStart(() => this.cargarProductos());
+        onWillStart(() => Promise.all([this.cargarProductos(), this._cargarDatosFaltantes()]));
         onWillUnmount(() => this.detenerEscaneo());
 
         // Enganchar el stream de la cámara al <video> recién cuando el
@@ -228,6 +245,79 @@ export class OrderScreen extends Component {
         );
         this._guardarBorradorCarrito(); // reinicia el conteo de 30 min
         this.actualizarPromos();
+    }
+
+    /** Aviso "a este cliente le faltan datos" (punto 4, no bloqueante):
+     * chequea qué le falta al cliente de esta visita, reusando el
+     * mismo método de fsm_order.py que también usa el cierre de la
+     * visita (validación real, esto es solo el aviso). Se llama al
+     * abrir la pantalla y de nuevo después de editar el cliente, para
+     * que el banner desaparezca solo en cuanto ya no falte nada. */
+    async _cargarDatosFaltantes() {
+        try {
+            const [orden] = await this.orm.read("fsm.order", [this.props.orderId], ["location_id"]);
+            this.state.locationId = orden.location_id ? orden.location_id[0] : false;
+            this.state.datosFaltantes = await this.orm.call(
+                "fsm.order",
+                "shalom_campos_cliente_faltantes",
+                [[this.props.orderId]]
+            );
+        } catch (error) {
+            // No es crítico para poder seguir armando el pedido -- si
+            // falla, simplemente no se muestra el aviso.
+            console.error("shalom: error al chequear datos del cliente", error);
+        }
+    }
+
+    cerrarAvisoDatosFaltantes() {
+        this.state.avisoDatosFaltantesCerrado = true;
+    }
+
+    abrirEdicionCliente() {
+        // Se llama tanto desde el banner de arriba como desde el botón
+        // "Completar datos del cliente" del interstitial de confirmar
+        // -- en ese segundo caso hace falta cerrar el interstitial
+        // también, si no queda abierto detrás (bug real reportado:
+        // ClienteForm se abría bien, pero el aviso se quedaba tapando
+        // encima -- ver también el z-index de .edit-overlay).
+        this.state.mostrandoAvisoConfirmar = false;
+        this.state.editandoCliente = true;
+    }
+
+    cerrarEdicionCliente() {
+        this.state.editandoCliente = false;
+    }
+
+    async clienteEditado() {
+        this.state.editandoCliente = false;
+        this.state.avisoDatosFaltantesCerrado = false;
+        await this._cargarDatosFaltantes();
+    }
+
+    cerrarAvisoConfirmar() {
+        this.state.mostrandoAvisoConfirmar = false;
+        this.state.accionPendienteAvisoDatos = null;
+    }
+
+    /** "Confirmar/Revisar de todas formas" del interstitial -- retoma
+     * la acción que lo disparó (ver confirmarPedido()/revisarCotizacion()),
+     * sin volver a mostrarlo para el resto de esta sesión del carrito. */
+    async continuarIgnorandoAvisoDatos() {
+        this.state.mostrandoAvisoConfirmar = false;
+        this.state.omitirAvisoDatosFaltantes = true;
+        const accion = this.state.accionPendienteAvisoDatos;
+        this.state.accionPendienteAvisoDatos = null;
+        if (accion === "revisar") {
+            await this._revisarCotizacionDeVerdad();
+        } else {
+            await this._confirmarPedidoDeVerdad();
+        }
+    }
+
+    /** True si corresponde interrumpir con el interstitial de "a este
+     * cliente le faltan datos" antes de confirmar/revisar. */
+    get _debeAvisarDatosFaltantes() {
+        return this.state.datosFaltantes.length > 0 && !this.state.omitirAvisoDatosFaltantes;
     }
 
     async cargarProductos() {
@@ -773,6 +863,20 @@ export class OrderScreen extends Component {
             this.notification.add("El carrito está vacío.", {type: "warning"});
             return;
         }
+        // Último aviso, no bloqueante, de que al cliente le faltan
+        // datos (punto 4) -- se muestra una sola vez por esta sesión
+        // del carrito (omitirAvisoDatosFaltantes), no en cada click de
+        // "Finalizar a orden de venta". Mismo aviso que revisarCotizacion().
+        if (this._debeAvisarDatosFaltantes) {
+            this.state.accionPendienteAvisoDatos = "confirmar";
+            this.state.mostrandoAvisoConfirmar = true;
+            return;
+        }
+        await this._confirmarPedidoDeVerdad();
+    }
+
+    async _confirmarPedidoDeVerdad() {
+        const items = this.itemsCarrito;
         const mensaje =
             `Vas a finalizar una cotización a orden de venta de ` +
             `${this.cantidadItems} producto(s) por $${this.total.toFixed(2)} para ` +
@@ -818,6 +922,17 @@ export class OrderScreen extends Component {
             this.notification.add("El carrito está vacío.", {type: "warning"});
             return;
         }
+        // Mismo aviso que confirmarPedido() -- ver _debeAvisarDatosFaltantes.
+        if (this._debeAvisarDatosFaltantes) {
+            this.state.accionPendienteAvisoDatos = "revisar";
+            this.state.mostrandoAvisoConfirmar = true;
+            return;
+        }
+        await this._revisarCotizacionDeVerdad();
+    }
+
+    async _revisarCotizacionDeVerdad() {
+        const items = this.itemsCarrito;
         this.state.guardandoBorrador = true;
         try {
             const lineas = this.lineasParaBackend(items);

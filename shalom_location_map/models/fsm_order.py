@@ -672,11 +672,76 @@ class FSMOrder(models.Model):
 
     def _es_transicion_a_completado(self, vals):
         """True si esta escritura mueve el stage_id hacia una etapa
-        cerrada que NO sea la de cancelado."""
+        cerrada que NO sea la de cancelado (esto incluye tanto
+        Completado como No quiso -- las dos son etapas cerradas)."""
         if "stage_id" not in vals or not vals["stage_id"]:
             return False
         stage = self.env["fsm.stage"].browse(vals["stage_id"])
         return bool(stage.is_closed) and stage.id != self._id_etapa_cancelada()
+
+    def shalom_campos_cliente_faltantes(self):
+        """Lista de etiquetas de los datos que le faltan al cliente de
+        ESTA visita para poder cerrarla en Completado/No quiso (ver
+        write() más abajo) -- el correo queda afuera a propósito, es
+        el único campo realmente opcional. fsm.location hereda estos
+        campos de res.partner vía _inherits, así que se leen directo
+        desde location_id sin un read aparte.
+
+        También la llama la app del vendedor desde el catálogo/carrito
+        (order_screen.js) para el aviso NO bloqueante de "a este
+        cliente le faltan datos" -- ahí se usa solo para avisar, antes
+        de siquiera intentar cerrar la visita."""
+        self.ensure_one()
+        loc = self.location_id
+        faltantes = []
+        if not loc:
+            return faltantes
+        if not (loc.partner_latitude and loc.partner_longitude):
+            faltantes.append(_("Ubicación GPS"))
+        if not (loc.phone or loc.mobile):
+            faltantes.append(_("Teléfono o celular"))
+        if not loc.vat:
+            faltantes.append(_("RUC"))
+        if not loc.x_nombre_contacto:
+            faltantes.append(_("Nombre del contacto"))
+        return faltantes
+
+    def _validar_cierre_visita(self, vals):
+        """Bloquea, con UserError, dejar esta visita en Completado/No
+        quiso con datos del cliente incompletos, o en Cancelado sin
+        una nota en Observaciones explicando por qué. Se llama SOLO
+        desde write() cuando viene con el contexto
+        shalom_validar_cierre_visita -- así queda acotado a la app del
+        vendedor (visit_sheet.js lo pasa a propósito en elegirEstado());
+        el Kanban nativo de fsm.order, que usa oficina, escribe
+        stage_id sin ese contexto y no se topa con esto -- decisión de
+        producto explícita: oficina necesita poder corregir casos
+        puntuales sin esta traba."""
+        if "stage_id" not in vals or not vals["stage_id"]:
+            return
+        stage_id = vals["stage_id"]
+        if stage_id == self._id_etapa_cancelada():
+            for order in self:
+                observacion = vals.get(
+                    "x_observaciones_visita", order.x_observaciones_visita
+                )
+                if not (observacion or "").strip():
+                    raise UserError(_(
+                        "Para dejar esta visita como Cancelado hace falta "
+                        "escribir en Observaciones por qué se cancela."
+                    ))
+        elif self._es_transicion_a_completado(vals):
+            for order in self:
+                faltantes = order.shalom_campos_cliente_faltantes()
+                if faltantes:
+                    raise UserError(_(
+                        'A "%(cliente)s" le falta: %(faltantes)s. '
+                        'Completalo desde "Editar cliente" antes de poder '
+                        "cerrar la visita así."
+                    ) % {
+                        "cliente": order.location_id.name or _("este cliente"),
+                        "faltantes": ", ".join(faltantes),
+                    })
 
     def _calcular_jornada(self):
         """Calcula el número de jornada para esta orden, comparando con
@@ -706,6 +771,9 @@ class FSMOrder(models.Model):
         return ultima.x_jornada or 1
 
     def write(self, vals):
+        if self.env.context.get("shalom_validar_cierre_visita"):
+            self._validar_cierre_visita(vals)
+
         # Detectar, ANTES de escribir, cuáles registros están pasando a
         # "completado" en esta llamada, para poder calcular la jornada
         # después con el estado ya actualizado (y sin pisar un valor

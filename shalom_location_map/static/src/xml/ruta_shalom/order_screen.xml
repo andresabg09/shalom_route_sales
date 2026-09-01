@@ -11,6 +11,22 @@
                 <span class="icon-btn-spacer"/>
             </div>
 
+            <div
+                class="nag-banner"
+                t-if="!state.cargando and state.datosFaltantes.length and !state.avisoDatosFaltantesCerrado"
+            >
+                <i class="fa fa-exclamation-triangle" aria-hidden="true"/>
+                <div class="nag-banner-body">
+                    <b><t t-esc="'A este cliente le faltan datos: ' + state.datosFaltantes.join(', ') + '.'"/></b>
+                    Podés seguir armando el pedido igual.
+                    <div class="nag-banner-actions">
+                        <button class="nag-btn nag-btn-primary" t-on-click="abrirEdicionCliente">Completar ahora</button>
+                        <button class="nag-btn" t-on-click="cerrarAvisoDatosFaltantes">Ahora no</button>
+                    </div>
+                </div>
+                <button class="nag-banner-close" t-on-click="cerrarAvisoDatosFaltantes" title="Cerrar">✕</button>
+            </div>
+
             <div t-if="state.cargando" class="shalom-vacio">Cargando catálogo…</div>
 
             <t t-elif="state.pantalla === 'catalogo'">
@@ -250,6 +266,25 @@
                 </div>
             </div>
 
+            <div class="confirm-overlay" t-if="state.mostrandoAvisoConfirmar">
+                <div class="confirm-card">
+                    <h3><i class="fa fa-exclamation-triangle" aria-hidden="true"/> Antes de <t t-esc="state.accionPendienteAvisoDatos === 'revisar' ? 'revisar' : 'confirmar'"/>…</h3>
+                    <p>
+                        A "<t t-esc="props.clienteNombre"/>" todavía le falta:
+                        <t t-esc="state.datosFaltantes.join(', ')"/>. La cotización se
+                        puede <t t-esc="state.accionPendienteAvisoDatos === 'revisar' ? 'guardar' : 'confirmar'"/>
+                        igual, pero después va a tocar completarlo desde oficina.
+                    </p>
+                    <div class="edit-actions">
+                        <button class="btn btn-ghost" t-on-click="cerrarAvisoConfirmar">Volver</button>
+                        <button class="btn btn-secondary" t-on-click="abrirEdicionCliente">Completar datos del cliente</button>
+                        <button class="btn btn-primary" t-on-click="continuarIgnorandoAvisoDatos">
+                            <t t-esc="state.accionPendienteAvisoDatos === 'revisar' ? 'Revisar cotización de todas formas' : 'Confirmar cotización de todas formas'"/>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="confirm-overlay" t-if="state.recompensaMenuAbierto">
                 <div class="confirm-card">
                     <h3>Elegí la recompensa</h3>
@@ -272,5 +307,13 @@
                 </div>
             </div>
         </div>
+
+        <ClienteForm
+            t-if="state.editandoCliente and state.locationId"
+            modo="'editar'"
+            locationId="state.locationId"
+            onGuardado.bind="clienteEditado"
+            onCancelar.bind="cerrarEdicionCliente"
+        />
     </t>
 </templates>

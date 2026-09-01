@@ -55,7 +55,16 @@ export class ClienteForm extends Component {
             cargando: this.props.modo === "editar",
             guardando: false,
             partnerId: false,
-            campos: {name: "", phone: "", mobile: "", email: "", vat: "", street: "", street2: ""},
+            campos: {
+                name: "",
+                nombreContacto: "",
+                phone: "",
+                mobile: "",
+                email: "",
+                vat: "",
+                street: "",
+                street2: "",
+            },
             rutas: [],
             rutaId: RUTA_SIN_ASIGNAR,
             rutaMenuAbierto: false,
@@ -130,11 +139,12 @@ export class ClienteForm extends Component {
                 const [partner] = await this.orm.read(
                     "res.partner",
                     [loc.partner_id[0]],
-                    ["vat", "mobile", "email", "image_1920"]
+                    ["vat", "mobile", "email", "image_1920", "x_nombre_contacto"]
                 );
                 this.state.campos.vat = partner.vat || "";
                 this.state.campos.mobile = partner.mobile || "";
                 this.state.campos.email = partner.email || "";
+                this.state.campos.nombreContacto = partner.x_nombre_contacto || "";
                 if (partner.image_1920) {
                     this.state.fotoPreviewUrl = `/web/image/res.partner/${loc.partner_id[0]}/image_256`;
                 }
@@ -351,6 +361,7 @@ export class ClienteForm extends Component {
                     this.state.lng || false,
                     rutaId,
                     clienteAnteriorId,
+                    this.state.campos.nombreContacto.trim() || false,
                 ]);
                 this.notification.add(`Cliente "${nombre}" creado.`, {type: "success"});
             } else {
@@ -388,6 +399,7 @@ export class ClienteForm extends Component {
                         vat: this.state.campos.vat.trim() || false,
                         mobile: this.state.campos.mobile.trim() || false,
                         email: this.state.campos.email.trim() || false,
+                        x_nombre_contacto: this.state.campos.nombreContacto.trim() || false,
                     };
                     if (this.state.fotoBase64) {
                         valoresPartner.image_1920 = this.state.fotoBase64;

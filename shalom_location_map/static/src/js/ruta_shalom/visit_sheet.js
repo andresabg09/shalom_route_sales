@@ -112,7 +112,18 @@ export class VisitSheet extends Component {
                 lat: orden.x_cliente_lat,
                 lng: orden.x_cliente_lng,
                 saleId: orden.sale_id ? orden.sale_id[0] : false,
+                datosFaltantes: [],
+                errorObservacion: false,
             };
+            // Se pide aparte (no bloquea el resto de la carga si falla)
+            // para poder marcar de entrada, en el selector de estado,
+            // cuáles opciones van a rechazarse si se eligen -- ver
+            // shalom_campos_cliente_faltantes() en fsm_order.py.
+            this.state.visita.datosFaltantes = await this.orm.call(
+                "fsm.order",
+                "shalom_campos_cliente_faltantes",
+                [[this.props.orderId]]
+            );
         } catch (error) {
             this.notification.add("No se pudo cargar la visita.", {type: "danger"});
         } finally {
@@ -133,6 +144,30 @@ export class VisitSheet extends Component {
         if (!this.state.visita || estado === this.state.visita.estado) {
             return;
         }
+        // Mismo criterio que _validar_cierre_visita() en fsm_order.py,
+        // repetido acá para avisar al toque (sin ida y vuelta al
+        // servidor) -- el backend sigue siendo quien realmente lo
+        // impide, esto es solo para que no haga falta intentarlo para
+        // enterarse.
+        if ((estado === "completado" || estado === "no_quiso") && this.state.visita.datosFaltantes.length) {
+            this.notification.add(
+                `A "${this.state.visita.nombre}" le falta: ` +
+                    `${this.state.visita.datosFaltantes.join(", ")}. Completalo desde ` +
+                    `"Editar cliente" antes de poder cerrar la visita así.`,
+                {type: "warning"}
+            );
+            return;
+        }
+        if (estado === "cancelado" && !this.state.visita.observaciones.trim()) {
+            // Antes solo se avisaba con un notification -- se reportó
+            // que se desvanece muy rápido y el vendedor se queda sin
+            // saber por qué no lo dejó. Ahora además queda un mensaje
+            // fijo debajo del cuadro de Observaciones (con el cuadro
+            // parpadeando en rojo, ver marcarErrorObservacion() /
+            // .obs-input.obs-error en el SCSS) hasta que escriba algo.
+            this._marcarErrorObservacion();
+            return;
+        }
         const ids = await obtenerIdsEtapas(this.orm);
         const stageId = ids[estado];
         if (!stageId) {
@@ -149,8 +184,14 @@ export class VisitSheet extends Component {
             // un flujo controlado) -- bypass_order_completed_stage es la
             // salida oficial para escrituras programáticas legítimas
             // como esta. No afecta al resto de las etapas.
+            // shalom_validar_cierre_visita activa, SOLO para esta
+            // escritura, la validación de fsm_order.py._validar_cierre_visita
+            // (datos del cliente completos para Completado/No quiso,
+            // observación obligatoria para Cancelado) -- ver el
+            // docstring de ese método para el porqué va acotado a un
+            // contexto y no aplica también al Kanban nativo de oficina.
             await this.orm.write("fsm.order", [this.props.orderId], {stage_id: stageId}, {
-                context: {bypass_order_completed_stage: true},
+                context: {bypass_order_completed_stage: true, shalom_validar_cierre_visita: true},
             });
             this.state.visita.estado = estado;
             this.notification.add(`${this.state.visita.nombre}: ${this.etiquetaEstado(estado)}`, {
@@ -161,8 +202,30 @@ export class VisitSheet extends Component {
             }
         } catch (error) {
             console.error("shalom: error al actualizar estado de fsm.order", error);
-            this.notification.add("No se pudo actualizar el estado.", {type: "danger"});
+            const mensajeServidor = error && error.data && error.data.message;
+            this.notification.add(mensajeServidor || "No se pudo actualizar el estado.", {
+                type: "danger",
+            });
+            if (estado === "cancelado") {
+                this._marcarErrorObservacion();
+            }
         }
+    }
+
+    /** Marca el aviso fijo (mensaje + cuadro parpadeando en rojo) de
+     * "hace falta una nota para Cancelado" -- ver elegirEstado(). */
+    _marcarErrorObservacion() {
+        // Togglear a false y de nuevo a true (en el siguiente frame)
+        // fuerza que la animación CSS del parpadeo se reinicie aunque
+        // ya estuviera marcado (ej: el vendedor vuelve a tocar
+        // "Cancelado" sin haber escrito nada todavía) -- dejarlo
+        // siempre en true no la repite sola.
+        this.state.visita.errorObservacion = false;
+        requestAnimationFrame(() => {
+            if (this.state.visita) {
+                this.state.visita.errorObservacion = true;
+            }
+        });
     }
 
     async guardarObservaciones(ev) {
@@ -172,6 +235,9 @@ export class VisitSheet extends Component {
                 x_observaciones_visita: texto,
             });
             this.state.visita.observaciones = texto;
+            if (texto.trim()) {
+                this.state.visita.errorObservacion = false;
+            }
             this.notification.add("Nota guardada.", {type: "success"});
         } catch (error) {
             this.notification.add("No se pudo guardar la nota.", {type: "danger"});

@@ -192,6 +192,7 @@ class FSMLocation(models.Model):
         longitude=False,
         route_id=False,
         cliente_anterior_id=False,
+        nombre_contacto=False,
     ):
         """Llamado desde la pestaña Clientes de la app del vendedor (y
         desde 'Editar cliente' cuando se crea desde cero): crea un
@@ -219,6 +220,7 @@ class FSMLocation(models.Model):
                 "mobile": mobile or False,
                 "email": email or False,
                 "image_1920": image_1920 or False,
+                "x_nombre_contacto": nombre_contacto or False,
                 "company_type": "company",
             }
         )

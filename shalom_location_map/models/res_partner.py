@@ -18,13 +18,22 @@ nuevo), y abre esa Ubicación recién creada para completar el resto
 """
 import logging
 
-from odoo import models
+from odoo import fields, models
 
 _logger = logging.getLogger(__name__)
 
 
 class ResPartner(models.Model):
     _inherit = "res.partner"
+
+    # Nombre de la persona con la que el vendedor habla en el local --
+    # distinto del nombre comercial (name), que es el del negocio.
+    # fsm.location lo hereda automáticamente vía _inherits (delegate=True
+    # sobre partner_id), así que queda disponible como
+    # location_id.x_nombre_contacto sin tocar fsm_location.py. Ver
+    # shalom_campos_cliente_faltantes() en fsm_order.py, que lo exige
+    # para poder cerrar una visita en Completado/No quiso.
+    x_nombre_contacto = fields.Char(string="Nombre del contacto")
 
     def action_crear_ubicacion_servicio(self):
         """Botón 'Crear Ubicación de Servicio' en la ficha de

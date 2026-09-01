@@ -34,6 +34,16 @@
                         <input id="shalom-cf-name" type="text" t-model="state.campos.name" t-on-input="marcarModificado"/>
                     </div>
                     <div class="edit-field">
+                        <label for="shalom-cf-contacto">Nombre del contacto</label>
+                        <input
+                            id="shalom-cf-contacto"
+                            type="text"
+                            placeholder="Ej: Delia Rodríguez"
+                            t-model="state.campos.nombreContacto"
+                            t-on-input="marcarModificado"
+                        />
+                    </div>
+                    <div class="edit-field">
                         <label for="shalom-cf-street">Dirección</label>
                         <input id="shalom-cf-street" type="text" t-model="state.campos.street" t-on-input="marcarModificado"/>
                         <input

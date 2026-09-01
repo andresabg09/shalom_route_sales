@@ -93,6 +93,21 @@ propio que define el módulo en vez de solo extender los nativos.
   historial y gráfico (widget Owl + Chart.js) de compras confirmadas
   (`state in ('sale', 'done')`) del cliente, con detección de productos
   "olvidados" (sin compra en `MESES_SIN_COMPRA_PARA_ALERTA` = 3 meses).
+- `shalom_campos_cliente_faltantes()`: lista de etiquetas (GPS, teléfono
+  o celular, RUC, nombre del contacto -- el correo queda afuera a
+  propósito, es el único campo realmente opcional) que le faltan al
+  cliente de esta visita. La usan dos cosas: `_validar_cierre_visita()`
+  (ver `write()` abajo) para bloquear el cierre, y `order_screen.js`
+  (catálogo/carrito) solo para el aviso NO bloqueante de "a este
+  cliente le faltan datos".
+- `_validar_cierre_visita()` + `write()`: si el `write()` viene con
+  `context={"shalom_validar_cierre_visita": True}` (solo
+  `visit_sheet.js`, en `elegirEstado()` -- el Kanban nativo de oficina
+  nunca manda ese contexto y queda sin esta traba, a propósito) y mueve
+  `stage_id` a Cancelado, exige una nota no vacía en
+  `x_observaciones_visita`; si lo mueve a Completado/No quiso, exige que
+  `shalom_campos_cliente_faltantes()` esté vacío. En cualquier caso
+  levanta `UserError` con el detalle de qué falta.
 
 ### `models/fsm_route.py` — hereda `fsm.route`
 - `x_ruta_trazado` (`GeoLine`, srid 4326): geometría real (siguiendo
@@ -309,6 +324,15 @@ nativa de Contactos que crea la `fsm.location` pasando `partner_id`/
 abre esa Ubicación recién creada para completar el resto (Ruta, Orden
 de Ruta, GPS) a mano.
 
+`x_nombre_contacto` (Char, nuevo): nombre de la persona con la que el
+vendedor habla en el local -- distinto del nombre comercial (`name`,
+que es el del negocio). Se edita desde "Editar cliente" en la app del
+vendedor (`cliente_form.js`/`.xml`). Como `fsm.location` delega en
+`res.partner` vía `_inherits`, queda disponible como
+`location_id.x_nombre_contacto` sin tocar `fsm_location.py`. Es uno de
+los cuatro datos que `shalom_campos_cliente_faltantes()`
+(`fsm_order.py`) exige para poder cerrar una visita -- ver ahí abajo.
+
 ### `controllers/mapbox_token.py`
 Endpoint JSON (`/shalom_location_map/mapbox_public_token`, `auth="user"`)
 que expone el mismo token público de Mapbox al JS del navegador para
@@ -434,6 +458,21 @@ Widgets Owl inyectados en `web.assets_backend`:
   `shalom_buscar_gps_wizard.py` pasaron de `related` a `compute`, por el
   mismo motivo: un `related` solo puede apuntar a un campo, y hacía
   falta combinar `street` + `street2` en el mismo texto.
+- Punto 4 (ficha de cliente completa para poder cerrar una visita):
+  `visit_sheet.xml`/`.js` marca con un candado (`fa-lock`) las opciones
+  Completado/No quiso del selector de estado cuando
+  `shalom_campos_cliente_faltantes()` no viene vacío, y repite la misma
+  validación en el cliente (antes de llamar al backend) para avisar sin
+  ida y vuelta al servidor; el backend (`fsm_order.py`) sigue siendo
+  quien realmente lo impide. `order_screen.xml`/`.js` (catálogo/
+  carrito) agrega un `.nag-banner` (tono ámbar, `--shalom-pendiente`,
+  a propósito distinto del rojo de "sin GPS": esto nunca bloquea) al
+  entrar, descartable, más un `.confirm-overlay` con el mismo aviso
+  como último paso antes de "Finalizar a orden de venta"
+  (`confirmarPedido()` se separó en un guard + `_confirmarPedidoDeVerdad()`
+  para poder interponer ese paso) -- las dos vías de "completar datos"
+  abren el mismo `ClienteForm` (ahora también con components en
+  `OrderScreen`) sin perder el carrito armado.
   `history.pushState`/`popstate` para que el botón Atrás de Android
   cerrara un nivel a la vez, pero choca con el router propio del web
   client de Odoo 18 (rompía la redirección de "Revisar cotización");

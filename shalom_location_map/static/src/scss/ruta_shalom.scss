@@ -1034,6 +1034,20 @@
         resize: vertical;
         min-height: 56px;
     }
+    // "hace falta una nota para Cancelado" (ver elegirEstado() en
+    // visit_sheet.js): antes solo había un notification, que se
+    // reportó que se desvanece muy rápido y no dejaba claro por qué no
+    // dejaba cancelar -- el cuadro parpadea dos veces y el borde rojo
+    // queda puesto (junto con el mensaje fijo de abajo, .gps-warning)
+    // hasta que se escribe algo.
+    @keyframes shalom-obs-parpadeo {
+        0%, 100% { border-color: var(--shalom-alerta); background: var(--shalom-surface); }
+        50% { border-color: var(--shalom-alerta); background: var(--shalom-no_quiso-soft); }
+    }
+    .obs-input.obs-error {
+        border-color: var(--shalom-alerta);
+        animation: shalom-obs-parpadeo 0.5s ease-in-out 2;
+    }
 
     .action-grid {
         display: grid;
@@ -1056,31 +1070,48 @@
         font-weight: 700;
         display: block;
     }
-    // Aviso "este cliente no tiene GPS" bajo el botón de captura --
-    // rojo con un halo del color de superficie detrás de la letra
-    // (en vez de depender solo del color) para que se siga leyendo
-    // nítido tanto en el tile claro como en el oscuro.
-    .action-tile .gps-warning {
-        display: block;
-        margin-top: 6px;
-        font-size: 0.68rem;
+    // Aviso rojo reusado en varios lados (botón "sin GPS", y el
+    // selector de estado cuando le falta algo al cliente para poder
+    // cerrarse) -- con un halo del color de superficie detrás de la
+    // letra (en vez de depender solo del color) para que se siga
+    // leyendo nítido tanto en fondo claro como en oscuro. El halo por
+    // default es --shalom-surface (fondo de .sheet); los dos casos de
+    // abajo lo pisan porque están sobre un fondo distinto
+    // (--shalom-surface-2).
+    .gps-warning {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.72rem;
         font-weight: 700;
         line-height: 1.25;
         color: var(--shalom-alerta);
+        text-shadow:
+            0 0 1px var(--shalom-surface),
+            0 0 5px var(--shalom-surface);
+    }
+    .action-tile .gps-warning {
+        margin-top: 6px;
+        font-size: 0.68rem;
+        justify-content: center;
         text-shadow:
             0 0 1px var(--shalom-surface-2),
             0 0 5px var(--shalom-surface-2);
     }
     .gps-btn .gps-warning {
-        display: block;
         margin-top: 8px;
-        font-size: 0.72rem;
-        font-weight: 700;
-        color: var(--shalom-alerta);
         // el fondo real del botón es --shalom-surface-2 (.btn-secondary)
         text-shadow:
             0 0 1px var(--shalom-surface-2),
             0 0 5px var(--shalom-surface-2);
+    }
+    .status-chip.chip-bloqueado {
+        color: var(--shalom-ink-muted);
+        opacity: 0.75;
+    }
+    .status-chip.chip-bloqueado .fa-lock {
+        margin-left: 3px;
+        font-size: 0.7em;
     }
     .cta-order {
         width: 100%;
@@ -1105,7 +1136,15 @@
         align-items: center;
         justify-content: center;
         padding: 20px;
-        z-index: 60;
+        // 96, no 60: tiene que quedar por encima de TODO lo que puede
+        // llegar a estar abierto cuando se lo invoca -- el catálogo/
+        // carrito (.order-overlay, z-index 70) desde el aviso "sin
+        // datos" (punto 4), e incluso el propio confirm-overlay de ese
+        // aviso (z-index 95) cuando se abre desde "Completar datos del
+        // cliente" ahí adentro. Bug real reportado: con z-index 60 el
+        // formulario SÍ se abría, pero quedaba tapado detrás del
+        // catálogo -- el botón "parecía" no hacer nada.
+        z-index: 96;
         animation: shalom-fondo-in 0.15s ease both;
     }
     .edit-overlay.closing {
@@ -1305,6 +1344,64 @@
     .icon-btn-spacer {
         width: 38px;
         flex: 0 0 auto;
+    }
+
+    // Aviso "a este cliente le faltan datos" (punto 4) en Catálogo/
+    // Carrito -- tono ámbar (--shalom-pendiente), a propósito distinto
+    // del rojo de --shalom-alerta: esto nunca bloquea, así que no
+    // pide la misma urgencia visual que el aviso de "sin GPS".
+    .nag-banner {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin: 12px 18px 0;
+        padding: 12px 14px;
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-pendiente-soft);
+        border: 1px solid var(--shalom-pendiente);
+        color: var(--shalom-ink);
+        font-size: 0.82rem;
+        line-height: 1.4;
+    }
+    .nag-banner > .fa-exclamation-triangle {
+        color: var(--shalom-pendiente);
+        margin-top: 2px;
+        flex: 0 0 auto;
+    }
+    .nag-banner-body {
+        flex: 1;
+        min-width: 0;
+    }
+    .nag-banner-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+    }
+    .nag-btn {
+        font-size: 0.76rem;
+        font-weight: 700;
+        padding: 6px 12px;
+        border-radius: var(--shalom-radius-sm);
+        border: 1px solid var(--shalom-pendiente);
+        background: transparent;
+        color: var(--shalom-ink);
+        font-family: inherit;
+        cursor: pointer;
+    }
+    .nag-btn-primary {
+        background: var(--shalom-pendiente);
+        color: var(--shalom-accent-ink);
+    }
+    .nag-banner-close {
+        flex: 0 0 auto;
+        background: none;
+        border: none;
+        color: var(--shalom-ink-muted);
+        font-size: 0.9rem;
+        cursor: pointer;
+        padding: 0;
+        line-height: 1;
     }
 
     // selector de categoría (botón único + panel con buscador, en vez

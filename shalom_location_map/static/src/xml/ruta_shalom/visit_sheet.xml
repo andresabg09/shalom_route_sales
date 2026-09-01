@@ -36,26 +36,34 @@
                             t-on-click="() => this.elegirEstado('pendiente')"
                         >Pendiente</button>
                         <button
-                            t-attf-class="status-chip {{state.visita.estado === 'completado' ? 'sel-completado' : ''}}"
+                            t-attf-class="status-chip {{state.visita.estado === 'completado' ? 'sel-completado' : ''}} {{state.visita.datosFaltantes.length ? 'chip-bloqueado' : ''}}"
                             t-on-click="() => this.elegirEstado('completado')"
-                        >Completada</button>
+                        >Completada <i t-if="state.visita.datosFaltantes.length" class="fa fa-lock" aria-hidden="true"/></button>
                         <button
-                            t-attf-class="status-chip {{state.visita.estado === 'no_quiso' ? 'sel-no_quiso' : ''}}"
+                            t-attf-class="status-chip {{state.visita.estado === 'no_quiso' ? 'sel-no_quiso' : ''}} {{state.visita.datosFaltantes.length ? 'chip-bloqueado' : ''}}"
                             t-on-click="() => this.elegirEstado('no_quiso')"
-                        >No quiso</button>
+                        >No quiso <i t-if="state.visita.datosFaltantes.length" class="fa fa-lock" aria-hidden="true"/></button>
                         <button
                             t-attf-class="status-chip {{state.visita.estado === 'cancelado' ? 'sel-cancelado' : ''}}"
                             t-on-click="() => this.elegirEstado('cancelado')"
                         >Cancelado</button>
                     </div>
+                    <div class="gps-warning" t-if="state.visita.datosFaltantes.length" style="margin-top:6px;">
+                        <i class="fa fa-exclamation-triangle" aria-hidden="true"/>
+                        <t t-esc="'Falta para poder cerrar: ' + state.visita.datosFaltantes.join(', ')"/>
+                    </div>
 
                     <label class="obs-label" for="shalom-obs-input">Observaciones de esta visita</label>
                     <textarea
                         id="shalom-obs-input"
-                        class="obs-input"
+                        t-attf-class="obs-input {{state.visita.errorObservacion ? 'obs-error' : ''}}"
                         t-on-change="guardarObservaciones"
                         placeholder="Ej: pedir que dejen la entrada libre, prefiere visitas por la mañana…"
                     ><t t-esc="state.visita.observaciones"/></textarea>
+                    <div class="gps-warning" t-if="state.visita.errorObservacion">
+                        <i class="fa fa-exclamation-triangle" aria-hidden="true"/>
+                        Para dejar esta visita como Cancelado hace falta escribir acá por qué se cancela.
+                    </div>
 
                     <div class="action-grid">
                         <button class="action-tile" t-on-click="llamar">
