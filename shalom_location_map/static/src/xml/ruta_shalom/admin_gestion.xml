@@ -11,72 +11,146 @@
                 </div>
             </div>
 
-            <div class="shalom-body admin-body">
+            <div class="segmented">
+                <button
+                    t-att-class="state.tab === 'seguimiento' ? 'active' : ''"
+                    t-on-click="() => this.cambiarTab('seguimiento')"
+                ><i class="fa fa-flag" aria-hidden="true"/> Seguimiento de Visitas</button>
+                <button
+                    t-att-class="state.tab === 'rutas' ? 'active' : ''"
+                    t-on-click="() => this.cambiarTab('rutas')"
+                ><i class="fa fa-map-o" aria-hidden="true"/> Rutas de mis vendedores</button>
+            </div>
+
+            <div class="shalom-body admin-body" t-if="state.tab === 'seguimiento'">
                 <!-- ============ Seguimiento de Visitas ============ -->
-                <div class="admin-section-label"><i class="fa fa-flag" aria-hidden="true"/> Seguimiento de Visitas</div>
+                <!-- Columna de filtros a la izquierda + lista a la
+                     derecha (mockup aprobado); apiladas en mobile,
+                     ver media query de .admin-seguimiento-columnas. -->
+                <div class="admin-seguimiento-columnas">
+                    <div class="admin-seguimiento-filtros-col">
+                        <div class="search-row" t-if="state.visitas.length">
+                            <div class="search-box-live">
+                                <span><i class="fa fa-search" aria-hidden="true"/></span>
+                                <input
+                                    type="text"
+                                    placeholder="Buscar cliente por nombre…"
+                                    t-model="state.busquedaVisita"
+                                />
+                            </div>
+                        </div>
 
-                <div class="admin-filters-card">
-                    <div class="filters admin-filters">
-                        <button
-                            t-foreach="estadosDisponibles"
-                            t-as="estado"
-                            t-key="estado"
-                            t-attf-class="chip {{state.estadosActivos.includes(estado) ? 'chip-active st-' + estado : ''}}"
-                            t-on-click="() => this.toggleEstado(estado)"
-                        ><t t-esc="etiquetaEstado(estado)"/></button>
+                        <div class="admin-filters-card">
+                            <div class="admin-filtro-titulo">Estado</div>
+                            <div class="filters admin-filters">
+                                <button
+                                    t-foreach="estadosDisponibles"
+                                    t-as="estado"
+                                    t-key="estado"
+                                    t-attf-class="chip {{state.estadosActivos.includes(estado) ? 'chip-active st-' + estado : ''}}"
+                                    t-on-click="() => this.toggleEstado(estado)"
+                                ><t t-esc="etiquetaEstado(estado)"/></button>
+                            </div>
+                        </div>
+
+                        <div class="admin-filters-card" t-if="state.visitas.length">
+                            <div class="admin-filtro-titulo">Filtrar por</div>
+                            <div class="admin-filtro-mini">
+                                <label for="shalom-admin-sel-filtro-vendedor"><i class="fa fa-user" aria-hidden="true"/> Vendedor</label>
+                                <select id="shalom-admin-sel-filtro-vendedor" t-on-change="elegirFiltroVendedor">
+                                    <option value="">Todos</option>
+                                    <option
+                                        t-foreach="vendedoresConVisitas"
+                                        t-as="nombreVendedor"
+                                        t-key="nombreVendedor"
+                                        t-att-value="nombreVendedor"
+                                        t-att-selected="nombreVendedor === state.filtroVendedorNombre"
+                                    ><t t-esc="nombreVendedor"/></option>
+                                </select>
+                            </div>
+                            <div class="admin-filtro-mini">
+                                <label for="shalom-admin-sel-filtro-ruta"><i class="fa fa-map-o" aria-hidden="true"/> Ruta</label>
+                                <select id="shalom-admin-sel-filtro-ruta" t-on-change="elegirFiltroRuta">
+                                    <option value="">Todas</option>
+                                    <option
+                                        t-foreach="rutasConVisitas"
+                                        t-as="nombreRuta"
+                                        t-key="nombreRuta"
+                                        t-att-value="nombreRuta"
+                                        t-att-selected="nombreRuta === state.filtroRutaNombre"
+                                    ><t t-esc="nombreRuta"/></option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="admin-seguimiento-lista-col">
+                        <div t-if="state.cargandoVisitas" class="shalom-vacio">Cargando…</div>
+                        <div t-elif="!state.visitas.length" class="shalom-vacio">
+                            No hay visitas con los estados elegidos.
+                        </div>
+                        <div t-elif="!visitasFiltradas.length" class="shalom-vacio">
+                            No hay visitas con ese vendedor/ruta.
+                        </div>
+                        <t t-else="">
+                            <div class="admin-visitas-count">
+                                <t t-esc="visitasFiltradas.length"/> <t t-esc="visitasFiltradas.length === 1 ? 'visita' : 'visitas'"/>
+                            </div>
+                            <div class="admin-visitas-list">
+                                <div
+                                    t-foreach="visitasFiltradas"
+                                    t-as="visita"
+                                    t-key="visita.id"
+                                    t-attf-class="stop-card admin-visit-card st-{{visita.estado}}"
+                                    t-on-click="() => this.abrirEdicionCliente(visita.location_id)"
+                                >
+                                    <div class="stop-info">
+                                        <div class="name">
+                                            <t t-esc="visita.cliente_nombre"/>
+                                            <span class="edit-nombre-btn" title="Editar cliente">
+                                                <i class="fa fa-pencil" aria-hidden="true"/>
+                                            </span>
+                                        </div>
+                                        <div class="addr">
+                                            <t t-esc="(visita.ruta_nombre || 'Sin ruta') + ' · ' + (visita.vendedor_nombre || 'Sin vendedor')"/>
+                                        </div>
+                                        <div class="admin-obs" t-if="visita.observaciones" t-esc="visita.observaciones"/>
+                                    </div>
+                                    <div class="stop-right">
+                                        <span class="stop-badge"><t t-esc="etiquetaEstado(visita.estado)"/></span>
+                                        <span class="admin-fecha" t-esc="visita.fecha"/>
+                                        <button
+                                            t-attf-class="btn-mini-admin {{visita.revisado ? 'revisado' : ''}}"
+                                            t-on-click="(ev) => this.toggleRevisado(ev, visita)"
+                                        ><t t-esc="visita.revisado ? '✓ Revisado' : 'Marcar revisado'"/></button>
+                                        <button
+                                            t-if="visita.estado === 'cancelado'"
+                                            class="btn-mini-admin danger"
+                                            t-on-click="(ev) => this.archivarCliente(ev, visita)"
+                                        >Archivar cliente</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
                     </div>
                 </div>
+            </div>
 
-                <div t-if="state.cargandoVisitas" class="shalom-vacio">Cargando…</div>
-                <div t-elif="!state.visitas.length" class="shalom-vacio">
-                    No hay visitas con los estados elegidos.
-                </div>
-                <t t-else="">
-                    <div
-                        t-foreach="state.visitas"
-                        t-as="visita"
-                        t-key="visita.id"
-                        t-attf-class="stop-card admin-visit-card st-{{visita.estado}}"
-                        t-on-click="() => this.abrirEdicionCliente(visita.location_id)"
-                    >
-                        <div class="stop-info">
-                            <div class="name">
-                                <t t-esc="visita.cliente_nombre"/>
-                                <span class="edit-nombre-btn" title="Editar cliente">
-                                    <i class="fa fa-pencil" aria-hidden="true"/>
-                                </span>
-                            </div>
-                            <div class="addr">
-                                <t t-esc="(visita.ruta_nombre || 'Sin ruta') + ' · ' + (visita.vendedor_nombre || 'Sin vendedor')"/>
-                            </div>
-                            <div class="admin-obs" t-if="visita.observaciones" t-esc="visita.observaciones"/>
-                        </div>
-                        <div class="stop-right">
-                            <span class="stop-badge"><t t-esc="visita.estado_nombre"/></span>
-                            <span class="admin-fecha" t-esc="visita.fecha"/>
-                            <button
-                                t-attf-class="btn-mini-admin {{visita.revisado ? 'revisado' : ''}}"
-                                t-on-click="(ev) => this.toggleRevisado(ev, visita)"
-                            ><t t-esc="visita.revisado ? '✓ Revisado' : 'Marcar revisado'"/></button>
-                            <button
-                                t-if="visita.estado === 'cancelado'"
-                                class="btn-mini-admin danger"
-                                t-on-click="(ev) => this.archivarCliente(ev, visita)"
-                            >Archivar cliente</button>
-                        </div>
-                    </div>
-                </t>
-
+            <div class="shalom-body admin-body" t-if="state.tab === 'rutas'">
                 <!-- ============ Rutas de mis vendedores ============ -->
-                <div class="admin-section-label admin-section-label-top"><i class="fa fa-map-o" aria-hidden="true"/> Rutas de mis vendedores</div>
-
                 <div t-if="state.cargandoVendedores" class="shalom-vacio">Cargando…</div>
                 <div t-elif="!state.vendedores.length" class="shalom-vacio">
                     No hay rutas programadas todavía.
                 </div>
                 <t t-else="">
-                    <div class="admin-filters-card admin-vendedor-select-wrap">
-                        <label for="shalom-admin-sel-vendedor"><i class="fa fa-user" aria-hidden="true"/> Vendedor</label>
+                    <!-- Pastilla de vendedor + ruteros compactos:
+                         mockup aprobado ("Vista previa: Administración
+                         v2"), reemplaza las tarjetas grandes con
+                         sombra de la ronda anterior, mismo <select>
+                         nativo por debajo (accesible, sin reinventar
+                         un dropdown a medida), solo el CSS cambia. -->
+                    <div class="admin-vendedor-pill">
+                        <span class="admin-vendedor-pill-avatar"><i class="fa fa-user" aria-hidden="true"/></span>
                         <select id="shalom-admin-sel-vendedor" t-on-change="elegirVendedor">
                             <option
                                 t-foreach="state.vendedores"
@@ -86,6 +160,7 @@
                                 t-att-selected="vendedor.persona_id === state.vendedorSeleccionadoId"
                             ><t t-esc="vendedor.persona_nombre + ' -- ' + vendedor.rutas.length + (vendedor.rutas.length === 1 ? ' ruta' : ' rutas')"/></option>
                         </select>
+                        <i class="fa fa-chevron-down admin-vendedor-pill-flecha" aria-hidden="true"/>
                     </div>
 
                     <div class="admin-route-chip-row" t-if="vendedorSeleccionado">
@@ -93,57 +168,92 @@
                             t-foreach="vendedorSeleccionado.rutas"
                             t-as="ruta"
                             t-key="ruta.id"
-                            t-attf-class="route-card admin-route-chip {{state.scheduleSeleccionadoId === ruta.id ? 'admin-route-chip-active' : ''}}"
+                            t-attf-class="admin-route-pill {{state.scheduleSeleccionadoId === ruta.id ? 'admin-route-pill-active' : ''}}"
                             t-on-click="() => this.elegirRuta(ruta)"
                         >
-                            <div class="route-card-head">
-                                <span class="rname"><i class="fa fa-map-o" aria-hidden="true"/> <t t-esc="ruta.route_name"/></span>
-                            </div>
-                            <div class="route-card-stats">
-                                <span><i class="fa fa-map-pin" aria-hidden="true"/> <b t-esc="ruta.cantidad_clientes"/> paradas</span>
-                            </div>
+                            <t t-esc="ruta.route_name"/>
+                            <span class="admin-route-pill-count">· <t t-esc="ruta.cantidad_clientes"/></span>
                         </button>
                     </div>
 
-                    <div class="admin-mapa-wrap" t-if="state.scheduleSeleccionadoId">
-                        <div class="admin-mapa" t-ref="mapaAdmin"/>
-                    </div>
+                    <!-- Mapa a la izquierda, lista de clientes a la
+                         derecha (desktop); apilados en mobile, ver
+                         media query de .admin-rutas-columnas. -->
+                    <div class="admin-rutas-columnas" t-if="state.scheduleSeleccionadoId">
+                        <div class="admin-mapa-wrap">
+                            <div class="admin-mapa-chip" t-if="rutaSeleccionada">
+                                <i class="fa fa-map-o" aria-hidden="true"/>
+                                <t t-esc="rutaSeleccionada.route_name"/>
+                                <span class="admin-mapa-chip-count">· <t t-esc="rutaSeleccionada.cantidad_clientes"/> paradas</span>
+                            </div>
+                            <div class="admin-mapa" t-ref="mapaAdmin"/>
+                        </div>
 
-                    <div t-if="state.cargandoClientesRuta" class="shalom-vacio">Cargando clientes…</div>
-                    <div class="admin-stop-list" t-elif="state.scheduleSeleccionadoId and state.clientesRuta.length">
-                        <div
-                            t-foreach="state.clientesRuta"
-                            t-as="cliente"
-                            t-key="cliente.ordenId"
-                            t-attf-class="stop-row admin-cliente-row st-{{cliente.estado}}"
-                        >
-                            <span class="idx" t-esc="cliente.orden || '-'"/>
-                            <span class="nombre" t-esc="cliente.nombre"/>
-                            <span class="flag-mini" t-if="!cliente.lat and !cliente.lng">
-                                <i class="fa fa-exclamation-triangle" aria-hidden="true"/> sin GPS
-                            </span>
-                            <span
-                                class="stop-icon-btn"
-                                title="Editar cliente"
-                                t-on-click="() => this.abrirEdicionCliente(cliente.locationId)"
-                            ><i class="fa fa-pencil" aria-hidden="true"/></span>
-                            <span
-                                class="stop-icon-btn stop-icon-btn-accent"
-                                title="Buscar GPS por nombre (Google)"
-                                t-on-click="(ev) => this.buscarGps(ev, cliente.locationId)"
-                            ><i class="fa fa-crosshairs" aria-hidden="true"/></span>
+                        <div class="admin-rutas-lista-col">
+                            <div class="search-row" t-if="state.clientesRuta.length">
+                                <div class="search-box-live">
+                                    <span><i class="fa fa-search" aria-hidden="true"/></span>
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar cliente en esta ruta…"
+                                        t-model="state.busquedaClienteRuta"
+                                    />
+                                </div>
+                            </div>
+
+                            <div t-if="state.cargandoClientesRuta" class="shalom-vacio">Cargando clientes…</div>
+                            <div t-elif="!state.clientesRuta.length" class="shalom-vacio">
+                                No hay clientes en esta ruta.
+                            </div>
+                            <div t-elif="!clientesRutaFiltrados.length" class="shalom-vacio">
+                                No hay clientes con ese nombre.
+                            </div>
+                            <div class="admin-stop-list" t-else="">
+                                <div
+                                    t-foreach="clientesRutaFiltrados"
+                                    t-as="cliente"
+                                    t-key="cliente.ordenId"
+                                    t-attf-class="stop-row admin-cliente-row st-{{cliente.estado}} {{cliente.ordenId === state.clienteResaltadoId ? 'resaltado' : ''}}"
+                                    t-att-data-orden-id="cliente.ordenId"
+                                    title="Ubicar en el mapa"
+                                    t-on-click="() => this.resaltarDesdeLista(cliente)"
+                                >
+                                    <span class="idx" t-esc="cliente.orden || '-'"/>
+                                    <span class="nombre" t-esc="cliente.nombre"/>
+                                    <span class="flag-mini" t-if="!cliente.lat and !cliente.lng">
+                                        <i class="fa fa-exclamation-triangle" aria-hidden="true"/> sin GPS
+                                    </span>
+                                    <span
+                                        class="stop-icon-btn"
+                                        title="Editar cliente"
+                                        t-on-click="(ev) => this.abrirEdicionCliente(cliente.locationId, ev)"
+                                    ><i class="fa fa-pencil" aria-hidden="true"/></span>
+                                    <span
+                                        class="stop-icon-btn stop-icon-btn-accent"
+                                        title="Buscar GPS por nombre (Google)"
+                                        t-on-click="(ev) => this.buscarGps(ev, cliente.locationId)"
+                                    ><i class="fa fa-crosshairs" aria-hidden="true"/></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </t>
             </div>
-        </div>
 
-        <ClienteForm
-            t-if="state.locationIdEditando"
-            modo="'editar'"
-            locationId="state.locationIdEditando"
-            onGuardado.bind="clienteEditado"
-            onCancelar.bind="cerrarEdicionCliente"
-        />
+            <!-- Bug real reportado y confirmado: este componente vivía
+                 como HERMANO de .o_shalom_ruta_app (fuera de este div),
+                 en vez de adentro como en cliente_form/ruta_detalle.xml.
+                 El modal ".edit-overlay"/".edit-card" está definido en
+                 el SCSS anidado bajo .o_shalom_ruta_app, así que nunca
+                 matcheaba: el popup "abría" (el t-if se volvía true)
+                 pero sin ningún estilo, invisible/colapsado. -->
+            <ClienteForm
+                t-if="state.locationIdEditando"
+                modo="'editar'"
+                locationId="state.locationIdEditando"
+                onGuardado.bind="clienteEditado"
+                onCancelar.bind="cerrarEdicionCliente"
+            />
+        </div>
     </t>
 </templates>

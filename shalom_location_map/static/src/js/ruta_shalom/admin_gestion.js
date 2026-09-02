@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import {Component, onWillStart, onWillUnmount, useRef, useState} from "@odoo/owl";
+import {Component, onWillStart, onWillUnmount, useEffect, useRef, useState} from "@odoo/owl";
 import {registry} from "@web/core/registry";
 import {useService} from "@web/core/utils/hooks";
 import {ClienteForm} from "./cliente_form";
@@ -9,10 +9,16 @@ import {getMapboxToken, cargarMapboxGl} from "./mapbox_utils";
 
 /**
  * Administración (punto 4 de la ronda "administración", ver README.md):
- * UNA sola página con dos secciones -- Seguimiento de Visitas arriba,
- * Rutas de mis vendedores abajo -- mismo mockup aprobado, no dos
- * pantallas separadas (versión anterior, se juntan a pedido explícito
- * del usuario: "me gustaba más cuando estaban juntas").
+ * dos secciones -- Seguimiento de Visitas y Rutas de mis vendedores --
+ * en pestañas conmutables (mismo `.segmented` de ruta_detalle.js,
+ * Lista/Mapa), no apiladas en una sola página. Se probaron apiladas
+ * (ronda anterior) y era inusable con volumen real: con varias visitas
+ * pendientes, la lista de Seguimiento empujaba el mapa de Rutas a un
+ * tamaño ridículo (bug real de flexbox: `.admin-mapa-wrap` tiene
+ * `overflow` propio, así que su "automatic minimum size" es 0 en vez
+ * del tamaño de su contenido -- el flex-shrink de `.admin-body` lo
+ * exprimía para que todo entrara). Con pestañas, cada sección tiene
+ * toda la altura disponible para sí sola.
  *
  * A propósito NO reusa VisitSheet/RutaDetalle acá: esos abren el flujo
  * de VENTA del vendedor (Tomar pedido, catálogo). Administración es
@@ -42,12 +48,21 @@ export class AdminGestion extends Component {
         this.action = useService("action");
         this.mapaRef = useRef("mapaAdmin");
         this.mapboxMap = null;
+        // {ordenId: {marker, pinEl}} -- para la resaltada bidireccional
+        // pin<->fila de la lista (ver resaltarDesdeLista/DesdeMapa).
+        this._markersPorCliente = {};
 
         this.state = useState({
+            // -- pestaña activa --
+            tab: "seguimiento",
+
             // -- Seguimiento de Visitas --
             cargandoVisitas: true,
             visitas: [],
             estadosActivos: [...ESTADOS_SEGUIMIENTO_DEFAULT],
+            filtroVendedorNombre: "",
+            filtroRutaNombre: "",
+            busquedaVisita: "",
 
             // -- Rutas de mis vendedores --
             cargandoVendedores: true,
@@ -56,6 +71,8 @@ export class AdminGestion extends Component {
             scheduleSeleccionadoId: null,
             cargandoClientesRuta: false,
             clientesRuta: [],
+            busquedaClienteRuta: "",
+            clienteResaltadoId: null,
 
             // -- compartido --
             locationIdEditando: null,
@@ -69,6 +86,33 @@ export class AdminGestion extends Component {
                 this.mapboxMap.remove();
             }
         });
+
+        // Mismo patrón que ruta_detalle.js (ver su comentario grande al
+        // respecto): NO dibujar el mapa con un setTimeout "a mano"
+        // después de elegirRuta() -- bug real reportado en producción
+        // ("el mapa aparece un instante y desaparece"). Owl programa
+        // sus repintados de forma asíncrona, así que ese setTimeout
+        // podía correr sobre un <div> viejo, a punto de ser reemplazado
+        // por el nodo real que Owl termina dejando en pantalla. Con
+        // useEffect, este código corre recién DESPUÉS de que Owl
+        // terminó de pintar el DOM, con this.mapaRef.el ya poblado y
+        // estable.
+        useEffect(
+            () => {
+                if (
+                    this.state.scheduleSeleccionadoId &&
+                    this.mapaRef.el &&
+                    !this.state.cargandoClientesRuta
+                ) {
+                    this.dibujarMapaAdmin();
+                }
+            },
+            () => [this.state.scheduleSeleccionadoId, this.state.cargandoClientesRuta]
+        );
+    }
+
+    cambiarTab(tab) {
+        this.state.tab = tab;
     }
 
     // ==================================================================
@@ -81,6 +125,64 @@ export class AdminGestion extends Component {
 
     etiquetaEstado(estado) {
         return ESTADO_ETIQUETA[estado] || estado;
+    }
+
+    /** Vendedores presentes en el listado actual de visitas (no el de
+     * "Rutas de mis vendedores" -- distintos vendedores pueden tener
+     * visitas en seguimiento aunque no tengan rutas programadas hoy),
+     * para el filtro. Se recalcula solo de los datos ya cargados, sin
+     * pedir nada nuevo al servidor. */
+    get vendedoresConVisitas() {
+        return [...new Set(this.state.visitas.map((v) => v.vendedor_nombre || "Sin vendedor"))].sort();
+    }
+
+    /** Rutas presentes en el listado actual, acotadas al vendedor
+     * elegido en el filtro (si hay uno) -- para que el select de ruta
+     * no muestre rutas de otros vendedores. A propósito sale de
+     * `state.visitas` (solo las rutas con alguna visita en el estado
+     * activo ahora), no de la lista completa de rutas del vendedor --
+     * se probó mostrar todas (9-11 por vendedor) y no gustó: ocupa
+     * espacio de más para rutas sin nada que revisar. */
+    get rutasConVisitas() {
+        const visitas = this.state.filtroVendedorNombre
+            ? this.state.visitas.filter(
+                  (v) => (v.vendedor_nombre || "Sin vendedor") === this.state.filtroVendedorNombre
+              )
+            : this.state.visitas;
+        return [...new Set(visitas.map((v) => v.ruta_nombre || "Sin ruta"))].sort();
+    }
+
+    get visitasFiltradas() {
+        const texto = this.state.busquedaVisita.trim().toLowerCase();
+        return this.state.visitas.filter((v) => {
+            if (
+                this.state.filtroVendedorNombre &&
+                (v.vendedor_nombre || "Sin vendedor") !== this.state.filtroVendedorNombre
+            ) {
+                return false;
+            }
+            if (
+                this.state.filtroRutaNombre &&
+                (v.ruta_nombre || "Sin ruta") !== this.state.filtroRutaNombre
+            ) {
+                return false;
+            }
+            if (texto && !(v.cliente_nombre || "").toLowerCase().includes(texto)) {
+                return false;
+            }
+            return true;
+        });
+    }
+
+    elegirFiltroVendedor(ev) {
+        this.state.filtroVendedorNombre = ev.target.value;
+        // La ruta elegida podría no pertenecer al vendedor nuevo --
+        // mejor arrancar de nuevo que mostrar una lista vacía confusa.
+        this.state.filtroRutaNombre = "";
+    }
+
+    elegirFiltroRuta(ev) {
+        this.state.filtroRutaNombre = ev.target.value;
     }
 
     async cargarVisitas() {
@@ -186,6 +288,18 @@ export class AdminGestion extends Component {
         );
     }
 
+    /** Ruta activa completa (route_name/cantidad_clientes) -- para el
+     * chip flotante sobre el mapa (mockup aprobado, "Vista previa:
+     * Administración"), que reemplaza el título repetido que antes
+     * llevaba cada tarjeta de ruta. */
+    get rutaSeleccionada() {
+        const vendedor = this.vendedorSeleccionado;
+        if (!vendedor) {
+            return null;
+        }
+        return vendedor.rutas.find((r) => r.id === this.state.scheduleSeleccionadoId) || null;
+    }
+
     elegirVendedor(ev) {
         this.state.vendedorSeleccionadoId = Number(ev.target.value);
         this.state.scheduleSeleccionadoId = null;
@@ -194,12 +308,19 @@ export class AdminGestion extends Component {
 
     async elegirRuta(ruta) {
         this.state.scheduleSeleccionadoId = ruta.id;
+        this.state.busquedaClienteRuta = "";
+        this.state.clienteResaltadoId = null;
         await this.cargarClientesRuta();
-        // El contenedor del mapa recién existe en el DOM después de
-        // este render (t-if de la sección mapa) -- se dibuja en el
-        // próximo microtask, ya con this.mapaRef.el poblado.
-        await Promise.resolve();
-        setTimeout(() => this.dibujarMapaAdmin(), 0);
+        // El dibujo del mapa lo dispara el useEffect de setup() cuando
+        // Owl termina de pintar el DOM -- ver el comentario grande ahí.
+    }
+
+    get clientesRutaFiltrados() {
+        const texto = this.state.busquedaClienteRuta.trim().toLowerCase();
+        if (!texto) {
+            return this.state.clientesRuta;
+        }
+        return this.state.clientesRuta.filter((c) => c.nombre.toLowerCase().includes(texto));
     }
 
     async cargarClientesRuta() {
@@ -274,7 +395,19 @@ export class AdminGestion extends Component {
             zoom: 12,
         });
 
+        // Defensivo -- bug real reportado ("el mapa se ve chiquito"):
+        // si en el instante exacto de crear el mapa el contenedor
+        // todavía no tenía aplicado su alto final de CSS, Mapbox mide
+        // un <canvas> chico y se queda así aunque el contenedor crezca
+        // un instante después. Un resize() explícito, ya en el próximo
+        // frame y de nuevo cuando el estilo terminó de cargar ("load"),
+        // fuerza a que vuelva a medir el contenedor con su tamaño real.
+        requestAnimationFrame(() => this.mapboxMap && this.mapboxMap.resize());
+
+        this._markersPorCliente = {};
+
         this.mapboxMap.on("load", () => {
+            this.mapboxMap.resize();
             if (!conCoordenadas.length) {
                 return;
             }
@@ -295,15 +428,103 @@ export class AdminGestion extends Component {
                     numEl.textContent = String(c.orden);
                     pinEl.appendChild(numEl);
                 }
-                pinEl.addEventListener("click", () => this.abrirEdicionCliente(c.locationId));
-                new window.mapboxgl.Marker({element: pinEl, anchor: "center"})
+
+                // Mismo popup que ruta_detalle.js al tocar un pin (name +
+                // fila de botones) en vez de saltar directo a editar --
+                // pedido explícito: acá los botones son Editar cliente y
+                // Buscar GPS (no Waze/Trazar ruta, que son de venta).
+                const popupEl = document.createElement("div");
+                popupEl.className = "shalom-map-popup";
+                const nombreEl = document.createElement("div");
+                nombreEl.className = "shalom-map-popup-name";
+                nombreEl.textContent = (c.orden ? "#" + c.orden + " · " : "") + c.nombre;
+                popupEl.appendChild(nombreEl);
+
+                const accionesEl = document.createElement("div");
+                accionesEl.className = "shalom-map-popup-acciones";
+                const btnEditarEl = document.createElement("button");
+                btnEditarEl.type = "button";
+                btnEditarEl.className = "shalom-map-popup-btn";
+                btnEditarEl.innerHTML = '<i class="fa fa-pencil" aria-hidden="true"></i> Editar cliente';
+                btnEditarEl.addEventListener("click", () => this.abrirEdicionCliente(c.locationId));
+                accionesEl.appendChild(btnEditarEl);
+                const btnGpsEl = document.createElement("button");
+                btnGpsEl.type = "button";
+                btnGpsEl.className = "shalom-map-popup-btn shalom-map-popup-btn-nav";
+                btnGpsEl.innerHTML = '<i class="fa fa-crosshairs" aria-hidden="true"></i> Buscar GPS';
+                btnGpsEl.addEventListener("click", () => this.buscarGps(null, c.locationId));
+                accionesEl.appendChild(btnGpsEl);
+                popupEl.appendChild(accionesEl);
+
+                const marker = new window.mapboxgl.Marker({element: pinEl, anchor: "center"})
                     .setLngLat([c.lng, c.lat])
+                    .setPopup(new window.mapboxgl.Popup({offset: 30}).setDOMContent(popupEl))
                     .addTo(this.mapboxMap);
+
+                // Resaltado bidireccional pin<->fila de la lista, pedido
+                // explícito: tocar un pin resalta su fila (para ubicar
+                // cuál cliente es en la lista) y viceversa (ver
+                // resaltarDesdeLista(), del lado de la fila). El propio
+                // Marker de Mapbox ya togglea su popup solo al hacer
+                // click en el elemento -- este listener solo agrega el
+                // resaltado, no reemplaza eso.
+                if (c.ordenId !== undefined) {
+                    this._markersPorCliente[c.ordenId] = {marker, pinEl};
+                    pinEl.addEventListener("click", () => this.resaltarDesdeMapa(c.ordenId));
+                }
+
                 bounds.extend([c.lng, c.lat]);
             });
             if (conCoordenadas.length > 1) {
                 this.mapboxMap.fitBounds(bounds, {padding: 50, maxZoom: 15});
             }
+        });
+    }
+
+    /** Tocar un pin del mapa: resalta la fila correspondiente en la
+     * lista de la derecha (scrollea hasta ella si hace falta). El
+     * popup del pin (Editar/GPS) ya lo abre Mapbox solo. */
+    resaltarDesdeMapa(ordenId) {
+        this.state.clienteResaltadoId = ordenId;
+        this._marcarPinResaltado(ordenId);
+        const fila = document.querySelector(`[data-orden-id="${ordenId}"]`);
+        if (fila) {
+            fila.scrollIntoView({block: "nearest", behavior: "smooth"});
+        }
+    }
+
+    /** Tocar una fila de la lista: resalta y centra su pin en el mapa,
+     * y abre su popup -- mismo propósito que resaltarDesdeMapa() pero
+     * en el sentido contrario, para ubicar un cliente "raro" de la
+     * lista en el mapa (pedido explícito: detectar mal posicionados). */
+    resaltarDesdeLista(cliente) {
+        this.state.clienteResaltadoId = cliente.ordenId;
+        this._marcarPinResaltado(cliente.ordenId);
+        const entry = this._markersPorCliente[cliente.ordenId];
+        if (!entry || !this.mapboxMap) {
+            return;
+        }
+        this.mapboxMap.flyTo({
+            center: entry.marker.getLngLat(),
+            zoom: Math.max(this.mapboxMap.getZoom(), 15),
+        });
+        if (!entry.marker.getPopup().isOpen()) {
+            entry.marker.togglePopup();
+        }
+    }
+
+    /** Clase .shalom-marker-numero-resaltado sobre el pin elegido (y
+     * ninguno de los demás) -- a propósito NO usa `transform` (ver el
+     * comentario grande de ruta_detalle.js sobre pines custom: Mapbox
+     * ya escribe su propio transform de posición en este mismo
+     * elemento en cada frame, así que uno propio en CSS se pisaría
+     * solo). El resaltado es con box-shadow/borde nada más. */
+    _marcarPinResaltado(ordenId) {
+        Object.entries(this._markersPorCliente).forEach(([id, entry]) => {
+            entry.pinEl.classList.toggle(
+                "shalom-marker-numero-resaltado",
+                String(id) === String(ordenId)
+            );
         });
     }
 
@@ -323,7 +544,14 @@ export class AdminGestion extends Component {
     // Editar cliente (compartido por las dos secciones)
     // ==================================================================
 
-    abrirEdicionCliente(locationId) {
+    abrirEdicionCliente(locationId, ev) {
+        // `ev` es opcional (solo lo pasa la fila de "Rutas de mis
+        // vendedores", que ahora también reacciona al click con
+        // resaltarDesdeLista() -- frena la propagación para no
+        // disparar las dos cosas por el mismo toque en el botón).
+        if (ev) {
+            ev.stopPropagation();
+        }
         this.state.locationIdEditando = locationId;
     }
 

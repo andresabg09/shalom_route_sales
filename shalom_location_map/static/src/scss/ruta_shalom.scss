@@ -2059,6 +2059,20 @@
         min-height: 0;
         overflow-y: auto;
         padding: 18px 20px 26px;
+        // display:block a propósito, PISANDO el display:flex que trae
+        // .shalom-body (misma clase, puesta junto con .admin-body en
+        // el mismo <div> -- ver admin_gestion.xml). Bug real reportado
+        // ("el mapa se hace cada vez más chico si hay más visitas"):
+        // con display:flex + flex-direction:column heredado, y
+        // .admin-mapa-wrap/.admin-stop-list con `overflow` propio, su
+        // "automatic minimum size" para flexbox es 0 en vez del alto
+        // real de su contenido -- así que el flex-shrink del propio
+        // Owl/navegador los apachurraba para que todo entrara en la
+        // altura visible, en vez de dejar que .admin-body scrollee
+        // (que es lo que su overflow-y:auto ya permitía). En block
+        // normal, cada hijo mantiene su alto real y es TODA la pantalla
+        // la que scrollea si no entra.
+        display: block;
     }
     // Título de pantalla vive en .topbar/.route-name (mismo componente
     // que ruta_detalle.xml/order_screen.xml) a propósito, NO en un
@@ -2114,6 +2128,94 @@
         align-items: flex-start;
         cursor: pointer;
     }
+    // Caja con tamaño fijo y scroll propio -- pedido explícito: con
+    // muchas visitas pendientes, esta lista se comía toda la pantalla y
+    // empujaba "Rutas de mis vendedores" (mapa incluido) kilómetros
+    // abajo, dando la sensación de que habían desaparecido. En mobile
+    // usa casi toda la altura disponible, en desktop un tope más chico
+    // así no domina la pantalla completa.
+    .admin-visitas-list {
+        max-height: 62vh;
+        overflow-y: auto;
+        padding-right: 2px;
+    }
+    // Columna de filtros a la izquierda + lista a la derecha (mockup
+    // aprobado) -- antes los tres bloques de filtro (buscador, chips
+    // de estado, vendedor/ruta) iban apilados arriba de la lista,
+    // empujándola cada vez más abajo. En mobile se apilan (una sola
+    // columna angosta no alcanza para las dos).
+    .admin-seguimiento-columnas {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .admin-seguimiento-filtros-col {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+    .admin-seguimiento-lista-col {
+        min-width: 0;
+        min-height: 0;
+    }
+    @media (min-width: 900px) {
+        .admin-seguimiento-columnas {
+            flex-direction: row;
+            align-items: flex-start;
+        }
+        .admin-seguimiento-filtros-col {
+            flex: 0 0 300px;
+        }
+        .admin-seguimiento-lista-col {
+            flex: 1;
+        }
+    }
+    .admin-filtro-titulo {
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--shalom-ink-muted);
+        margin-bottom: 12px;
+    }
+    .admin-filtro-mini {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .admin-filtro-mini + .admin-filtro-mini {
+        margin-top: 12px;
+    }
+    .admin-filtro-mini label {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.68rem;
+        font-weight: 800;
+        color: var(--shalom-ink-muted);
+    }
+    .admin-filtro-mini select {
+        font-family: inherit;
+        font-size: 0.88rem;
+        font-weight: 700;
+        color: var(--shalom-ink);
+        background: var(--shalom-bg);
+        border: 1.5px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-sm);
+        padding: 8px 10px;
+    }
+    // Mismo motivo que la nota grande de .admin-vendedor-pill select
+    // option, más abajo: sin esto la lista desplegable del <select>
+    // sale con los colores de sistema del navegador, no los de la app.
+    .admin-filtro-mini select option {
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+    }
+    .admin-visitas-count {
+        font-size: 0.8rem;
+        color: var(--shalom-ink-muted);
+        margin-bottom: 10px;
+    }
     .admin-obs {
         margin-top: 6px;
         font-size: 0.82rem;
@@ -2161,88 +2263,275 @@
         color: var(--shalom-alerta);
     }
 
-    .admin-vendedor-select-wrap {
-        display: flex;
+    // Pastilla de vendedor en "Rutas de mis vendedores" (mockup
+    // aprobado, más minimalista que la tarjeta grande de la ronda
+    // anterior): el <select> real sigue ahí (accesible, sin reinventar
+    // un dropdown a medida), pero sin su apariencia nativa -- flota
+    // "invisible" encima de la pastilla dibujada por el resto de las
+    // reglas, para que el click en cualquier parte de la pastilla abra
+    // el desplegable nativo del navegador.
+    .admin-vendedor-pill {
+        position: relative;
+        display: inline-flex;
         align-items: center;
         gap: 10px;
+        width: fit-content;
+        padding: 6px 34px 6px 6px;
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: 999px;
     }
-    .admin-vendedor-select-wrap label {
+    .admin-vendedor-pill-avatar {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
         display: flex;
         align-items: center;
-        gap: 5px;
-        font-size: 0.74rem;
-        font-weight: 800;
-        color: var(--shalom-ink-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
+        justify-content: center;
+        flex: none;
+        font-size: 0.72rem;
     }
-    .admin-vendedor-select-wrap select {
-        flex: 1;
+    .admin-vendedor-pill select {
+        appearance: none;
+        border: none;
+        background: transparent;
         font-family: inherit;
-        font-size: 0.92rem;
+        font-size: 0.9rem;
         font-weight: 700;
         color: var(--shalom-ink);
-        background: var(--shalom-bg);
-        border: 1.5px solid var(--shalom-line);
-        border-radius: var(--shalom-radius-sm);
-        padding: 8px 12px;
+        padding: 0;
+        cursor: pointer;
     }
+    // El <select> en sí ya usa los tokens de color de arriba -- lo que
+    // quedaba ilegible (bug real reportado) es la lista desplegable de
+    // <option> que arma el navegador: sin esto, Chrome/Edge la pintan
+    // con sus colores de sistema (a veces texto claro sobre fondo
+    // claro) en vez de los de la app. No hay forma de estilar el
+    // desplegable nativo más allá de esto (fondo/color de cada option)
+    // -- es una limitación del <select> HTML, no de este CSS.
+    .admin-vendedor-pill select option {
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+    }
+    .admin-vendedor-pill-flecha {
+        position: absolute;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--shalom-ink-muted);
+        font-size: 0.7rem;
+        pointer-events: none;
+    }
+
     .admin-route-chip-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 12px;
+        gap: 8px;
     }
-    // .admin-route-chip se combina con .route-card (mismas tarjetas
-    // que ya usa rutas_hub.xml, con su ícono + stats) -- acá solo se
-    // pisa lo necesario para que entren en fila en vez de apiladas.
-    .admin-route-chip.route-card {
-        width: auto;
-        min-width: 190px;
-        flex: 0 1 auto;
-        margin-bottom: 0;
-    }
-    .admin-route-chip-active {
-        border-color: var(--shalom-accent);
-        background: var(--shalom-accent-soft);
-    }
-
-    // Rótulo de sección DENTRO de la misma página (Seguimiento de
-    // Visitas / Rutas de mis vendedores conviven en una sola pantalla
-    // -- ver AdminGestion, a pedido explícito: antes eran dos menús/
-    // pantallas separadas y no gustó). No es un <h2> por el mismo
-    // motivo que .route-name no lo es -- ver el comentario grande más
-    // arriba sobre el bug de contraste con headings reales.
-    .admin-section-label {
+    // Pastillas de ruta compactas (mockup aprobado) en vez de las
+    // tarjetas con ícono/sombra de la ronda anterior -- la activa usa
+    // --shalom-ink/--shalom-bg (no el rosa de marca) a propósito: son
+    // opuestos por diseño en las dos paletas (claro: ink oscuro/bg
+    // claro: oscuro; oscuro: ink claro/bg oscuro), así que esta pareja
+    // invierte bien solita en los dos modos sin variables nuevas.
+    .admin-route-pill {
+        flex: 0 0 auto;
         display: flex;
         align-items: center;
-        gap: 7px;
-        font-size: 1rem;
-        font-weight: 800;
-        margin-bottom: 10px;
+        gap: 5px;
+        padding: 9px 16px;
+        border-radius: 999px;
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        font-weight: 700;
+        font-size: 0.86rem;
+        cursor: pointer;
+        font-family: inherit;
     }
-    .admin-section-label-top {
-        margin-top: 26px;
-        padding-top: 22px;
-        border-top: 1px solid var(--shalom-line);
+    .admin-route-pill-count {
+        color: var(--shalom-ink-muted);
+        font-weight: 600;
+    }
+    .admin-route-pill-active {
+        border-color: var(--shalom-ink);
+        background: var(--shalom-ink);
+        color: var(--shalom-bg);
+    }
+    .admin-route-pill-active .admin-route-pill-count {
+        color: var(--shalom-bg);
+        opacity: 0.65;
+    }
+    // Mapa a la izquierda, lista de clientes a la derecha -- pedido
+    // explícito ("como en el mockup"): apiladas uno debajo del otro se
+    // sentía como usar dos pantallas distintas. En mobile (una sola
+    // columna angosta) se apilan igual que antes, el mapa arriba.
+    .admin-rutas-columnas {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+    .admin-rutas-lista-col {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+    @media (min-width: 900px) {
+        .admin-rutas-columnas {
+            flex-direction: row;
+            align-items: flex-start;
+        }
+        .admin-mapa-wrap {
+            flex: 1 1 55%;
+            margin: 0;
+        }
+        .admin-rutas-lista-col {
+            flex: 1 1 45%;
+        }
+        .admin-mapa {
+            height: 62vh;
+        }
+        .admin-rutas-lista-col .admin-stop-list {
+            max-height: 62vh;
+        }
     }
     .admin-mapa-wrap {
+        position: relative;
         border-radius: var(--shalom-radius-lg);
         overflow: hidden;
         border: 1px solid var(--shalom-line);
         box-shadow: var(--shalom-shadow);
         margin: 12px 0;
     }
+    // Chip flotante con el nombre/paradas de la ruta activa (mockup
+    // aprobado) -- reemplaza el título que antes repetía cada tarjeta
+    // de ruta; ahora esa info vive acá, sobre el mapa mismo.
+    .admin-mapa-chip {
+        position: absolute;
+        left: 16px;
+        top: 16px;
+        z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--shalom-surface);
+        border-radius: var(--shalom-radius-sm);
+        padding: 8px 14px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        box-shadow: var(--shalom-shadow);
+    }
+    .admin-mapa-chip-count {
+        color: var(--shalom-ink-muted);
+        font-weight: 600;
+    }
     .admin-mapa {
         width: 100%;
-        height: 320px;
+        height: 46vh;
+        min-height: 340px;
     }
+    // Caja con tamaño fijo y scroll propio para la lista de clientes de
+    // la ruta elegida -- mismo motivo que .admin-visitas-list: una ruta
+    // con 60+ paradas no debería obligar a scrollear toda la pantalla.
     .admin-stop-list {
         border-top: 1px solid var(--shalom-line);
+        max-height: 42vh;
+        overflow-y: auto;
     }
+    // .search-row/.search-box-live (mismos de ruta_detalle.xml) traen
+    // su propio padding horizontal pensado para ser hijo directo de
+    // .shalom-screen (sin padding propio) -- acá .admin-body YA tiene
+    // padding lateral, así que ese padding extra sumado se veía
+    // desalineado contra las demás tarjetas. Se pisa a 0 y se deja solo
+    // el espacio de abajo.
+    .admin-body .search-row {
+        padding: 0;
+        margin: 0 0 12px;
+    }
+    // Fila de cliente dentro del mapa de "Rutas de mis vendedores" --
+    // faltaban estas reglas (mockup aprobado, ver artifact de
+    // "Vista previa: Administración"): el HTML/Owl ya usaba estas
+    // clases, pero nunca se escribió el CSS, por eso se veía como
+    // texto plano sin estilo.
     .admin-cliente-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
         border-bottom: 1px solid var(--shalom-line);
+        font-size: 0.86rem;
+        cursor: pointer;
     }
     .admin-cliente-row:last-child {
         border-bottom: none;
+    }
+    // Resaltado bidireccional pin<->fila (pedido explícito, para
+    // ubicar un cliente mal posicionado en el mapa desde la lista, o
+    // al revés): ver resaltarDesdeLista()/resaltarDesdeMapa() en
+    // admin_gestion.js.
+    .admin-cliente-row.resaltado {
+        background: var(--shalom-accent-soft);
+    }
+    .shalom-marker-numero-resaltado {
+        // A propósito SIN transform (ver el comentario grande en
+        // admin_gestion.js) -- Mapbox ya escribe su propio transform de
+        // posición sobre este mismo elemento en cada frame.
+        box-shadow: 0 0 0 5px var(--shalom-accent-soft), 0 2px 10px rgba(20, 10, 15, 0.55);
+        border-color: var(--shalom-accent);
+    }
+    // Gris por default, acento solo en la fila resaltada (mockup
+    // aprobado, más minimalista): antes cada bolita salía siempre en
+    // rosa de marca, no destacaba nada en particular.
+    .admin-cliente-row .idx {
+        width: 22px;
+        height: 22px;
+        flex: none;
+        border-radius: 50%;
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
+        font-size: 0.72rem;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .admin-cliente-row.resaltado .idx {
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+    }
+    .admin-cliente-row .nombre {
+        flex: 1;
+        min-width: 0;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .admin-cliente-row .flag-mini {
+        color: var(--shalom-alerta);
+        font-size: 0.68rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        white-space: nowrap;
+    }
+    // Sin la caja bordeada de la ronda anterior (mockup aprobado, más
+    // minimalista): ícono solo, mismo gris muted por default para
+    // Editar y GPS -- la fila resaltada es la que los pasa a acento,
+    // no cada botón por separado.
+    .admin-cliente-row .stop-icon-btn {
+        flex: none;
+        color: var(--shalom-ink-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        cursor: pointer;
+    }
+    .admin-cliente-row.resaltado .stop-icon-btn-accent {
+        color: var(--shalom-accent);
     }
 }

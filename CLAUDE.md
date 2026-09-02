@@ -43,8 +43,18 @@ does **not** include the OCA Field Service stack, so installing
 
 - VM: `traspastras2-east`, GCP, IP `104.196.114.160`.
 - Odoo container: `crm_odoo` — has a rotating suffix, **always get the
-  current name with `docker ps`, never assume it**.
-- Postgres container: `crm_odoo-db`.
+  current name with `docker ps`, never assume it**. `docker ps --filter
+  name=crm_odoo` matches on substring, so it **also returns the Postgres
+  container** (`crm_odoo-db.1...`) alongside the real one
+  (`crm_odoo.1...`) — confirmed in production: `CID=$(docker ps
+  --filter name=crm_odoo --format '{{.ID}}')` silently captured both
+  IDs (newline-joined) into one variable, and the second one then got
+  passed as the *command* to `docker exec -u root $CID chown ...`,
+  which failed as "executable file not found". Always filter on
+  `name=crm_odoo.1` instead (the Swarm task-naming pattern
+  `<service>.<replica>.<task-id>`) to get only the Odoo app container.
+- Postgres container: `crm_odoo-db` (matches `docker ps --filter
+  name=crm_odoo` too — see above).
 - Addons live at `/root/odoo-addons/` on the host, owned by `root`; the
   user's normal account needs `sudo` to read/write there.
 - Module update flow: `sudo chown -R 101:101` + `sudo chmod -R 755` on
