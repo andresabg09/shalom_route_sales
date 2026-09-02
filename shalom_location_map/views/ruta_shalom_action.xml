@@ -8,35 +8,44 @@
         clientes y planificación. Esta app es exclusivamente el flujo
         diario del vendedor.
 
-        Vive DENTRO del menú "Operaciones" del propio módulo Field
-        Service (fieldservice.operations), igual que "Programación de
-        Rutas": decisión de producto ya confirmada, nunca como app
-        aparte.
+        Ubicación en el menú, decisión final de la ronda "administración"
+        (mockup aprobado, ids reales confirmados por SSH : ver
+        README.md): Ruta Shalom REEMPLAZA el "Tablero" nativo
+        (fieldservice.dashboard, xml_id "dashboard") en el nivel raíz
+        de Servicio de Campo, en vez de tener su propia entrada aparte
+        dentro de Operaciones (donde vivía antes). Los hijos nativos de
+        Tablero (Equipos, Ordenes) siguen ahí, solo cambia qué pasa al
+        tocar el título del menú.
     -->
     <record id="ruta_shalom_client_action" model="ir.actions.client">
         <field name="name">Ruta Shalom</field>
         <field name="tag">shalom_ruta_app</field>
     </record>
 
-    <menuitem
-        id="ruta_shalom_app_menu"
-        name="Ruta Shalom (App del Vendedor)"
-        parent="fieldservice.operations"
-        action="ruta_shalom_client_action"
-        sequence="5"
-    />
+    <!--
+        NO un <record id="fieldservice.dashboard"> normal: se probó
+        (desplegado, actualizado y reiniciado en producción) y Odoo lo
+        ignora en silencio : el ir.model.data de "dashboard" lo trajo
+        el propio fieldservice con noupdate=True, y ESE es el que
+        manda, no el de este módulo. Ver models/ir_ui_menu.py para el
+        porqué del <function> (write directo por ORM, esquiva ese
+        mecanismo por completo) en vez de un <record>.
+    -->
+    <function model="ir.ui.menu" name="shalom_reemplazar_tablero_por_ruta_shalom">
+        <value eval="[]" />
+    </function>
 
     <!--
-        Decisión de producto: abrir la app "Servicio de Campo" (para
-        cualquier rol, no solo vendedores) tiene que caer directo en
-        Ruta Shalom, no en el tablero nativo. La raíz del menú
-        (fieldservice.root) no tenía acción propia: Odoo bajaba por
-        el primer hijo con acción que encontrara (Tablero, secuencia
-        10, antes que Operaciones en 20) y nunca llegaba hasta acá.
-        Setearle la acción directo a la raíz resuelve esto sin mover
-        ningún menú nativo de lugar: todo el árbol de menús (Tablero,
-        Operaciones, Data Maestra, Informes, Ajustes) sigue existiendo
-        y accesible igual que siempre desde la barra lateral.
+        Decisión de producto (ronda anterior, sigue vigente): abrir la
+        app "Servicio de Campo" (para cualquier rol, no solo
+        vendedores) tiene que caer directo en Ruta Shalom, no en el
+        tablero nativo. La raíz del menú (fieldservice.root) no tenía
+        acción propia: Odoo bajaba por el primer hijo con acción que
+        encontrara : que ahora YA ES Ruta Shalom (Tablero, arriba),
+        así que en rigor esto ya quedaría cubierto por el cambio de
+        arriba solo; se deja de todos modos, explícito, para no
+        depender de ese orden de resolución si el día de mañana se
+        reordenan los menús nativos.
     -->
     <record id="fieldservice.root" model="ir.ui.menu">
         <field name="action" ref="ruta_shalom_client_action"/>

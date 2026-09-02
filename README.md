@@ -333,6 +333,81 @@ vendedor (`cliente_form.js`/`.xml`). Como `fsm.location` delega en
 los cuatro datos que `shalom_campos_cliente_faltantes()`
 (`fsm_order.py`) exige para poder cerrar una visita -- ver ahí abajo.
 
+### Administración (`views/shalom_admin_action.xml`, `admin_gestion.js`/`.xml`)
+UNA sola client action Owl ("AdminGestion"), restringida al grupo
+`fieldservice.group_fsm_manager` (el mismo que ya usa el botón "Crear
+Ubicación de Servicio" de `res_partner.py`) tanto en el menú como del
+lado del servidor (`_shalom_verificar_admin()` en cada método de
+backend, para no depender solo de que el menú esté oculto). Empezó
+como dos pantallas/menús separados (Seguimiento de Visitas / Rutas de
+mis vendedores) reusando `VisitSheet`/`RutaDetalle` tal cual -- se
+unieron en una sola página y se dejó de reusar esos dos componentes a
+pedido explícito del usuario: quería las dos secciones juntas como en
+el mockup, y que Administración sirva para revisar/arreglar datos de
+clientes, no para reabrir el flujo de VENTA del vendedor (Tomar
+pedido, catálogo) que traía `VisitSheet` de arrastre.
+
+- **Seguimiento de Visitas** (`shalom_admin_seguimiento_visitas()` en
+  `fsm_order.py`): lista, por default, las visitas Cancelado/No quiso
+  de TODOS los vendedores (chips para sumar Completado/Pendiente),
+  con cliente, ruta, vendedor, fecha y observación a la vista, cada
+  una en una `.stop-card` (reusa el mismo componente visual que ya
+  usan `ruta_detalle.xml`/`clientes.xml`, no una tabla nueva). Tocar
+  la fila o el lápiz abre `ClienteForm` (editar cliente) -- NO
+  `VisitSheet`. "Marcar revisado" (`x_revisado_admin`,
+  `shalom_toggle_revisado()`) es un booleano nuevo que no toca el
+  estado de la visita, solo para que oficina no relea la misma
+  observación dos veces. "Archivar cliente"
+  (`shalom_admin_archivar_cliente()` en `fsm_location.py`) pone
+  `active=False` en la `fsm.location` -- eso sí la saca de
+  `action_generar_visitas_ruta()`, a diferencia de solo vaciarle
+  `fsm_route_id`; DISTINTO de `action_eliminar_ubicacion()` (borrado
+  permanente, ya existía). Como `active` vive en el contacto delegado
+  (`_inherits`), si el contacto tiene más de una Ubicación activa se
+  rechaza con `UserError` en vez de archivarlas todas en silencio.
+- **Rutas de mis vendedores**, debajo, misma página
+  (`shalom_admin_rutas_programadas()` en `fsm_person.py`, sin la
+  restricción de `fsm_person_id` que sí tiene
+  `shalom_mis_rutas_programadas()`): selector "vendedor primero, en
+  cascada" (`<select>` de vendedores, chips con solo las rutas de ese
+  vendedor -- Opción A del mockup). Al elegir una ruta se lee su lista
+  de clientes (`orm.searchRead` directo sobre `fsm.order`, mismo
+  criterio que `ruta_detalle.js`, sin método de backend nuevo) y se
+  dibuja un mapa PROPIO chico (`dibujarMapaAdmin()`, con los mismos
+  helpers de `mapbox_utils.js` y el mismo pin `.shalom-marker-numero`
+  que ya existían) -- deliberadamente NO es `dibujarMapa()` de
+  `ruta_detalle.js` reusado: sin trazado, sin seguimiento en vivo del
+  vendedor, sin popup de venta. Tocar un pin abre `ClienteForm`
+  directo. Debajo del mapa, la lista de clientes de esa ruta repite el
+  mismo patrón de dos íconos por fila que ya tiene el mockup: lápiz
+  (`ClienteForm`) y mira (abre el wizard nativo "Buscar GPS por
+  nombre" ya existente, vía `shalom_buscar_gps_wizard_action` con
+  `active_ids=[locationId]` para que arranque cargado con ese único
+  cliente -- ningún wizard nuevo).
+
+Menú: "Administración" cuelga de `fieldservice.root`, mismo nivel que
+Data Maestra/Informes (sequence 45, entre Informes=40 y Ajustes=100).
+Los xml_id reales del árbol de menús de `fieldservice` (no viven en
+este repo, son del módulo OCA) se confirmaron por SSH: `root` (Servicio
+de Campo), `dashboard` (Tablero), `operations` (Operaciones), `data`
+(Data Maestra), `reporting` (Informes).
+
+`ruta_shalom_action.xml` hace que Ruta Shalom reemplace el Tablero
+nativo (sus hijos nativos, Equipos/Ordenes, siguen ahí) y la entrada
+propia que Ruta Shalom tenía antes dentro de Operaciones se eliminó
+(quedaba redundante). Bug real encontrado y corregido: un
+`<record id="fieldservice.dashboard">` normal para renombrarlo/
+cambiarle la acción se cargaba SIN error pero Odoo lo ignoraba en
+silencio -- el `ir.model.data` de "dashboard" lo trae el propio
+`fieldservice` con `noupdate=True`, y ese es el que manda, no el de
+este módulo. La salida (`models/ir_ui_menu.py`,
+`shalom_reemplazar_tablero_por_ruta_shalom()`, invocado por un
+`<function>` sin `noupdate` en vez de un `<record>`): un `write()`
+directo por ORM, que esquiva el mecanismo de diff de `<record>`/
+`noupdate` por completo (ese mecanismo solo aplica al cargar datos
+declarativos, no a una escritura común) y corre en cada `-u` para que
+se mantenga aunque algo más lo toque después.
+
 ### `controllers/mapbox_token.py`
 Endpoint JSON (`/shalom_location_map/mapbox_public_token`, `auth="user"`)
 que expone el mismo token público de Mapbox al JS del navegador para

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Administración (punto 4 de la ronda "administración", ver
+        README.md): UNA sola client action Owl ("AdminGestion"),
+        restringida al grupo fieldservice.group_fsm_manager, con dos
+        secciones en una misma página (Seguimiento de Visitas +
+        Rutas de mis vendedores) : antes eran dos pantallas/menús
+        separados; se unieron a pedido explícito del usuario. Los
+        métodos de backend que la alimentan (fsm_order.py/
+        fsm_location.py/fsm_person.py) verifican el mismo grupo del
+        lado del servidor, no solo acá.
+
+        Menú "Administración" al mismo nivel que Data Maestra/Informes
+        (xml_id "data"/"reporting", confirmados por SSH : ver
+        README.md), sequence 45: entre Informes (40) y Ajustes (100).
+    -->
+    <record id="shalom_admin_gestion_client_action" model="ir.actions.client">
+        <field name="name">Administración</field>
+        <field name="tag">shalom_admin_gestion</field>
+    </record>
+
+    <menuitem
+        id="shalom_admin_menu"
+        name="Administración"
+        parent="fieldservice.root"
+        action="shalom_admin_gestion_client_action"
+        groups="fieldservice.group_fsm_manager"
+        sequence="45"
+    />
+</odoo>

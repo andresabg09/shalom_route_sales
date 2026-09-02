@@ -90,7 +90,8 @@ from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
+from odoo.osv import expression
 
 _logger = logging.getLogger(__name__)
 
@@ -188,6 +189,13 @@ class FSMOrder(models.Model):
         "mejor horario, pedir que dejen la entrada libre). Campo "
         "propio de la app del vendedor, independiente de otros campos "
         "de notas nativos del pedido.",
+    )
+    x_revisado_admin = fields.Boolean(
+        string="Revisado por oficina",
+        help="Marcado desde Administración → Seguimiento de Visitas, "
+        "para no tener que releer la misma observación de una visita "
+        "Cancelado/No quiso dos veces. No afecta ningún flujo del "
+        "vendedor ni cambia el estado de la visita.",
     )
     # Solo se agrega tracking=True -- el resto de la definición del
     # campo (comodel, relación con fsm.stage, etc.) la hereda de
@@ -987,3 +995,94 @@ class FSMOrder(models.Model):
         ]
 
         return {"meses": meses, "series": series, "olvidados": olvidados}
+
+    # ------------------------------------------------------------------
+    # Administración → Seguimiento de Visitas (punto 4 de la ronda de
+    # feedback "administración"). Ver también fsm_location.py
+    # (shalom_admin_archivar_cliente) y fsm_person.py
+    # (shalom_admin_rutas_programadas) para el resto del apartado.
+    # ------------------------------------------------------------------
+
+    def _shalom_verificar_admin(self):
+        """Corta con AccessError si el usuario logueado no tiene el rol
+        Administrador de Servicio de Campo -- todos los métodos de
+        Administración pasan por acá antes de devolver o tocar nada,
+        para no depender solo de que el menú esté oculto en el
+        frontend (el mismo grupo que ya usa el botón "Crear Ubicación
+        de Servicio" en res_partner.py)."""
+        if not self.env.user.has_group("fieldservice.group_fsm_manager"):
+            raise AccessError(_(
+                "Esta acción es solo para el rol Administrador de "
+                "Servicio de Campo."
+            ))
+
+    # xml_id de cada etapa cerrada -- mismo criterio que
+    # _id_etapa_cancelada() más arriba (por xml_id, no por nombre
+    # visible, que puede estar traducido o editado a mano).
+    _SHALOM_XMLID_ETAPA = {
+        "cancelado": "fieldservice.fsm_stage_cancelled",
+        "completado": "fieldservice.fsm_stage_completed",
+        "no_quiso": "shalom_location_map.shalom_fsm_stage_no_quiso",
+    }
+
+    @api.model
+    def shalom_admin_seguimiento_visitas(self, estados=None, route_id=False):
+        """Visitas para Administración → Seguimiento de Visitas: por
+        default Cancelado/No quiso (las que necesitan que alguien
+        decida algo), con cliente, ruta, vendedor, fecha y observación
+        a la vista -- para revisar sin abrir cada visita una por una.
+        `estados` acepta cualquier combinación de "cancelado",
+        "no_quiso", "completado", "pendiente" (cualquier etapa
+        abierta)."""
+        self._shalom_verificar_admin()
+        estados = estados or ["cancelado", "no_quiso"]
+
+        sub_dominios = []
+        if "pendiente" in estados:
+            sub_dominios.append([("stage_id.is_closed", "=", False)])
+        ids_cerradas = []
+        for estado in estados:
+            xml_id = self._SHALOM_XMLID_ETAPA.get(estado)
+            if not xml_id:
+                continue
+            etapa = self.env.ref(xml_id, raise_if_not_found=False)
+            if etapa:
+                ids_cerradas.append(etapa.id)
+        if ids_cerradas:
+            sub_dominios.append([("stage_id", "in", ids_cerradas)])
+        if not sub_dominios:
+            return []
+
+        dominio = expression.OR(sub_dominios)
+        if route_id:
+            dominio = expression.AND([dominio, [("fsm_route_id", "=", route_id)]])
+
+        ordenes = self.search(dominio, order="write_date desc", limit=200)
+        return [
+            {
+                "id": orden.id,
+                "cliente_nombre": orden.location_id.name if orden.location_id else "",
+                "location_id": orden.location_id.id if orden.location_id else False,
+                "ruta_nombre": orden.fsm_route_id.name if orden.fsm_route_id else "",
+                "vendedor_nombre": (
+                    orden.fsm_route_id.fsm_person_id.name
+                    if orden.fsm_route_id and orden.fsm_route_id.fsm_person_id
+                    else ""
+                ),
+                "fecha": fields.Datetime.to_string(orden.write_date) if orden.write_date else "",
+                "observaciones": orden.x_observaciones_visita or "",
+                "estado_nombre": orden.stage_id.name or "",
+                "revisado": orden.x_revisado_admin,
+            }
+            for orden in ordenes
+        ]
+
+    def shalom_toggle_revisado(self):
+        """Botón 'Marcar revisado' / 'Marcar sin revisar' de
+        Administración → Seguimiento de Visitas -- no cambia el
+        estado de la visita, solo evita que oficina tenga que releer
+        la misma observación dos veces."""
+        self._shalom_verificar_admin()
+        for orden in self:
+            orden.x_revisado_admin = not orden.x_revisado_admin
+        return True

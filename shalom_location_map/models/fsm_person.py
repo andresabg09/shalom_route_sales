@@ -14,7 +14,8 @@ un dato nuevo de asignación.
 """
 import logging
 
-from odoo import api, models
+from odoo import _, api, models
+from odoo.exceptions import AccessError
 
 _logger = logging.getLogger(__name__)
 
@@ -162,3 +163,43 @@ class FSMPerson(models.Model):
             }
             for o in orders
         ]
+
+    @api.model
+    def shalom_admin_rutas_programadas(self):
+        """Administración → Rutas de mis vendedores: TODAS las
+        ocurrencias de fsm.route.schedule todavía no completadas, de
+        TODOS los vendedores (no solo el usuario logueado), agrupadas
+        por vendedor -- para el selector "vendedor primero, en
+        cascada" (Opción A del mockup). Mismo criterio de "abierta"
+        que shalom_mis_rutas_programadas(), sin la restricción de
+        fsm_person_id."""
+        if not self.env.user.has_group("fieldservice.group_fsm_manager"):
+            raise AccessError(_(
+                "Esta acción es solo para el rol Administrador de "
+                "Servicio de Campo."
+            ))
+        schedules = self.env["fsm.route.schedule"].search(
+            [("estado", "!=", "completada")],
+            order="fsm_person_id, date_start asc",
+        )
+        vendedores = {}
+        for s in schedules:
+            persona = s.fsm_person_id
+            if not persona:
+                continue
+            if persona.id not in vendedores:
+                vendedores[persona.id] = {
+                    "persona_id": persona.id,
+                    "persona_nombre": persona.name,
+                    "rutas": [],
+                }
+            vendedores[persona.id]["rutas"].append(
+                {
+                    "id": s.id,
+                    "route_id": s.route_id.id,
+                    "route_name": s.route_id.name,
+                    "cantidad_clientes": s.cantidad_clientes,
+                    "estado": s.estado,
+                }
+            )
+        return list(vendedores.values())

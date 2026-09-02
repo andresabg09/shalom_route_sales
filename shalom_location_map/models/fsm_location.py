@@ -23,7 +23,7 @@ import logging
 import re
 
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -388,5 +388,42 @@ class FSMLocation(models.Model):
             "fsm.location id=%s asignada a fsm.route id=%s en posición %s "
             "(%s ubicaciones corridas)",
             self.id, route_id, nuevo_orden, len(siguientes),
+        )
+        return True
+
+    def shalom_admin_archivar_cliente(self):
+        """Botón "Archivar cliente" de Administración → Seguimiento de
+        Visitas: a diferencia de action_eliminar_ubicacion() (borrado
+        PERMANENTE), esto solo apaga active -- reversible desde
+        Contactos archivados. Es lo que de verdad saca a un cliente de
+        su ruta: una Ubicación archivada no entra en
+        action_generar_visitas_ruta() (que solo busca activas), a
+        diferencia de simplemente vaciarle fsm_route_id.
+
+        OJO -- active vive en el contacto delegado (_inherits, ver el
+        comentario grande en _shalom_eliminar_ubicacion_o_motivo): si
+        este contacto tiene MÁS de una Ubicación, archivar acá las
+        archiva a TODAS. Se avisa antes en vez de hacerlo en
+        silencio."""
+        self.ensure_one()
+        if not self.env.user.has_group("fieldservice.group_fsm_manager"):
+            raise AccessError(_(
+                "Esta acción es solo para el rol Administrador de "
+                "Servicio de Campo."
+            ))
+        otras_ubicaciones = self.search(
+            [("partner_id", "=", self.partner_id.id), ("id", "!=", self.id), ("active", "=", True)]
+        )
+        if otras_ubicaciones:
+            raise UserError(_(
+                "Este contacto tiene más de una Ubicación activa -- "
+                "archivar acá las archivaría TODAS (active vive en el "
+                "contacto, no en la Ubicación). Si es lo que querés, "
+                "hacelo desde Contactos en vez de acá."
+            ))
+        self.write({"active": False})
+        _logger.info(
+            "Cliente archivado desde Administración → Seguimiento de "
+            "Visitas: fsm.location id=%s ('%s').", self.id, self.name,
         )
         return True
