@@ -1165,15 +1165,20 @@ export class OrderScreen extends Component {
 
     /**
      * Arma las líneas en el formato que espera el backend
-     * (_crear_lineas_pedido) -- las de recompensa van con
-     * price_unit: 0 explícito (si no, Odoo les calcularía el precio de
-     * lista normal al crear la línea).
+     * (_crear_lineas_pedido) -- las de recompensa van marcadas
+     * es_recompensa/regla_id: el backend NO crea un sale.order.line a
+     * mano para esas (por eso ya no manda price_unit/cantidad de
+     * regalo), sino que reclama la promo contra el motor nativo de
+     * lealtad de Odoo, que calcula solo cuántas unidades gratis
+     * corresponden según los puntos reales del pedido (ver
+     * _shalom_reclamar_recompensas_nativas en fsm_order.py).
      */
     lineasParaBackend(items) {
         return items.map((item) => ({
             product_id: item.producto.id,
             qty: item.cantidad,
-            price_unit: item.esRecompensa ? 0 : false,
+            es_recompensa: !!item.esRecompensa,
+            regla_id: item.reglaId || false,
         }));
     }
 

@@ -5,7 +5,7 @@
                "botón de GPS y orden/jornada de visita en las órdenes de servicio, "
                "generación de visitas por ruta, y la app de venta de ruta callejera "
                "del vendedor (Ruta Shalom).",
-    "version": "18.0.27.0.0",
+    "version": "18.0.28.0.0",
     "category": "Field Service",
     "author": "AutomatePTY",
     "license": "AGPL-3",
@@ -19,6 +19,14 @@
         # Ya está instalado en producción (confirmado por SSH); se declara
         # como dependencia real en vez de asumirlo en silencio.
         "loyalty",
+        # sale_loyalty -- para _shalom_reclamar_recompensas_nativas()
+        # (fsm_order.py): usa sale.order._update_programs_and_rewards() y
+        # _apply_program_reward(), que viven en este módulo (el botón
+        # "Recompensas" del formulario nativo de Ventas es de acá), no en
+        # el "loyalty" base. Ya está instalado en producción -- es lo que
+        # hoy permite reclamar recompensas desde el formulario nativo de
+        # Ventas.
+        "sale_loyalty",
     ],
     "data": [
         "security/ir.model.access.csv",

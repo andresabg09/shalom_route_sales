@@ -254,12 +254,14 @@ class FSMLocation(models.Model):
 
     def _shalom_agregar_a_ocurrencia_activa(self, route_id):
         """Llamado desde shalom_crear_cliente_rapido() cuando el alta
-        rápida viene con una ruta ya elegida: además de posicionar al
-        cliente en la ruta, le genera la visita en la ocurrencia
-        (fsm.route.schedule) que el vendedor está usando AHORA MISMO --
-        para que aparezca de una en la ruta que está atendiendo, sin
-        que oficina tenga que ir a "Agregar cliente a esta ocurrencia"
-        a mano.
+        rápida viene con una ruta ya elegida, y también desde
+        shalom_asignar_ruta_y_orden() (cliente existente al que se le
+        cambia la ruta desde Administración/Editar cliente): además de
+        posicionar al cliente en la ruta, le genera la visita en la
+        ocurrencia (fsm.route.schedule) que el vendedor está usando
+        AHORA MISMO -- para que aparezca de una en la ruta que está
+        atendiendo, sin que oficina tenga que ir a "Agregar cliente a
+        esta ocurrencia" a mano.
 
         Ocurrencia activa = la más reciente (por date_start) de esa
         ruta con estado 'en_curso' o 'por_iniciar' -- A PROPÓSITO no
@@ -287,16 +289,17 @@ class FSMLocation(models.Model):
         try:
             ocurrencia.action_agregar_visita(self.id)
         except UserError:
-            # No debería pasar (el cliente recién se creó, no puede
-            # tener ya una visita abierta en esta ocurrencia) -- pero
-            # si pasara por algún motivo, no se bloquea el alta del
-            # cliente por esto. Queda solo en la ruta, como si no
-            # hubiera ocurrencia activa.
-            _logger.warning(
-                "No se pudo agregar automáticamente fsm.location id=%s "
-                "a la ocurrencia activa (fsm.route.schedule id=%s) de "
-                "su ruta -- el cliente queda igual posicionado en la "
-                "ruta.", self.id, ocurrencia.id,
+            # Puede pasar de verdad acá (a diferencia del alta rápida):
+            # si solo se cambió "va después de" dentro de la MISMA ruta
+            # (sin cambiar realmente de ruta), el cliente puede ya tener
+            # una visita abierta en esta ocurrencia -- no es un error,
+            # simplemente no hay nada nuevo que generar. En cualquier
+            # caso, nunca se bloquea el guardado del cliente por esto.
+            _logger.info(
+                "No se generó una visita nueva para fsm.location id=%s "
+                "en la ocurrencia activa (fsm.route.schedule id=%s) -- "
+                "probablemente ya tenía una abierta ahí.",
+                self.id, ocurrencia.id,
             )
 
     def shalom_actualizar_gps(self, latitude, longitude):
@@ -409,7 +412,16 @@ class FSMLocation(models.Model):
         para que el nuevo cliente entre sin pisar a nadie.
 
         route_id=False desasigna la ruta (deja el cliente sin ruta,
-        como si nunca se hubiera posicionado)."""
+        como si nunca se hubiera posicionado).
+
+        Si route_id viene informado, además intenta generarle la visita
+        en la ocurrencia activa de esa ruta (mismo criterio que
+        shalom_crear_cliente_rapido -- ver
+        _shalom_agregar_a_ocurrencia_activa) -- caso típico: un cliente
+        se pasa de una ruta a otra desde Administración y hay que
+        atenderlo en el ciclo que ya está en curso, no esperar al
+        próximo. Si no hay ocurrencia activa para esa ruta, no pasa
+        nada (queda solo posicionado, como siempre)."""
         self.ensure_one()
         if not route_id:
             self.write({"fsm_route_id": False})
@@ -437,6 +449,7 @@ class FSMLocation(models.Model):
             "(%s ubicaciones corridas)",
             self.id, route_id, nuevo_orden, len(siguientes),
         )
+        self._shalom_agregar_a_ocurrencia_activa(route_id)
         return True
 
     def shalom_admin_archivar_cliente(self):

@@ -2541,4 +2541,11 @@
     .admin-cliente-row.resaltado .stop-icon-btn-accent {
         color: var(--shalom-accent);
     }
+    // Archivar visita: a diferencia de Editar/GPS (mismo gris muted por
+    // default), este SÍ lleva su propio color siempre -- es una acción
+    // destructiva (aunque reversible), tiene que distinguirse a simple
+    // vista de las otras dos incluso sin resaltar la fila.
+    .admin-cliente-row .stop-icon-btn-danger {
+        color: var(--shalom-alerta);
+    }
 }

@@ -445,7 +445,9 @@ class FSMOrder(models.Model):
         cierre de la visita.
 
         lineas: mismo formato que shalom_confirmar_pedido (lista de
-        dicts {"product_id": int, "qty": float}).
+        dicts {"product_id": int, "qty": float, "es_recompensa": bool,
+        "regla_id": int|False} -- los dos últimos solo importan para
+        las líneas de recompensa, ver _crear_lineas_pedido).
 
         Devuelve la acción de ventana para abrir esa cotización.
         """
@@ -495,19 +497,87 @@ class FSMOrder(models.Model):
         """Crea las sale.order.line del carrito -- compartido entre
         shalom_confirmar_pedido y shalom_guardar_borrador_pedido.
 
-        Cada línea puede traer opcionalmente "price_unit": si viene,
-        se fuerza ese precio (se usa para la línea de recompensa de una
-        promo completa, que va a $0 -- sin esto, Odoo le calcularía el
-        precio de lista normal al crear la línea)."""
+        Las líneas marcadas "es_recompensa" (producto gratis de una
+        promo "comprar X llevar Y" ya completa, elegido con el botón
+        Recompensa del carrito) NO se crean acá como sale.order.line
+        a mano -- eso dejaba una línea en $0 sin ninguna marca de que
+        fuera un regalo (ni is_reward_line, ni reward_id/coupon_id), así
+        que el motor de lealtad de Odoo nunca se enteraba de que la
+        promo ya había sido canjeada (se podía volver a reclamar la
+        misma promo después desde el formulario nativo de Ventas, sin
+        que nada lo bloqueara). En vez de eso, se junta la loyalty.rule
+        de cada una y se reclama de verdad vía
+        _shalom_reclamar_recompensas_nativas() -- mismo mecanismo que
+        el botón "Recompensas" del formulario nativo."""
+        reglas_a_reclamar = self.env["loyalty.rule"]
         for linea in lineas:
+            if linea.get("es_recompensa"):
+                if linea.get("regla_id"):
+                    reglas_a_reclamar |= self.env["loyalty.rule"].browse(
+                        linea["regla_id"]
+                    )
+                continue
             vals = {
                 "order_id": sale_order.id,
                 "product_id": linea["product_id"],
                 "product_uom_qty": linea.get("qty") or 1,
             }
-            if "price_unit" in linea and linea["price_unit"] is not False:
-                vals["price_unit"] = linea["price_unit"]
             self.env["sale.order.line"].create(vals)
+        if reglas_a_reclamar:
+            self._shalom_reclamar_recompensas_nativas(sale_order, reglas_a_reclamar)
+
+    def _shalom_reclamar_recompensas_nativas(self, sale_order, reglas):
+        """Reclama de verdad, contra el motor nativo de lealtad de Odoo
+        (sale_loyalty), las promociones "comprar X llevar Y" elegidas
+        con el botón Recompensa del carrito -- mismo mecanismo que usa
+        el botón "Recompensas" del formulario nativo de Ventas
+        (action_open_reward_wizard), pero llamado directo para no abrir
+        ningún wizard ni depender de que sea la única promo reclamable
+        del pedido.
+
+        _update_programs_and_rewards() (antes de reclamar nada) hace que
+        Odoo detecte el programa automático como aplicable a las líneas
+        pagas ya creadas y le calcule los puntos/canjes reales -- por
+        eso NO hace falta mandar una cantidad de regalo calculada en el
+        carrito: _apply_program_reward() (vía _get_reward_values_product)
+        calcula sola cuántas unidades gratis corresponden según los
+        puntos que el pedido tiene en ESTE momento, que es la fuente de
+        verdad (no lo que el carrito alcanzó a estimar en el celular).
+
+        reglas: recordset de loyalty.rule (una por regla_id distinta
+        que venía marcada es_recompensa en el carrito)."""
+        sale_order._update_programs_and_rewards()
+        for regla in reglas:
+            programa = regla.program_id
+            recompensa = programa.reward_ids.filtered(
+                lambda r: r.reward_type == "product" and r.reward_product_id
+            )[:1]
+            if not recompensa:
+                raise UserError(
+                    _("El programa '%(programa)s' ya no tiene un producto "
+                      "de regalo configurado -- no se pudo aplicar la "
+                      "promoción. Revisalo desde Ventas antes de "
+                      "confirmar el pedido.",
+                      programa=programa.name)
+                )
+            coupon = sale_order.coupon_point_ids.filtered(
+                lambda p: p.coupon_id.program_id == programa
+            ).coupon_id[:1]
+            if not coupon:
+                raise UserError(
+                    _("La promoción '%(programa)s' ya no está completa en "
+                      "este pedido -- revisá las cantidades antes de "
+                      "confirmar.",
+                      programa=programa.name)
+                )
+            resultado = sale_order._apply_program_reward(recompensa, coupon)
+            if resultado.get("error"):
+                raise UserError(
+                    _("No se pudo aplicar la promoción '%(programa)s': "
+                      "%(error)s",
+                      programa=programa.name, error=resultado["error"])
+                )
+        sale_order._update_programs_and_rewards()
 
     def shalom_confirmar_pedido(self, lineas):
         """Llamado desde la app del vendedor al tocar "Confirmar
@@ -519,8 +589,10 @@ class FSMOrder(models.Model):
         genera después, aparte, en oficina -- este método no toca
         facturación.
 
-        lineas: lista de dicts {"product_id": int, "qty": float}, uno
-        por producto agregado al carrito.
+        lineas: lista de dicts {"product_id": int, "qty": float,
+        "es_recompensa": bool, "regla_id": int|False}, uno por producto
+        agregado al carrito -- los dos últimos solo importan para las
+        líneas de recompensa, ver _crear_lineas_pedido.
 
         A diferencia de action_crear_cotizacion (que abre el formulario
         completo de sale.order para cargar productos ahí), acá los
@@ -932,18 +1004,24 @@ class FSMOrder(models.Model):
 
     @api.model
     def shalom_admin_visitas_en_vivo(self):
-        """Administración → 'Ver en vivo': lista las visitas ABIERTAS
-        ahora mismo (no cerradas), con su vendedor/ruta/cliente y si
-        tienen el catálogo genuinamente abierto en algún dispositivo
-        (heartbeat de x_catalogo_heartbeat, mismo criterio que
-        shalom_leer_carrito) -- para que oficina elija a cuál entrar a
-        mirar/ayudar sin tener que adivinar cuál está realmente en uso
-        en este momento."""
+        """Administración → 'En vivo': lista SOLO los catálogos
+        genuinamente abiertos ahora mismo en algún dispositivo (heartbeat
+        de x_catalogo_heartbeat de los últimos SHALOM_SEGUNDOS_CARRITO_ACTIVO
+        segundos, mismo criterio que shalom_leer_carrito) -- para que
+        oficina elija a cuál entrar a mirar/ayudar sin tener que revisar
+        visitas abiertas que nadie está usando en este momento (antes
+        traía TODAS las visitas sin cerrar, con un flag "activo" aparte
+        que el frontend usaba solo para el texto/puntito -- pedido
+        explícito: que la lista misma quede filtrada, no mezclada)."""
         self._shalom_verificar_admin()
+        limite = fields.Datetime.now() - timedelta(seconds=SHALOM_SEGUNDOS_CARRITO_ACTIVO)
         ordenes = self.search(
-            [("stage_id.is_closed", "=", False)], order="x_catalogo_heartbeat desc"
+            [
+                ("stage_id.is_closed", "=", False),
+                ("x_catalogo_heartbeat", ">=", limite),
+            ],
+            order="x_catalogo_heartbeat desc",
         )
-        ahora = fields.Datetime.now()
         return [
             {
                 "id": orden.id,
@@ -953,11 +1031,6 @@ class FSMOrder(models.Model):
                     orden.fsm_route_id.fsm_person_id.name
                     if orden.fsm_route_id and orden.fsm_route_id.fsm_person_id
                     else ""
-                ),
-                "activo": bool(
-                    orden.x_catalogo_heartbeat
-                    and (ahora - orden.x_catalogo_heartbeat).total_seconds()
-                    <= SHALOM_SEGUNDOS_CARRITO_ACTIVO
                 ),
             }
             for orden in ordenes

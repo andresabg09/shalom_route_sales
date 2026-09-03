@@ -30,15 +30,15 @@
                 <!-- ============ En vivo ============ -->
                 <div t-if="state.cargandoEnVivo" class="shalom-vacio">Cargando…</div>
                 <div t-elif="!state.visitasEnVivo.length" class="shalom-vacio">
-                    No hay visitas abiertas en este momento.
+                    No hay catálogos abiertos en este momento.
                 </div>
                 <t t-else="">
                     <div class="admin-visitas-count">
-                        <t t-esc="state.visitasEnVivo.length"/> visita(s) abierta(s)
+                        <t t-esc="state.visitasEnVivo.length"/> catálogo(s) abierto(s) ahora
                     </div>
                     <div class="admin-visitas-list">
                         <div
-                            t-foreach="visitasEnVivoOrdenadas"
+                            t-foreach="state.visitasEnVivo"
                             t-as="visita"
                             t-key="visita.id"
                             class="stop-card admin-visit-card"
@@ -46,7 +46,7 @@
                         >
                             <div class="stop-info">
                                 <div class="name">
-                                    <i t-if="visita.activo" class="fa fa-circle" aria-hidden="true" style="color:#d9534f;font-size:0.55em;margin-right:6px;"/>
+                                    <i class="fa fa-circle" aria-hidden="true" style="color:#d9534f;font-size:0.55em;margin-right:6px;"/>
                                     <t t-esc="visita.cliente_nombre"/>
                                 </div>
                                 <div class="addr">
@@ -54,7 +54,7 @@
                                 </div>
                             </div>
                             <div class="stop-right">
-                                <span class="stop-badge" t-esc="visita.activo ? 'Catálogo abierto' : 'Visita abierta'"/>
+                                <span class="stop-badge">Catálogo abierto</span>
                             </div>
                         </div>
                     </div>
@@ -272,6 +272,11 @@
                                         title="Buscar GPS por nombre (Google)"
                                         t-on-click="(ev) => this.buscarGps(ev, cliente.locationId)"
                                     ><i class="fa fa-crosshairs" aria-hidden="true"/></span>
+                                    <span
+                                        class="stop-icon-btn stop-icon-btn-danger"
+                                        title="Archivar visita (no borra al cliente)"
+                                        t-on-click="(ev) => this.archivarVisita(ev, cliente)"
+                                    ><i class="fa fa-trash-o" aria-hidden="true"/></span>
                                 </div>
                             </div>
                         </div>

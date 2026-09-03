@@ -305,13 +305,6 @@ export class AdminGestion extends Component {
         }
     }
 
-    /** Las activas (alguien con el catálogo abierto ahora) primero --
-     * el resto son visitas abiertas pero sin nadie tomando pedido en
-     * este momento, útiles igual para entrar a ayudar/corregir. */
-    get visitasEnVivoOrdenadas() {
-        return [...this.state.visitasEnVivo].sort((a, b) => (b.activo ? 1 : 0) - (a.activo ? 1 : 0));
-    }
-
     abrirEnVivo(visita) {
         this.state.orderIdEnVivo = visita.id;
         this.state.clienteEnVivoNombre = visita.cliente_nombre || "";
@@ -601,6 +594,39 @@ export class AdminGestion extends Component {
         this.action.doAction("shalom_location_map.shalom_buscar_gps_wizard_action", {
             additionalContext: {active_model: "fsm.location", active_ids: [locationId]},
         });
+    }
+
+    /** Botón "Archivar visita" (papelera) de una fila de "Rutas de mis
+     * vendedores": archiva SOLO esta fsm.order puntual -- mismo botón
+     * "Eliminar" que ya existe en la lista de "Visitas generadas" de
+     * una fsm.route.schedule (action_shalom_archivar_visita), reusado
+     * acá tal cual, sin duplicar el método. Caso típico: un cliente se
+     * cambió a otra ruta y queda una visita colada en la ruta vieja --
+     * esto la saca de la lista sin tocar al cliente ni a su Ubicación
+     * (a diferencia de "Archivar cliente" de Seguimiento de Visitas). */
+    async archivarVisita(ev, cliente) {
+        ev.stopPropagation();
+        // eslint-disable-next-line no-alert
+        const acepta = window.confirm(
+            `¿Sacar la visita de "${cliente.nombre}" de esta ruta? Se archiva ` +
+            `(no se borra del todo) -- si te equivocaste, se puede recuperar ` +
+            `buscándola con el filtro de archivados en fsm.order. No afecta a ` +
+            `ninguna otra visita de esta ocurrencia.`
+        );
+        if (!acepta) {
+            return;
+        }
+        try {
+            await this.orm.call("fsm.order", "action_shalom_archivar_visita", [
+                [cliente.ordenId],
+            ]);
+            this.notification.add(`Visita de "${cliente.nombre}" archivada.`, {
+                type: "success",
+            });
+            await this.cargarClientesRuta();
+        } catch (error) {
+            this.notification.add("No se pudo archivar la visita.", {type: "danger"});
+        }
     }
 
     // ==================================================================
