@@ -2855,10 +2855,48 @@
 // texto de estas listas envuelven en varias líneas dentro de un ancho
 // fijo (como "dos párrafos" en vez de una línea que se alarga sin
 // límite).
+// Nota (2do intento): no alcanzaba con esto en el <td> -- el "..."
+// seguía apareciendo porque el widget de solo lectura de Odoo (el
+// <span>/<div> DENTRO de la celda) trae su propio white-space:nowrap +
+// text-overflow:ellipsis, que es más específico que la regla de acá y
+// ganaba por herencia. Por eso ahora se aplica a la celda Y a todo lo
+// que tenga adentro (`*`), con !important para pisar el estilo propio
+// del widget -- si no, el texto se sigue cortando aunque la celda ya
+// no tenga tope de ancho.
+.o_shalom_gps_wizard_list .o_data_cell,
+.o_shalom_gps_wizard_list .o_data_cell * {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    word-break: break-word !important;
+}
 .o_shalom_gps_wizard_list .o_data_cell {
-    white-space: normal;
-    word-break: break-word;
     max-width: 260px;
     vertical-align: top;
     line-height: 1.3;
+}
+
+// Ídem, pero en celular: el tope fijo de 260px pensado para desktop
+// (más las columnas de botones al lado) sigue apretando el nombre/
+// dirección en una pantalla angosta -- pedido explícito: que se lea
+// completo sin tener que hacer zoom manual. Se saca el tope fijo (que
+// el texto use todo el ancho angosto disponible en vez de un valor de
+// escritorio) y se agranda un poco la letra; los botones de acción
+// pasan a ocupar todo el ancho de su celda y su texto también envuelve
+// en vez de quedar en una sola línea larga, para no competir por
+// espacio con las columnas de texto.
+@media (max-width: 768px) {
+    .o_shalom_gps_wizard_list .o_data_cell {
+        max-width: none;
+        font-size: 0.92rem;
+        line-height: 1.35;
+        padding-top: 8px;
+        padding-bottom: 8px;
+    }
+    .o_shalom_gps_wizard_list .o_data_cell button.btn {
+        display: block;
+        width: 100%;
+        white-space: normal !important;
+        line-height: 1.25;
+    }
 }
