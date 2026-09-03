@@ -115,15 +115,18 @@ in active use), during low-traffic hours.
    a new container ID).
 8. **Only after permissions are confirmed applied**, give the module
    update command (`docker exec ... odoo -u shalom_location_map -d
-   [DB] --db_host=... --db_port=... --db_user=... --stop-after-init`,
+   shalom --db_host=... --db_port=... --db_user=... --stop-after-init`,
    with `PGPASSWORD` passed via `-e` env var to `docker exec`, never as
-   a plain CLI flag). `odoo.conf` on this server has no `db_*` keys —
-   those live as env vars on the container (`HOST`, `PORT`, `USER`,
-   `PASSWORD`); read them with `docker exec [ID] env | grep -iE
-   'host|port|user|pass|name'` if unsure, and get the actual database
-   name with `docker exec -e PGPASSWORD=... [ID] psql -h [HOST] -p
-   [PORT] -U [USER] -l` if unsure (skip `postgres`/`template0`/
-   `template1`).
+   a plain CLI flag). The production database is named **`shalom`**
+   (confirmed via `psql -l` — the only real DB besides
+   `postgres`/`template0`/`template1`) — don't re-discover this via
+   `psql -l` every session, go straight to the update command.
+   `odoo.conf` on this server has no `db_*` keys — those live as env
+   vars on the container (`HOST`, `PORT`, `USER`, `PASSWORD`); read
+   them with `docker exec [ID] env | grep -iE 'host|port|user|pass|name'`
+   if unsure (container env vars, unlike the DB name, can change if the
+   stack is reconfigured, so still worth a quick check rather than
+   hardcoding host/port/user/password here).
 9. **Only if that update runs clean (no traceback)**, give
    `docker service update --force crm_odoo` to restart the service.
 

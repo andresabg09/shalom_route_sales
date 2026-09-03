@@ -33,6 +33,17 @@ fsm.location.shalom_actualizar_gps() para el guardado real, en vez de
 duplicar el write -- mismo criterio de "nunca inventar datos" que ya
 sigue geo_localize() en models/fsm_location.py.
 
+El popup de opciones (ShalomBuscarGpsWizardOpcion, que abre "Buscar
+opciones en Google") repite "Dejar como está" (acá "Ninguna es
+correcta: dejar como está") y "Borrar coordenada actual" con el mismo
+criterio de arriba, y los dos sacan al cliente de ESTA corrida del
+wizard -- pedido explícito: no había que llevar la cuenta a mano de
+cuáles ya se habían revisado. "Borrar coordenada actual" sigue
+dejándolo SIN GPS de verdad (a diferencia de "Dejar como está"), así
+que va a volver a aparecer en la próxima búsqueda/recarga de la lista.
+Antes había un cuarto botón, "Cerrar sin elegir", redundante con
+"Ninguna es correcta: dejar como está" -- se sacó.
+
 La cola de "a quién mostrar" por defecto es "clientes SIN coordenadas"
 (partner_latitude/partner_longitude vacíos o en 0) -- NO se basa en si
 ya se "revisó" antes: un cliente al que ya se le encontró GPS deja de
@@ -461,6 +472,15 @@ class ShalomBuscarGpsWizardOpcion(models.TransientModel):
         }
 
     def action_dejar_como_esta(self):
+        """Único botón de 'cerrar sin cambiar la coordenada' del popup
+        (antes había dos casi idénticos -- 'Ninguna es correcta: dejar
+        como está' y 'Cerrar sin elegir' -- se sacó el segundo por
+        redundante, pedido explícito). NO toca la coordenada del
+        cliente (la deja tal cual esté, con o sin GPS) pero sí lo saca
+        de ESTA corrida del wizard (ver sacar_de_la_lista=True, default
+        de _volver_al_wizard_o_cerrar), para que no estorbe mientras se
+        sigue buscando el resto -- la intención es 'ya lo voy a buscar
+        en persona en la ruta', no reintentar por Google."""
         self.ensure_one()
         self.location_id.x_gps_wizard_revisado = True
         return self._volver_al_wizard_o_cerrar(
@@ -468,12 +488,21 @@ class ShalomBuscarGpsWizardOpcion(models.TransientModel):
         )
 
     def action_borrar_coordenada(self):
+        """Vacía el GPS de este cliente y lo saca de ESTA corrida del
+        wizard (no estorba mientras se sigue revisando el resto) -- a
+        diferencia de la versión anterior, que lo dejaba en la lista y
+        obligaba a llevar la cuenta de cuáles ya se habían revisado.
+        Sigue sin GPS de verdad, así que la próxima vez que se busque/
+        recargue la lista (action_cargar_ubicaciones) va a volver a
+        aparecer -- acá solo se deja de mostrar en la corrida actual,
+        ya revisada."""
         self.ensure_one()
         self.location_id.shalom_actualizar_gps(0.0, 0.0)
         self.location_id.x_gps_wizard_revisado = False
         return self._volver_al_wizard_o_cerrar(
-            _("Coordenada de '%s' borrada. Sigue en la cola.") % self.location_id.name,
-            sacar_de_la_lista=False,
+            _("Coordenada de '%s' borrada. No va a estorbar en esta "
+              "corrida -- va a volver a aparecer en la próxima búsqueda "
+              "porque sigue sin GPS.") % self.location_id.name
         )
 
     def action_ver_mapa_actual(self):
@@ -487,20 +516,6 @@ class ShalomBuscarGpsWizardOpcion(models.TransientModel):
             f"&query={self.location_lat}%2C{self.location_lng}"
         )
         return {"type": "ir.actions.act_url", "url": url, "target": "new"}
-
-    def action_cerrar_popup(self):
-        """Botón 'Cerrar sin elegir' del footer: antes era un botón
-        nativo special='cancel', que -- por cómo Odoo apila (o más
-        bien NO apila) diálogos target='new' abiertos desde dentro de
-        otro diálogo -- terminaba sacando al usuario del wizard
-        principal en vez de solo cerrar este popup. Ahora vuelve al
-        wizard igual que las otras acciones del popup, sin tocar nada
-        de este cliente (no se saca de la lista: no se decidió nada)."""
-        self.ensure_one()
-        return self._volver_al_wizard_o_cerrar(
-            _("Sin cambios en '%s'.") % self.location_id.name,
-            sacar_de_la_lista=False,
-        )
 
     def _volver_al_wizard_o_cerrar(self, mensaje, sacar_de_la_lista=True):
         """Después de manejar un cliente desde este popup (usar una

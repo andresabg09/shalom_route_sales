@@ -213,6 +213,7 @@
                             <i t-if="ruta.es_visita_express" class="fa fa-bolt" aria-hidden="true"/>
                             <t t-esc="ruta.route_name"/>
                             <span class="admin-route-pill-count">· <t t-esc="ruta.cantidad_clientes"/></span>
+                            <span class="admin-route-pill-capacidad">· $<t t-esc="(ruta.capacidad || 0).toFixed(2)"/></span>
                         </button>
                     </div>
 
@@ -355,7 +356,7 @@
                             <div class="admin-mapa-chip" t-if="rutaSeleccionada">
                                 <i class="fa fa-map-o" aria-hidden="true"/>
                                 <t t-esc="rutaSeleccionada.route_name"/>
-                                <span class="admin-mapa-chip-count">· <t t-esc="rutaSeleccionada.cantidad_clientes"/> paradas</span>
+                                <span class="admin-mapa-chip-count">· <t t-esc="rutaSeleccionada.cantidad_clientes"/> paradas · $<t t-esc="(rutaSeleccionada.capacidad || 0).toFixed(2)"/> capacidad</span>
                             </div>
                             <div class="admin-mapa" t-ref="mapaAdmin"/>
                         </div>
@@ -391,6 +392,9 @@
                                 >
                                     <span class="idx" t-esc="cliente.orden || '-'"/>
                                     <span class="nombre" t-esc="cliente.nombre"/>
+                                    <span class="meta-venta" t-if="cliente.ventaMasAlta">
+                                        <i class="fa fa-flag" aria-hidden="true"/> <t t-esc="'$' + cliente.ventaMasAlta.toFixed(2)"/>
+                                    </span>
                                     <span class="flag-mini" t-if="!cliente.lat and !cliente.lng">
                                         <i class="fa fa-exclamation-triangle" aria-hidden="true"/> sin GPS
                                     </span>

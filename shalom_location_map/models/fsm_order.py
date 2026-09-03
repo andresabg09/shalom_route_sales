@@ -1088,7 +1088,9 @@ class FSMOrder(models.Model):
         write() más abajo) -- el correo queda afuera a propósito, es
         el único campo realmente opcional. fsm.location hereda estos
         campos de res.partner vía _inherits, así que se leen directo
-        desde location_id sin un read aparte.
+        desde location_id sin un read aparte. Incluye la foto del local
+        (image_1920, misma foto que carga cliente_form.js) -- pedido
+        explícito, se agregó como dato obligatorio junto con el resto.
 
         También la llama la app del vendedor desde el catálogo/carrito
         (order_screen.js) para el aviso NO bloqueante de "a este
@@ -1107,6 +1109,8 @@ class FSMOrder(models.Model):
             faltantes.append(_("RUC"))
         if not loc.x_nombre_contacto:
             faltantes.append(_("Nombre del contacto"))
+        if not loc.image_1920:
+            faltantes.append(_("Foto del local"))
         return faltantes
 
     def _validar_cierre_visita(self, vals):

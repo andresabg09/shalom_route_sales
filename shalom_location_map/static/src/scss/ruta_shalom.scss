@@ -2375,12 +2375,21 @@
         color: var(--shalom-ink-muted);
         font-weight: 600;
     }
+    // Capacidad de la ruta (fsm.route.schedule.capacidad, ver
+    // fsm_person.py) al lado de la cantidad de clientes -- pedido
+    // explícito: ver de un vistazo qué rutas conviene partir por ser
+    // demasiado grandes, sin tener que entrar a cada una.
+    .admin-route-pill-capacidad {
+        color: var(--shalom-primary, #7c5cff);
+        font-weight: 700;
+    }
     .admin-route-pill-active {
         border-color: var(--shalom-ink);
         background: var(--shalom-ink);
         color: var(--shalom-bg);
     }
-    .admin-route-pill-active .admin-route-pill-count {
+    .admin-route-pill-active .admin-route-pill-count,
+    .admin-route-pill-active .admin-route-pill-capacidad {
         color: var(--shalom-bg);
         opacity: 0.65;
     }
@@ -2729,18 +2738,34 @@
         gap: 3px;
         white-space: nowrap;
     }
-    // Sin la caja bordeada de la ronda anterior (mockup aprobado, más
-    // minimalista): ícono solo, mismo gris muted por default para
-    // Editar y GPS -- la fila resaltada es la que los pasa a acento,
-    // no cada botón por separado.
+    // Botón de verdad (con borde/fondo), no ícono pelado -- pedido
+    // explícito: en desktop tenía solo el ícono y era ambiguo qué hacía
+    // cada uno; ahora lleva ícono + palabra corta (ver .stop-icon-btn-label
+    // y el t-esc de cada botón en admin_gestion.xml) en las DOS
+    // resoluciones, desktop compacto acá y mobile/tablet más grande en
+    // el media query de abajo (pedido explícito: "mismo estilo, pero un
+    // poco más chico" que en el celular).
     .admin-cliente-row .stop-icon-btn {
         flex: none;
-        color: var(--shalom-ink-muted);
         display: flex;
         align-items: center;
         justify-content: center;
+        gap: 5px;
+        color: var(--shalom-ink-muted);
+        padding: 6px 11px;
+        border-radius: var(--shalom-radius-sm);
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface-2);
         font-size: 0.85rem;
         cursor: pointer;
+    }
+    // Más separación entre Editar/GPS/Eliminar que el resto de la fila
+    // (el `gap` general de .admin-cliente-row ya separa idx/nombre/
+    // badges de los botones) -- pedido explícito, reportado con
+    // captura: en desktop los 3 quedaban muy pegados, costaba
+    // distinguir cuál era cuál.
+    .admin-cliente-row .stop-icon-btn + .stop-icon-btn {
+        margin-left: 4px;
     }
     .admin-cliente-row.resaltado .stop-icon-btn-accent {
         color: var(--shalom-accent);
@@ -2752,30 +2777,37 @@
     .admin-cliente-row .stop-icon-btn-danger {
         color: var(--shalom-alerta);
     }
-    // Mismos colores, pero SIN el prefijo ".admin-cliente-row" -- los
-    // botones de icono del buscador/"por confirmar" de Visita Exprés
+    // Mismos colores (+ borde a juego, ahora que el botón siempre tiene
+    // caja), pero SIN el prefijo ".admin-cliente-row" -- los botones de
+    // icono del buscador/"por confirmar" de Visita Exprés
     // (.admin-express-resultado-row/.admin-express-pendiente-row) no
     // viven dentro de esa clase, y se estaban quedando sin color.
     .stop-icon-btn-accent {
         color: var(--shalom-accent);
+        border-color: var(--shalom-accent);
     }
     .stop-icon-btn-danger {
         color: var(--shalom-alerta);
+        border-color: var(--shalom-alerta);
     }
-    // El texto de cada botón (Editar/GPS/Eliminar) -- oculto en
-    // desktop (mismo ícono solo de siempre) y visible recién en
-    // tablet/celular, ver el media query de abajo.
+    // El texto de cada botón (Editar/GPS/Eliminar) -- visible siempre
+    // (desktop chico, mobile/tablet más grande en el media query de
+    // abajo). Antes solo se veía en mobile/tablet; pedido explícito:
+    // "no me desagrada que diga el ícono y la palabra... que sean los
+    // mismos, mismo tamaño [de estilo], misma navegación".
     .stop-icon-btn-label {
-        display: none;
+        display: inline;
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: var(--shalom-ink);
+        white-space: nowrap;
     }
     // Pedido explícito, reportado con capturas: en tablet/celular los
-    // botones de icono solo (Editar/GPS/Eliminar/Marcar revisado/
-    // Archivar cliente) quedaban muy chicos para tocar con el dedo con
-    // confianza -- "sentía que iba a tocar el equivocado". Acá, en vez
-    // de íconos sueltos, pasan a ser botones de verdad (con borde,
-    // fondo, más padding) con su nombre al lado -- 900px es el mismo
-    // corte que ya separa "una sola columna" del resto de Rutas de mis
-    // vendedores (ver @media (min-width: 900px) más arriba).
+    // botones quedaban chicos para tocar con el dedo con confianza --
+    // "sentía que iba a tocar el equivocado". Acá crecen (más padding,
+    // más tipografía) a un tamaño de área táctil cómoda -- 900px es el
+    // mismo corte que ya separa "una sola columna" del resto de Rutas
+    // de mis vendedores (ver @media (min-width: 900px) más arriba).
     @media (max-width: 899px) {
         .admin-cliente-row,
         .admin-express-resultado-row,
@@ -2792,23 +2824,10 @@
             gap: 6px;
             min-height: 40px;
             padding: 8px 12px;
-            border-radius: var(--shalom-radius-sm);
-            border: 1px solid var(--shalom-line);
-            background: var(--shalom-surface);
             font-size: 1rem;
         }
         .stop-icon-btn-label {
-            display: inline;
             font-size: 0.8rem;
-            font-weight: 700;
-            color: var(--shalom-ink);
-            white-space: nowrap;
-        }
-        .stop-icon-btn-accent {
-            border-color: var(--shalom-accent);
-        }
-        .stop-icon-btn-danger {
-            border-color: var(--shalom-alerta);
         }
         // Los de Visita Exprés que quedan sin texto (expandir "por
         // confirmar"/agregar del buscador) igual crecen para ser
@@ -2825,4 +2844,21 @@
             font-size: 0.88rem;
         }
     }
+}
+
+// Wizard nativo de Odoo "Buscar GPS por nombre" (shalom.buscar.gps.wizard
+// y .opcion, ver views/shalom_buscar_gps_wizard_views.xml) -- FUERA de
+// .o_shalom_ruta_app a propósito: es un diálogo de backend estándar de
+// Odoo, no la app Owl del vendedor. Pedido explícito: el nombre del
+// cliente y la dirección se cortaban a una sola línea y había que
+// agrandar la columna a mano cada vez. En vez de eso, las celdas de
+// texto de estas listas envuelven en varias líneas dentro de un ancho
+// fijo (como "dos párrafos" en vez de una línea que se alarga sin
+// límite).
+.o_shalom_gps_wizard_list .o_data_cell {
+    white-space: normal;
+    word-break: break-word;
+    max-width: 260px;
+    vertical-align: top;
+    line-height: 1.3;
 }

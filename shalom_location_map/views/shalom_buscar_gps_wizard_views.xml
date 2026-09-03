@@ -46,7 +46,7 @@
                     <span invisible="not mi_lat">Tu ubicación ya está guardada -- las próximas búsquedas van a mostrar distancia.</span>
                 </group>
                 <field name="line_ids" nolabel="1">
-                    <list create="0" delete="0">
+                    <list create="0" delete="0" class="o_shalom_gps_wizard_list">
                         <field name="location_id" readonly="1" force_save="1" />
                         <field name="location_direccion_actual" readonly="1" string="Dirección actual" />
                         <button
@@ -99,8 +99,10 @@
         Popup de opciones: se abre desde el botón "Buscar opciones en
         Google" de una fila. Muestra hasta 3 candidatos con su propio
         "Ver mapa" + "Usar esta opción", y repite acá los mismos
-        atajos "Dejar como está" / "Borrar coordenada actual" para no
-        tener que volver a la lista.
+        atajos "Ninguna es correcta: dejar como está" / "Borrar
+        coordenada actual" para no tener que volver a la lista: los
+        dos sacan al cliente de ESTA corrida del wizard (ver
+        wizards/shalom_buscar_gps_wizard.py).
     -->
     <record id="shalom_buscar_gps_wizard_opcion_form" model="ir.ui.view">
         <field name="name">shalom.buscar.gps.wizard.opcion.form</field>
@@ -137,7 +139,7 @@
                     Google no devolvió ninguna opción para esta búsqueda.
                 </p>
                 <field name="candidato_ids" nolabel="1">
-                    <list create="0" delete="0">
+                    <list create="0" delete="0" class="o_shalom_gps_wizard_list">
                         <field name="nombre" readonly="1" />
                         <field name="direccion" readonly="1" />
                         <field name="distancia_km" readonly="1" string="Distancia (km)" />
@@ -168,13 +170,7 @@
                         type="object"
                         string="Borrar coordenada actual"
                         class="btn-danger"
-                        confirm="Esto vacía el GPS de este cliente (sigue en la lista para buscarle otra). ¿Confirmás?"
-                    />
-                    <button
-                        name="action_cerrar_popup"
-                        type="object"
-                        string="Cerrar sin elegir"
-                        help="Vuelve a la lista principal del wizard sin cambiar nada de este cliente."
+                        confirm="Esto vacía el GPS de este cliente y lo saca de esta corrida (va a volver a aparecer en la próxima búsqueda, sigue sin GPS). ¿Confirmás?"
                     />
                 </footer>
             </form>

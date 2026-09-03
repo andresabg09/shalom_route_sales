@@ -431,7 +431,14 @@ export class AdminGestion extends Component {
                 .filter(Boolean);
             let datosPorLocation = {};
             if (locationIds.length) {
-                const locaciones = await this.orm.read("fsm.location", locationIds, ["name"]);
+                // x_venta_mas_alta: mismo campo ya calculado en
+                // fsm.location (ver ruta_detalle.js/"meta-venta" en la
+                // app del vendedor) -- se reusa tal cual acá, no se
+                // recalcula de nuevo.
+                const locaciones = await this.orm.read("fsm.location", locationIds, [
+                    "name",
+                    "x_venta_mas_alta",
+                ]);
                 datosPorLocation = Object.fromEntries(locaciones.map((l) => [l.id, l]));
             }
             this.state.clientesRuta = ordenes.map((o) => {
@@ -444,6 +451,7 @@ export class AdminGestion extends Component {
                     lat: o.x_cliente_lat,
                     lng: o.x_cliente_lng,
                     estado: estadoDesdeStageName(o.stage_name),
+                    ventaMasAlta: loc ? loc.x_venta_mas_alta : 0,
                 };
             });
         } catch (error) {
@@ -576,13 +584,24 @@ export class AdminGestion extends Component {
 
     /** Tocar un pin del mapa: resalta la fila correspondiente en la
      * lista de la derecha (scrollea hasta ella si hace falta). El
-     * popup del pin (Editar/GPS) ya lo abre Mapbox solo. */
+     * popup del pin (Editar/GPS) ya lo abre Mapbox solo.
+     *
+     * block: "start" (no "nearest") a propósito -- pedido explícito:
+     * en celular, la lista y el mapa están apilados (una sola columna
+     * angosta, ver @media (min-width: 900px) más arriba) y se ve muy
+     * poco de la lista a la vez. Con "nearest" la fila resaltada podía
+     * quedar centrada o parcialmente tapada, obligando a scrollear más
+     * para encontrarla. Con "start" queda pegada arriba de todo,
+     * justo debajo del buscador, visible de una sin explorar. En
+     * desktop (lista completa siempre visible al lado del mapa) este
+     * mismo comportamiento no tiene contra: la fila igual queda a la
+     * vista, solo que arriba en vez de en el medio. */
     resaltarDesdeMapa(ordenId) {
         this.state.clienteResaltadoId = ordenId;
         this._marcarPinResaltado(ordenId);
         const fila = document.querySelector(`[data-orden-id="${ordenId}"]`);
         if (fila) {
-            fila.scrollIntoView({block: "nearest", behavior: "smooth"});
+            fila.scrollIntoView({block: "start", behavior: "smooth"});
         }
     }
 

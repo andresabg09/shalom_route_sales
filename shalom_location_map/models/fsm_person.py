@@ -238,6 +238,11 @@ class FSMPerson(models.Model):
                     # admin_gestion.js/.xml (misma idea que ya se hizo
                     # en rutas_hub.js/.xml para la app del vendedor).
                     "es_visita_express": s.route_id.x_es_visita_express,
+                    # Mismo campo que ya se muestra en "Ruta Shalom" (app
+                    # del vendedor, rutas_hub.xml) -- acá para que
+                    # Administración pueda ver de un vistazo qué rutas
+                    # conviene partir por ser demasiado grandes.
+                    "capacidad": s.capacidad,
                 }
             )
         return list(vendedores.values())
