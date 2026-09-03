@@ -145,6 +145,23 @@ in active use), during low-traffic hours.
    is the whole reason steps 8/9 are gated in the first place. If the
    hashes don't match or the update log shows a traceback, stop there
    and figure out why before giving anything else.
+
+   **Everything the user runs on the server is a `.sh` file, no
+   exceptions** — explicit user request, this rule is absolute. This
+   was already true for step 5; it applies just as much to steps 7, 8
+   and 9: the permission-fix commands and the module update command
+   (bundled together per the paragraph above) go into one `.sh` script
+   sent as a file, and the restart command (step 9, sent separately
+   after the STOP checkpoint) is its **own** `.sh` script too — never
+   raw shell commands pasted inline in chat for the user to copy by
+   hand, no matter how short or "safe-looking" the command is (a
+   one-line `docker service update --force crm_odoo` still goes in its
+   own tiny script). Claude never runs these commands itself either —
+   it has no direct access to the production server; the user always
+   executes the script themselves, in their own SSH session already
+   open on the VM (no `scp` needed when they're already logged in —
+   only when the script needs to get from Claude's environment onto
+   the VM in the first place).
 10. **User tests the change live** in production and reports back
     what happened.
 11. **Only once the user confirms it works**, `git commit` + `push` —
