@@ -82,7 +82,14 @@
                             <span class="lbl"><i class="fa fa-history" aria-hidden="true"/> Historial</span>
                         </button>
                     </div>
-                    <button t-if="!state.visita.saleId" class="cta-order" t-on-click="tomarPedido"><i class="fa fa-shopping-cart" aria-hidden="true"/> Tomar pedido</button>
+                    <button
+                        t-if="!state.visita.saleId"
+                        t-attf-class="cta-order {{state.carritoActivo ? 'cta-order-en-vivo' : ''}}"
+                        t-on-click="tomarPedido"
+                    >
+                        <i t-attf-class="fa {{state.carritoActivo ? 'fa-eye' : 'fa-shopping-cart'}}" aria-hidden="true"/>
+                        <t t-esc="state.carritoActivo ? 'Ver en vivo' : 'Tomar pedido'"/>
+                    </button>
                     <button t-else="" class="cta-order" t-on-click="examinarCotizacion"><i class="fa fa-file-text-o" aria-hidden="true"/> Examinar cotización</button>
                 </t>
             </div>

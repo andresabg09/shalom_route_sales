@@ -20,6 +20,45 @@
                     t-att-class="state.tab === 'rutas' ? 'active' : ''"
                     t-on-click="() => this.cambiarTab('rutas')"
                 ><i class="fa fa-map-o" aria-hidden="true"/> Rutas de mis vendedores</button>
+                <button
+                    t-att-class="state.tab === 'en_vivo' ? 'active' : ''"
+                    t-on-click="() => this.cambiarTab('en_vivo')"
+                ><i class="fa fa-eye" aria-hidden="true"/> En vivo</button>
+            </div>
+
+            <div class="shalom-body admin-body" t-if="state.tab === 'en_vivo'">
+                <!-- ============ En vivo ============ -->
+                <div t-if="state.cargandoEnVivo" class="shalom-vacio">Cargando…</div>
+                <div t-elif="!state.visitasEnVivo.length" class="shalom-vacio">
+                    No hay visitas abiertas en este momento.
+                </div>
+                <t t-else="">
+                    <div class="admin-visitas-count">
+                        <t t-esc="state.visitasEnVivo.length"/> visita(s) abierta(s)
+                    </div>
+                    <div class="admin-visitas-list">
+                        <div
+                            t-foreach="visitasEnVivoOrdenadas"
+                            t-as="visita"
+                            t-key="visita.id"
+                            class="stop-card admin-visit-card"
+                            t-on-click="() => this.abrirEnVivo(visita)"
+                        >
+                            <div class="stop-info">
+                                <div class="name">
+                                    <i t-if="visita.activo" class="fa fa-circle" aria-hidden="true" style="color:#d9534f;font-size:0.55em;margin-right:6px;"/>
+                                    <t t-esc="visita.cliente_nombre"/>
+                                </div>
+                                <div class="addr">
+                                    <t t-esc="(visita.ruta_nombre || 'Sin ruta') + ' · ' + (visita.vendedor_nombre || 'Sin vendedor')"/>
+                                </div>
+                            </div>
+                            <div class="stop-right">
+                                <span class="stop-badge" t-esc="visita.activo ? 'Catálogo abierto' : 'Visita abierta'"/>
+                            </div>
+                        </div>
+                    </div>
+                </t>
             </div>
 
             <div class="shalom-body admin-body" t-if="state.tab === 'seguimiento'">
@@ -253,6 +292,18 @@
                 locationId="state.locationIdEditando"
                 onGuardado.bind="clienteEditado"
                 onCancelar.bind="cerrarEdicionCliente"
+            />
+
+            <!-- "En vivo": mismo componente de catálogo/carrito del
+                 vendedor, abierto encima de todo. Ver el docstring
+                 de la sección "En vivo" en admin_gestion.js. -->
+            <OrderScreen
+                t-if="state.orderIdEnVivo"
+                orderId="state.orderIdEnVivo"
+                clienteNombre="state.clienteEnVivoNombre"
+                onCerrar.bind="cerrarEnVivo"
+                onConfirmado.bind="cerrarEnVivo"
+                onRevisado.bind="cerrarEnVivo"
             />
         </div>
     </t>

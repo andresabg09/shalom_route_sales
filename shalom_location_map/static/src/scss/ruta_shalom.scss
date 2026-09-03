@@ -1126,6 +1126,13 @@
         cursor: pointer;
         font-family: inherit;
     }
+    // "Ver en vivo" (punto C): mismo botón, otro color/ícono cuando el
+    // carrito de esta visita tiene actividad reciente de otro
+    // dispositivo -- ver carritoActivo en visit_sheet.js.
+    .cta-order.cta-order-en-vivo {
+        background: var(--shalom-alerta, #d9534f);
+        color: #fff;
+    }
 
     // modal chico de editar cliente
     .edit-overlay {

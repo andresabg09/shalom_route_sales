@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo noupdate="0">
+    <!--
+        Limpieza mensual de carritos abandonados (x_carrito_borrador y
+        x_carrito_actualizado en fsm.order). Ver
+        shalom_limpiar_carritos_viejos() en fsm_order.py. Red de
+        seguridad: la limpieza normal pasa por
+        _shalom_limpiar_carrito_borrador() al confirmar/revisar un
+        pedido o al tocar "Salir sin guardar" en el catálogo; este cron
+        cubre los casos donde eso no llegó a correr (ej. la app se
+        cerró de un tirón). Corre una vez al mes; cada visita se limpia
+        recién cuando SU PROPIO carrito cumple 30 días sin tocarse, no
+        el día 1 del mes calendario.
+    -->
+    <record id="shalom_cron_limpiar_carritos_viejos" model="ir.cron">
+        <field name="name">Shalom: limpiar carritos de catálogo abandonados</field>
+        <field name="model_id" ref="fieldservice.model_fsm_order"/>
+        <field name="state">code</field>
+        <field name="code">model.shalom_limpiar_carritos_viejos()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">months</field>
+        <field name="active">True</field>
+    </record>
+</odoo>

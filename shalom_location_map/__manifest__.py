@@ -42,6 +42,7 @@
         "views/shalom_admin_action.xml",
         "data/mapbox_raster_layer.xml",
         "data/migrar_orden_ruta.xml",
+        "data/carrito_borrador_cron.xml",
     ],
     "assets": {
         "web.assets_backend": [

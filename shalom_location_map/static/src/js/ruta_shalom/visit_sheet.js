@@ -13,6 +13,15 @@ import {OrderScreen} from "./order_screen";
 // hoja cuente como "cerrar" en vez de volver a su posición.
 const UMBRAL_ARRASTRE_CIERRE = 90;
 
+// Cada cuánto se pregunta si el carrito de esta visita tiene actividad
+// reciente (otro dispositivo con el catálogo abierto), para decidir si
+// el botón dice "Tomar pedido" o "Ver en vivo" -- ver
+// SHALOM_SEGUNDOS_CARRITO_ACTIVO en fsm_order.py (el umbral real de
+// "reciente" lo define el servidor, acá solo se refresca la pregunta
+// seguido para que el botón reaccione rápido cuando el otro
+// dispositivo se cierra).
+const SHALOM_INTERVALO_HEARTBEAT_MS = 2000;
+
 /**
  * Hoja de visita (Fase 2): se abre al tocar una parada en la Lista del
  * detalle de ruta. Muestra los datos del cliente, permite cambiar el
@@ -64,12 +73,49 @@ export class VisitSheet extends Component {
             arrastreY: 0,
             arrastrando: false,
             cerrando: false,
+            // "Ver en vivo" (punto C): true si el carrito de esta
+            // visita se guardó hace poco -- ver
+            // SHALOM_INTERVALO_HEARTBEAT_MS más arriba.
+            carritoActivo: false,
         });
         this._onMoverArrastre = (ev) => this.moverArrastre(ev);
         this._onSoltarArrastre = (ev) => this.soltarArrastre(ev);
+        this._heartbeatTimer = null;
 
         onWillStart(() => this.cargar());
-        onWillUnmount(() => this.detenerArrastre());
+        onWillStart(() => this._chequearCarritoActivo());
+        this._heartbeatTimer = setInterval(
+            () => this._chequearCarritoActivo(), SHALOM_INTERVALO_HEARTBEAT_MS
+        );
+        onWillUnmount(() => {
+            this.detenerArrastre();
+            if (this._heartbeatTimer) {
+                clearInterval(this._heartbeatTimer);
+            }
+        });
+    }
+
+    /** Pregunta liviana (mismo método que usa la sincronización del
+     * catálogo) para saber si otro dispositivo tiene el carrito de
+     * esta visita abierto ahora mismo -- solo cambia el texto del
+     * botón, no trae ni toca el carrito en sí. Se ignora cualquier
+     * error en silencio (sin señal, etc.): el botón se queda como
+     * estaba hasta el próximo chequeo. */
+    async _chequearCarritoActivo() {
+        if (this.state.tomandoPedido) {
+            // Mientras el catálogo está abierto ACÁ MISMO, no tiene
+            // sentido este chequeo -- se retoma solo al volver a esta
+            // hoja (cerrarPedido()).
+            return;
+        }
+        try {
+            const resultado = await this.orm.call("fsm.order", "shalom_leer_carrito", [
+                [this.props.orderId],
+            ]);
+            this.state.carritoActivo = resultado.activo;
+        } catch (error) {
+            // ver docstring de _chequearCarritoActivo
+        }
     }
 
     async cargar() {

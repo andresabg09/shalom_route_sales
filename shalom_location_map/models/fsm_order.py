@@ -84,6 +84,7 @@ comparación nunca coincidía, así que una visita cancelada estaba
 contando como completada para el correlativo de Jornada. Bug
 preexistente, corregido junto con esta tanda de cambios.
 """
+import json
 import logging
 from datetime import timedelta
 
@@ -97,6 +98,20 @@ _logger = logging.getLogger(__name__)
 
 # Umbral de inactividad para considerar que empezó una nueva jornada.
 HORAS_INACTIVIDAD_NUEVA_JORNADA = 6
+
+# Segundos sin un guardado nuevo de x_carrito_borrador para considerar
+# que ya nadie tiene el catálogo abierto en esta visita ("Ver en
+# vivo" deja de mostrarse). Ver shalom_leer_carrito().
+# Antes se medía sobre x_carrito_actualizado (solo se movía al agregar/
+# sacar un producto) -- ahora sobre x_catalogo_heartbeat, que se
+# refresca cada ~1 seg tenga o no cambios de carrito, así que este
+# umbral puede ser bien chico (el heartbeat nunca debería atrasarse
+# más de 1-2 seg salvo problema real de red).
+SHALOM_SEGUNDOS_CARRITO_ACTIVO = 3
+
+# Días de antigüedad (desde el último guardado) para que la limpieza
+# mensual borre un carrito abandonado. Ver shalom_limpiar_carritos_viejos().
+SHALOM_DIAS_CARRITO_VIEJO = 30
 
 
 # Estados de sale.order que cuentan como "venta real" para el
@@ -189,6 +204,60 @@ class FSMOrder(models.Model):
         "mejor horario, pedir que dejen la entrada libre). Campo "
         "propio de la app del vendedor, independiente de otros campos "
         "de notas nativos del pedido.",
+    )
+    x_carrito_borrador = fields.Text(
+        string="Carrito (borrador, JSON)",
+        help="Snapshot del carrito de esta visita, guardado desde el "
+        "catálogo de la app del vendedor (order_screen.js) -- para que "
+        "sobreviva si el dispositivo se apaga/rompe (se recupera desde "
+        "cualquier otro dispositivo con el mismo usuario) y para el "
+        "'Ver en vivo' (dos dispositivos viendo/editando el mismo "
+        "carrito casi en tiempo real). Formato: {clave: {product_id, "
+        "name, list_price, cantidad, es_recompensa, regla_id}}, una "
+        "entrada por producto/recompensa. No se usa para nada más "
+        "(no crea sale.order.line -- eso sigue pasando solo al "
+        "confirmar/revisar el pedido).",
+    )
+    x_carrito_actualizado = fields.Datetime(
+        string="Carrito actualizado",
+        help="Cuándo se guardó por última vez x_carrito_borrador -- "
+        "usado SOLO para decidir cuál snapshot es más nuevo (servidor "
+        "vs localStorage del dispositivo) al reabrir el catálogo. El "
+        "heartbeat de 'Ver en vivo' usa x_catalogo_heartbeat, NO este "
+        "campo (ver su docstring).",
+    )
+    x_catalogo_heartbeat = fields.Datetime(
+        string="Catálogo abierto (heartbeat)",
+        help="Se refresca solo, cada ~1 seg, mientras CUALQUIER "
+        "dispositivo tiene el catálogo de esta visita abierto -- tenga "
+        "o no cambios de carrito en ese momento (a diferencia de "
+        "x_carrito_actualizado, que solo se mueve cuando se agrega/"
+        "saca un producto). Bug real reportado: con el heartbeat "
+        "atado al carrito, si el vendedor solo estaba navegando el "
+        "catálogo sin tocar nada, 'Ver en vivo' tardaba en aparecer "
+        "(o no aparecía) del lado del que mira. Separado a propósito: "
+        "shalom_leer_carrito() usa ESTE campo para decidir 'activo', "
+        "y solo lo escribe shalom_marcar_catalogo_abierto() -- nunca "
+        "una simple lectura (si no, un dispositivo que solo está "
+        "MIRANDO 'Ver en vivo', sin el catálogo abierto, marcaría "
+        "presencia por error).",
+    )
+    x_catalogo_sesiones = fields.Text(
+        string="Sesiones de catálogo abiertas (JSON)",
+        help="Quién tiene el catálogo de esta visita abierto ahora, "
+        "para decidir cuál es la sesión 'principal' -- la que ve la "
+        "confirmación de 'guardar o descartar' al salir, y la única "
+        "que puede de verdad vaciar el carrito compartido (ver "
+        "shalom_limpiar_carrito). Formato: {sesion_id: {desde: "
+        "datetime ISO, heartbeat: datetime ISO}}. 'Principal' = la "
+        "sesión con 'desde' más antiguo entre las que siguen con "
+        "heartbeat reciente -- si esa sesión se cierra, el rol pasa "
+        "sola a la siguiente más antigua, en cadena (pedido explícito: "
+        "riesgo real de que un vendedor/cliente mirando en paralelo "
+        "descarte por error un pedido de otro). sesion_id lo genera "
+        "order_screen.js una vez por pestaña del navegador (no hay "
+        "forma de identificar 'el dispositivo físico' desde el "
+        "navegador -- pestaña es la aproximación más cercana).",
     )
     x_revisado_admin = fields.Boolean(
         string="Revisado por oficina",
@@ -412,6 +481,7 @@ class FSMOrder(models.Model):
         self._crear_lineas_pedido(sale_order, lineas)
 
         self._cerrar_visita_completada()
+        self._shalom_limpiar_carrito_borrador()
 
         return {
             "type": "ir.actions.act_window",
@@ -486,6 +556,7 @@ class FSMOrder(models.Model):
         self._crear_lineas_pedido(sale_order, lineas)
         sale_order.action_confirm()
         self._cerrar_visita_completada()
+        self._shalom_limpiar_carrito_borrador()
 
         self.message_post(
             body=_(
@@ -640,6 +711,257 @@ class FSMOrder(models.Model):
             )
 
         return {"mensajes": mensajes, "recompensas": recompensas}
+
+    # ------------------------------------------------------------------
+    # Carrito respaldado en el servidor (punto B) + "Ver en vivo"
+    # (punto C) -- ver order_screen.js para el lado JS. El carrito
+    # sigue viviendo solo en memoria/localStorage hasta que se
+    # confirma o revisa (shalom_confirmar_pedido /
+    # shalom_guardar_borrador_pedido, que son los que de verdad crean
+    # sale.order.line); x_carrito_borrador es únicamente para que ese
+    # estado en memoria sobreviva a un dispositivo que se rompe/apaga
+    # y para reflejarlo casi en vivo en un segundo dispositivo.
+    # ------------------------------------------------------------------
+
+    def _shalom_carrito_dict(self):
+        """Lee x_carrito_borrador como dict, tolerando vacío/corrupto
+        (nunca revienta el catálogo por un JSON viejo o mal
+        formado)."""
+        self.ensure_one()
+        if not self.x_carrito_borrador:
+            return {}
+        try:
+            return json.loads(self.x_carrito_borrador) or {}
+        except (ValueError, TypeError):
+            _logger.warning(
+                "x_carrito_borrador de fsm.order id=%s no es JSON "
+                "válido -- se trata como carrito vacío.", self.id,
+            )
+            return {}
+
+    def shalom_actualizar_carrito(self, cambios=None, eliminados=None):
+        """Llamado desde order_screen.js cada vez que hay cambios
+        pendientes del carrito (con un colchón de ~1 seg, no en cada
+        toque) -- FUSIONA por clave de producto/recompensa en vez de
+        reemplazar el carrito entero, a propósito: así, si dos
+        dispositivos tocan productos DISTINTOS casi al mismo segundo
+        (ej. el cliente agrega uno y el vendedor corrige otro desde su
+        celular), los dos cambios sobreviven. Solo se pierde algo si
+        los dos dispositivos tocan la MISMA clave en la misma llamada
+        -- ahí gana la que llega después, como cualquier guardado
+        normal.
+
+        cambios: dict {clave: {product_id, name, list_price, cantidad,
+        es_recompensa, regla_id}} a agregar/actualizar.
+        eliminados: lista de claves a sacar del carrito.
+
+        Devuelve el carrito ya fusionado completo + la marca de tiempo
+        nueva, para que el dispositivo que llamó pueda quedar
+        reconciliado de una sin tener que pedir de nuevo."""
+        self.ensure_one()
+        carrito = self._shalom_carrito_dict()
+        for clave, valor in (cambios or {}).items():
+            carrito[clave] = valor
+        for clave in (eliminados or []):
+            carrito.pop(clave, None)
+        ahora = fields.Datetime.now()
+        self.write({
+            "x_carrito_borrador": json.dumps(carrito),
+            "x_carrito_actualizado": ahora,
+        })
+        return {
+            "carrito": carrito,
+            "actualizado": fields.Datetime.to_string(ahora),
+        }
+
+    def shalom_leer_carrito(self):
+        """Llamado desde order_screen.js al abrir el catálogo (para
+        decidir si el snapshot del servidor es más nuevo que el de
+        localStorage) y en el ciclo de sincronización de ~1 seg
+        mientras no hay cambios locales pendientes (para traer lo que
+        haya agregado/sacado otro dispositivo). También lo usa el
+        heartbeat de 'Ver en vivo' de visit_sheet.js -- "activo" es
+        True si CUALQUIER dispositivo tiene el catálogo abierto ahora
+        (heartbeat de x_catalogo_heartbeat, ver
+        shalom_marcar_catalogo_abierto), no si hubo un cambio de
+        carrito -- un dispositivo puede estar con el catálogo abierto
+        navegando, sin tocar nada, y sigue contando como 'activo'."""
+        self.ensure_one()
+        activo = False
+        if self.x_catalogo_heartbeat:
+            activo = (
+                fields.Datetime.now() - self.x_catalogo_heartbeat
+            ).total_seconds() <= SHALOM_SEGUNDOS_CARRITO_ACTIVO
+        return {
+            "carrito": self._shalom_carrito_dict(),
+            "actualizado": (
+                fields.Datetime.to_string(self.x_carrito_actualizado)
+                if self.x_carrito_actualizado else False
+            ),
+            "activo": activo,
+        }
+
+    def _shalom_sesiones_dict(self):
+        """Lee x_catalogo_sesiones como dict, tolerando vacío/corrupto."""
+        self.ensure_one()
+        if not self.x_catalogo_sesiones:
+            return {}
+        try:
+            return json.loads(self.x_catalogo_sesiones) or {}
+        except (ValueError, TypeError):
+            return {}
+
+    def shalom_marcar_catalogo_abierto(self, sesion_id):
+        """Heartbeat de presencia: llamado por order_screen.js UNA VEZ
+        POR TICK de su propio ciclo de sincronización (~1 seg), tenga o
+        no cambios de carrito pendientes -- así 'Ver en vivo' refleja
+        'el catálogo está genuinamente abierto ahí', no 'se tocó algo
+        hace poco'. A propósito NO lo llama shalom_leer_carrito (que
+        también usa visit_sheet.js para el chequeo pasivo del botón):
+        si una simple lectura marcara presencia, un dispositivo que
+        solo está MIRANDO el botón 'Ver en vivo' -- sin el catálogo
+        abierto -- se marcaría a sí mismo como presente por error.
+
+        Además registra/actualiza esta sesión (pestaña del navegador)
+        en x_catalogo_sesiones y devuelve si ES la principal ahora --
+        ver el docstring grande de ese campo para el criterio ('desde'
+        más antiguo entre las sesiones con heartbeat vivo). De paso
+        descarta sesiones viejas cuyo heartbeat quedó colgado (cerrada
+        sin avisar, ej. se cerró la pestaña de un tirón): así el rol
+        de principal pasa solo al siguiente en la cadena, sin esperar
+        ninguna acción explícita del que se fue."""
+        self.ensure_one()
+        ahora = fields.Datetime.now()
+        sesiones = self._shalom_sesiones_dict()
+        limite = ahora - timedelta(seconds=SHALOM_SEGUNDOS_CARRITO_ACTIVO)
+
+        vivas = {}
+        for sid, datos in sesiones.items():
+            try:
+                heartbeat = fields.Datetime.from_string(datos.get("heartbeat"))
+            except (ValueError, TypeError):
+                continue
+            if heartbeat and heartbeat >= limite:
+                vivas[sid] = datos
+
+        if sesion_id in vivas:
+            vivas[sesion_id]["heartbeat"] = fields.Datetime.to_string(ahora)
+        else:
+            vivas[sesion_id] = {
+                "desde": fields.Datetime.to_string(ahora),
+                "heartbeat": fields.Datetime.to_string(ahora),
+            }
+
+        self.write({
+            "x_catalogo_sesiones": json.dumps(vivas),
+            "x_catalogo_heartbeat": ahora,
+        })
+
+        principal_id = min(vivas, key=lambda sid: vivas[sid]["desde"])
+        return {"es_principal": principal_id == sesion_id}
+
+    def shalom_cerrar_sesion_catalogo(self, sesion_id):
+        """Llamado por order_screen.js al cerrarse (cualquier salida
+        intencional) para sacar esta sesión de x_catalogo_sesiones de
+        una, sin esperar a que su heartbeat quede viejo -- así el rol
+        de 'principal' pasa a la siguiente sesión ni bien esta se va,
+        no ~SHALOM_SEGUNDOS_CARRITO_ACTIVO segundos después. Best-effort
+        del lado del JS (no bloquea el cierre si falla): si no llega a
+        correr, la limpieza por heartbeat viejo de
+        shalom_marcar_catalogo_abierto() cubre igual el caso, con ese
+        margen de segundos nomás."""
+        self.ensure_one()
+        sesiones = self._shalom_sesiones_dict()
+        if sesion_id in sesiones:
+            sesiones.pop(sesion_id)
+            self.write({"x_catalogo_sesiones": json.dumps(sesiones)})
+        return True
+
+    def _shalom_limpiar_carrito_borrador(self):
+        """Vacía x_carrito_borrador/x_carrito_actualizado de esta
+        visita -- llamado desde shalom_confirmar_pedido y
+        shalom_guardar_borrador_pedido (el carrito ya cumplió su
+        función, no tiene sentido dejar la copia de trabajo colgada) y
+        desde shalom_limpiar_carrito (llamado por order_screen.js al
+        tocar 'Salir sin guardar'). Sin esto, un carrito armado y
+        después descartado se quedaba guardado en el servidor para
+        siempre (bug real reportado: al reabrir la visita, el carrito
+        'descartado' volvía a aparecer, porque la reconciliación de
+        B tomaba el snapshot del servidor -- más nuevo que el de
+        localStorage, que sí se había limpiado -- como el válido)."""
+        for orden in self:
+            if orden.x_carrito_borrador or orden.x_carrito_actualizado:
+                orden.write({
+                    "x_carrito_borrador": False,
+                    "x_carrito_actualizado": False,
+                })
+
+    def shalom_limpiar_carrito(self):
+        """Llamado desde order_screen.js al confirmar 'Salir sin
+        guardar' (carrito con productos, descartado a propósito) --
+        ver _shalom_limpiar_carrito_borrador(). Se ignora en silencio
+        del lado del JS si esta llamada falla (ej. sin señal en ese
+        instante); no es grave si a veces no llega a limpiarse acá: la
+        limpieza mensual automática (shalom_limpiar_carritos_viejos)
+        es la red de seguridad para esos casos."""
+        self._shalom_limpiar_carrito_borrador()
+        return True
+
+    @api.model
+    def shalom_limpiar_carritos_viejos(self):
+        """Cron mensual (ver data/carrito_borrador_cron.xml): limpia
+        x_carrito_borrador/x_carrito_actualizado de cualquier visita
+        cuyo carrito no se toca hace más de SHALOM_DIAS_CARRITO_VIEJO
+        días -- red de seguridad para el caso en que
+        _shalom_limpiar_carrito_borrador() no llegó a correr (ej. el
+        vendedor cerró la app de un tirón sin pasar por 'Salir sin
+        guardar' ni por confirmar/revisar el pedido). No es por peso
+        real (es un texto chico) sino para no dejar basura vieja
+        acumulada sin límite. 30 días de ANTIGÜEDAD del último
+        guardado, no "el mes calendario" -- cada visita se limpia
+        cuando cumple sus propios 30 días, no todas juntas el día 1."""
+        limite = fields.Datetime.now() - timedelta(days=SHALOM_DIAS_CARRITO_VIEJO)
+        viejas = self.search([("x_carrito_actualizado", "<", limite)])
+        if viejas:
+            viejas._shalom_limpiar_carrito_borrador()
+            _logger.info(
+                "Limpieza mensual de carritos: %s visita(s) con carrito "
+                "de más de %s días sin tocar, limpiadas.",
+                len(viejas), SHALOM_DIAS_CARRITO_VIEJO,
+            )
+
+    @api.model
+    def shalom_admin_visitas_en_vivo(self):
+        """Administración → 'Ver en vivo': lista las visitas ABIERTAS
+        ahora mismo (no cerradas), con su vendedor/ruta/cliente y si
+        tienen el catálogo genuinamente abierto en algún dispositivo
+        (heartbeat de x_catalogo_heartbeat, mismo criterio que
+        shalom_leer_carrito) -- para que oficina elija a cuál entrar a
+        mirar/ayudar sin tener que adivinar cuál está realmente en uso
+        en este momento."""
+        self._shalom_verificar_admin()
+        ordenes = self.search(
+            [("stage_id.is_closed", "=", False)], order="x_catalogo_heartbeat desc"
+        )
+        ahora = fields.Datetime.now()
+        return [
+            {
+                "id": orden.id,
+                "cliente_nombre": orden.location_id.name if orden.location_id else "",
+                "ruta_nombre": orden.fsm_route_id.name if orden.fsm_route_id else "",
+                "vendedor_nombre": (
+                    orden.fsm_route_id.fsm_person_id.name
+                    if orden.fsm_route_id and orden.fsm_route_id.fsm_person_id
+                    else ""
+                ),
+                "activo": bool(
+                    orden.x_catalogo_heartbeat
+                    and (ahora - orden.x_catalogo_heartbeat).total_seconds()
+                    <= SHALOM_SEGUNDOS_CARRITO_ACTIVO
+                ),
+            }
+            for orden in ordenes
+        ]
 
     def _cerrar_visita_completada(self):
         """Mueve esta visita a la etapa Completada -- usado tanto por

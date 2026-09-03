@@ -4,8 +4,15 @@ import {Component, onWillStart, onWillUnmount, useEffect, useRef, useState} from
 import {registry} from "@web/core/registry";
 import {useService} from "@web/core/utils/hooks";
 import {ClienteForm} from "./cliente_form";
+import {OrderScreen} from "./order_screen";
 import {ESTADO_ETIQUETA, estadoDesdeStageName} from "./stage_utils";
 import {getMapboxToken, cargarMapboxGl} from "./mapbox_utils";
+
+// Cada cuánto se refresca la lista de "Visitas en vivo" (quién tiene
+// el catálogo abierto ahora mismo) -- más espaciado que el heartbeat
+// de visit_sheet.js porque acá es una lista completa, no una sola
+// visita.
+const SHALOM_INTERVALO_LISTA_EN_VIVO_MS = 3000;
 
 /**
  * Administración (punto 4 de la ronda "administración", ver README.md):
@@ -39,7 +46,7 @@ const ESTADOS_SEGUIMIENTO_DEFAULT = ["cancelado", "no_quiso"];
 
 export class AdminGestion extends Component {
     static template = "shalom_location_map.AdminGestion";
-    static components = {ClienteForm};
+    static components = {ClienteForm, OrderScreen};
     static props = ["*"];
 
     setup() {
@@ -74,16 +81,29 @@ export class AdminGestion extends Component {
             busquedaClienteRuta: "",
             clienteResaltadoId: null,
 
+            // -- En vivo --
+            cargandoEnVivo: true,
+            visitasEnVivo: [],
+            orderIdEnVivo: null,
+            clienteEnVivoNombre: "",
+
             // -- compartido --
             locationIdEditando: null,
         });
+        this._enVivoTimer = null;
 
         onWillStart(async () => {
-            await Promise.all([this.cargarVisitas(), this.cargarVendedores()]);
+            await Promise.all([this.cargarVisitas(), this.cargarVendedores(), this.cargarVisitasEnVivo()]);
         });
+        this._enVivoTimer = setInterval(
+            () => this.cargarVisitasEnVivo(), SHALOM_INTERVALO_LISTA_EN_VIVO_MS
+        );
         onWillUnmount(() => {
             if (this.mapboxMap) {
                 this.mapboxMap.remove();
+            }
+            if (this._enVivoTimer) {
+                clearInterval(this._enVivoTimer);
             }
         });
 
@@ -257,6 +277,49 @@ export class AdminGestion extends Component {
                 {type: "danger"}
             );
         }
+    }
+
+    // ==================================================================
+    // En vivo (punto C): mismo catálogo/carrito que usa el vendedor,
+    // embebido acá igual que ClienteForm más abajo -- no es una
+    // pantalla "de solo mirar" aparte, es la misma con la que ya
+    // trabaja el vendedor (ver order_screen.js para la sincronización
+    // de ~1 seg entre dispositivos).
+    // ==================================================================
+
+    async cargarVisitasEnVivo() {
+        // No usar el "cargando" para tapar la lista en cada refresco
+        // automático (solo la primera vez) -- si no, la lista
+        // parpadea cada 3 seg mientras el admin está mirándola.
+        if (!this.state.visitasEnVivo.length) {
+            this.state.cargandoEnVivo = true;
+        }
+        try {
+            this.state.visitasEnVivo = await this.orm.call(
+                "fsm.order", "shalom_admin_visitas_en_vivo", []
+            );
+        } catch (error) {
+            console.error("shalom: error al cargar visitas en vivo", error);
+        } finally {
+            this.state.cargandoEnVivo = false;
+        }
+    }
+
+    /** Las activas (alguien con el catálogo abierto ahora) primero --
+     * el resto son visitas abiertas pero sin nadie tomando pedido en
+     * este momento, útiles igual para entrar a ayudar/corregir. */
+    get visitasEnVivoOrdenadas() {
+        return [...this.state.visitasEnVivo].sort((a, b) => (b.activo ? 1 : 0) - (a.activo ? 1 : 0));
+    }
+
+    abrirEnVivo(visita) {
+        this.state.orderIdEnVivo = visita.id;
+        this.state.clienteEnVivoNombre = visita.cliente_nombre || "";
+    }
+
+    cerrarEnVivo() {
+        this.state.orderIdEnVivo = null;
+        this.cargarVisitasEnVivo();
     }
 
     // ==================================================================

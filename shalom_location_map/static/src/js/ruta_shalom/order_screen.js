@@ -96,8 +96,68 @@ const PRODUCTOS_POR_PAGINA = 80;
 // ningún código nuestro.
 const INACTIVIDAD_MAXIMA_BORRADOR_MS = 30 * 60 * 1000;
 
+// -- Carrito en el servidor (Fase 5, "auto-asignación de rutas +
+// carrito respaldado + Ver en vivo") --
+//
+// Cada este intervalo, un solo timer hace UNA de dos cosas:
+// - Si hay cambios locales sin mandar (this._cambiosPendientes /
+//   this._eliminadosPendientes no vacíos): los manda con
+//   shalom_actualizar_carrito (fusión por clave de producto en el
+//   servidor, no reemplazo del carrito entero -- ver el docstring de
+//   ese método en fsm_order.py) y adopta el carrito ya fusionado que
+//   devuelve como verdad local.
+// - Si no hay nada pendiente: pregunta shalom_leer_carrito (liviano,
+//   solo trae la marca de tiempo + el carrito) y, SOLO si la marca de
+//   tiempo cambió desde la última vez que se supo, adopta ese carrito
+//   -- así la pantalla no se re-dibuja sin motivo si nadie más está
+//   tocando nada.
+//
+// Con esto, dos dispositivos abiertos en la MISMA visita quedan con
+// el carrito sincronizado en ~1 seg en cualquier sentido, sin
+// necesidad de una pantalla "espejo" aparte: es literalmente esta
+// misma pantalla, en los dos lados.
+const SHALOM_SYNC_INTERVALO_MS = 1000;
+
 function claveBorradorCarrito(orderId) {
     return `shalom_carrito_borrador_${orderId}`;
+}
+
+// "Sesión" de catálogo = esta pestaña del navegador, mientras siga
+// abierta -- sessionStorage (no localStorage) para que cada pestaña/
+// dispositivo tenga la suya, generada una sola vez y reusada mientras
+// dure. No hay forma de identificar "el dispositivo físico" desde el
+// navegador; pestaña es la aproximación más cercana. Usado para
+// decidir cuál dispositivo es el "principal" (ver el docstring grande
+// de x_catalogo_sesiones en fsm_order.py): el que abrió el catálogo
+// primero es el único al que se le pregunta "¿guardar o descartar?"
+// al salir -- riesgo real reportado, un vendedor/cliente mirando en
+// paralelo podía descartar por error el pedido de otro.
+const CLAVE_SESION_CATALOGO = "shalom_sesion_catalogo";
+
+function shalomIdSesionCatalogo() {
+    try {
+        let id = sessionStorage.getItem(CLAVE_SESION_CATALOGO);
+        if (!id) {
+            id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            sessionStorage.setItem(CLAVE_SESION_CATALOGO, id);
+        }
+        return id;
+    } catch (error) {
+        // sessionStorage puede fallar (modo privado, etc.) -- un id
+        // nuevo por render no es ideal (siempre "principal" al abrir),
+        // pero no bloquea poder usar el catálogo.
+        return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+}
+
+/** "2026-09-02 14:30:00" (hora del servidor, UTC, sin zona explícita
+ * -- así devuelve fields.Datetime.to_string de Odoo) -> milisegundos
+ * epoch, interpretándolo como UTC. */
+function shalomFechaServidorAMs(fechaServidor) {
+    if (!fechaServidor) {
+        return 0;
+    }
+    return Date.parse(fechaServidor.replace(" ", "T") + "Z") || 0;
 }
 
 export class OrderScreen extends Component {
@@ -121,6 +181,16 @@ export class OrderScreen extends Component {
         this.detectorEnCurso = false;
         this.detector = null;
         this._cerrado = false;
+
+        // -- Carrito en el servidor / "Ver en vivo" (ver el comentario
+        // grande de SHALOM_SYNC_INTERVALO_MS más arriba) --
+        this._cambiosPendientes = {}; // {clave: linea para el servidor}
+        this._eliminadosPendientes = new Set();
+        this._sincronizando = false; // evita solapar dos ciclos si uno tarda
+        this._ultimaActualizadaConocida = false; // string del servidor
+        this._syncTimer = null;
+        this._sesionId = shalomIdSesionCatalogo();
+        this._sesionCerrada = false; // guarda para no llamar shalom_cerrar_sesion_catalogo dos veces
 
         this.state = useState({
             cargando: true,
@@ -156,12 +226,33 @@ export class OrderScreen extends Component {
             // venta) o "revisar" (Revisar cotización): las dos pasan
             // por el mismo aviso, ver confirmarPedido()/revisarCotizacion().
             accionPendienteAvisoDatos: null,
+            // "Principal" (ver el docstring grande de
+            // CLAVE_SESION_CATALOGO más arriba): true hasta el primer
+            // heartbeat -- así, si esta pestaña está sola (caso normal,
+            // sin nadie más mirando), el aviso de "salir sin guardar"
+            // sigue funcionando desde el instante en que se abre,
+            // sin esperar el primer tick de sincronización.
+            esPrincipal: true,
         });
 
         this._restaurarBorradorCarritoSiCorresponde();
 
-        onWillStart(() => Promise.all([this.cargarProductos(), this._cargarDatosFaltantes()]));
-        onWillUnmount(() => this.detenerEscaneo());
+        onWillStart(async () => {
+            // cargarProductos() primero (o junto, pero resuelto antes de
+            // reconciliar): _reconciliarCarritoServidorInicial() necesita
+            // this.state.productos ya cargado para poder buscarle el
+            // qty_available a cada línea que traiga del servidor.
+            await Promise.all([this.cargarProductos(), this._cargarDatosFaltantes()]);
+            await this._reconciliarCarritoServidorInicial();
+        });
+        onWillUnmount(() => {
+            this.detenerEscaneo();
+            if (this._syncTimer) {
+                clearInterval(this._syncTimer);
+            }
+            this._cerrarSesionCatalogo();
+        });
+        this._syncTimer = setInterval(() => this._tickSincronizacionCarrito(), SHALOM_SYNC_INTERVALO_MS);
 
         // Enganchar el stream de la cámara al <video> recién cuando el
         // elemento ya existe en el DOM (t-if renderiza el <video> junto
@@ -245,6 +336,232 @@ export class OrderScreen extends Component {
         );
         this._guardarBorradorCarrito(); // reinicia el conteo de 30 min
         this.actualizarPromos();
+    }
+
+    // -- Carrito en el servidor / "Ver en vivo" --
+
+    /** Convierte una línea del carrito en memoria (state.carrito[clave])
+     * al formato liviano que se manda/guarda en el servidor (sin el
+     * objeto `producto` completo, solo lo necesario para reconstruirlo
+     * del otro lado -- ver _carritoDesdeServidor). */
+    _lineaParaServidor(item) {
+        return {
+            product_id: item.producto.id,
+            name: item.producto.name,
+            list_price: item.producto.list_price,
+            cantidad: item.cantidad,
+            es_recompensa: !!item.esRecompensa,
+            regla_id: item.reglaId || false,
+        };
+    }
+
+    /** Inverso de _lineaParaServidor: reconstruye el shape que usa
+     * state.carrito a partir de lo guardado en el servidor. qty_available
+     * se busca en el catálogo ya cargado (this.state.productos) si el
+     * producto sigue existiendo ahí -- si no, 0 (solo afecta la
+     * etiqueta de stock, no bloquea nada). */
+    _carritoDesdeServidor(dictServidor) {
+        const carrito = {};
+        for (const [clave, linea] of Object.entries(dictServidor || {})) {
+            const enCatalogo = this.state.productos.find((p) => p.id === linea.product_id);
+            carrito[clave] = {
+                producto: {
+                    id: linea.product_id,
+                    name: linea.name,
+                    list_price: linea.list_price,
+                    qty_available: enCatalogo ? enCatalogo.qty_available : 0,
+                    categ_id: enCatalogo ? enCatalogo.categ_id : false,
+                },
+                cantidad: linea.cantidad,
+                esRecompensa: !!linea.es_recompensa,
+                reglaId: linea.regla_id || false,
+            };
+        }
+        return carrito;
+    }
+
+    /** Llamado por cada acción que toca el carrito (agregar, cambiar
+     * cantidad, quitar, canjear recompensa) -- ADEMÁS de actualizar
+     * state.carrito y guardar en localStorage (comportamiento previo,
+     * sin cambios), deja anotada la clave como "pendiente de mandar al
+     * servidor" en el próximo tick de sincronización (hasta 1 seg de
+     * colchón, no una llamada por toque). */
+    _marcarCambioPendienteCarrito(clave) {
+        // String(clave) SIEMPRE -- bug real reportado ("no deja borrar
+        // ningún producto"): para productos normales `clave` llega acá
+        // como NÚMERO (item.producto.id), y _eliminadosPendientes es un
+        // Set (a diferencia de _cambiosPendientes, un objeto plano, que
+        // JS ya convierte sus claves a texto solo). Un Set en cambio
+        // guarda 42 (número) y "42" (texto) como dos valores DISTINTOS.
+        // Ese número viajaba tal cual al servidor, donde el carrito
+        // guardado es JSON con claves de texto -- carrito.pop(42, None)
+        // nunca encontraba la clave "42" real, así que el borrado no
+        // hacía nada, en silencio, siempre (no era una carrera).
+        clave = String(clave);
+        const item = this.state.carrito[clave];
+        if (item) {
+            this._cambiosPendientes[clave] = this._lineaParaServidor(item);
+            this._eliminadosPendientes.delete(clave);
+        } else {
+            delete this._cambiosPendientes[clave];
+            this._eliminadosPendientes.add(clave);
+        }
+    }
+
+    /** Al abrir el catálogo: compara el snapshot de localStorage (ya
+     * restaurado de forma síncrona en setup(), si correspondía) contra
+     * el del servidor, y se queda con el que sea más nuevo -- así da
+     * igual desde qué dispositivo se reabre esta visita (punto B). No
+     * bloquea la apertura si falla (sin conexión): sigue con lo que ya
+     * haya en memoria/localStorage. */
+    async _reconciliarCarritoServidorInicial() {
+        let tsLocal = 0;
+        try {
+            const crudo = localStorage.getItem(claveBorradorCarrito(this.props.orderId));
+            if (crudo) {
+                tsLocal = JSON.parse(crudo).ts || 0;
+            }
+        } catch (error) {
+            // ver _guardarBorradorCarrito()
+        }
+
+        let resultado;
+        try {
+            resultado = await this.orm.call("fsm.order", "shalom_leer_carrito", [
+                [this.props.orderId],
+            ]);
+        } catch (error) {
+            console.error("shalom: no se pudo leer el carrito del servidor", error);
+            return;
+        }
+
+        this._ultimaActualizadaConocida = resultado.actualizado;
+        const tsServidor = shalomFechaServidorAMs(resultado.actualizado);
+        if (tsServidor > tsLocal) {
+            Object.assign(this.state.carrito, this._carritoDesdeServidor(resultado.carrito));
+            this.actualizarPromos();
+        } else if (Object.keys(this.state.carrito).length) {
+            // El local es igual o más nuevo (o el servidor no tenía
+            // nada todavía): lo mandamos nosotros para que el servidor
+            // -- y cualquier otro dispositivo mirando esta visita --
+            // quede al día, en vez de esperar al próximo cambio.
+            for (const clave of Object.keys(this.state.carrito)) {
+                this._marcarCambioPendienteCarrito(clave);
+            }
+        }
+    }
+
+    /** Aplica el carrito que devolvió el servidor a state.carrito SIN
+     * pisar cambios locales hechos MIENTRAS se esperaba esa respuesta
+     * -- bug real reportado ("no me deja borrar productos"): con
+     * varios toques seguidos, la respuesta de un guardado anterior
+     * (más vieja) podía llegar DESPUÉS de que el vendedor ya hubiera
+     * borrado otro producto, y un reemplazo/merge ciego "resucitaba"
+     * lo recién borrado. Acá nunca se resucita una clave que ahora
+     * está en _eliminadosPendientes, y nunca se pisa una clave que
+     * ahora está en _cambiosPendientes (ese valor local es más nuevo
+     * que la respuesta que se está aplicando -- se termina de mandar
+     * solo, en el próximo tick). */
+    _aplicarCarritoServidor(dictServidor) {
+        const nuevo = this._carritoDesdeServidor(dictServidor);
+        for (const clave of this._eliminadosPendientes) {
+            delete nuevo[clave];
+        }
+        for (const clave of Object.keys(this._cambiosPendientes)) {
+            if (this.state.carrito[clave]) {
+                nuevo[clave] = this.state.carrito[clave];
+            }
+        }
+        this.state.carrito = nuevo;
+    }
+
+    /** Best-effort, llamado al cerrarse esta pantalla (cualquier vía,
+     * intencional o no -- ver onWillUnmount): saca esta sesión de
+     * x_catalogo_sesiones para que el rol de "principal" pase a la
+     * siguiente sesión más antigua de una, sin esperar a que el
+     * heartbeat de esta quede viejo. */
+    _cerrarSesionCatalogo() {
+        if (this._sesionCerrada) {
+            return;
+        }
+        this._sesionCerrada = true;
+        this.orm.call("fsm.order", "shalom_cerrar_sesion_catalogo", [
+            [this.props.orderId], this._sesionId,
+        ]).catch(() => {});
+    }
+
+    /** Timer de ~1 seg (ver SHALOM_SYNC_INTERVALO_MS): manda lo
+     * pendiente si hay, si no pregunta si hay algo nuevo. Sin bloquear
+     * la interacción del vendedor -- cualquier error (sin señal en la
+     * calle) se ignora en silencio, se reintenta solo en el próximo
+     * tick.
+     *
+     * También manda, en cada tick, el heartbeat de "el catálogo está
+     * abierto acá" (con el id de esta sesión/pestaña) -- de ahí sale
+     * si esta pestaña es la "principal" (ver el docstring grande de
+     * CLAVE_SESION_CATALOGO), que es lo único que decide si
+     * intentarSalir() pregunta "guardar o descartar" o cierra
+     * directo. A diferencia del resto del tick, a este SÍ se le espera
+     * la respuesta (es la misma llamada liviana de siempre, no una
+     * extra). */
+    async _tickSincronizacionCarrito() {
+        if (this._sincronizando || this._cerrado) {
+            return;
+        }
+        this._sincronizando = true;
+        try {
+            try {
+                const heartbeat = await this.orm.call("fsm.order", "shalom_marcar_catalogo_abierto", [
+                    [this.props.orderId], this._sesionId,
+                ]);
+                this.state.esPrincipal = heartbeat.es_principal;
+            } catch (error) {
+                // Sin señal: no se sabe si sigue siendo principal --
+                // se deja el último valor conocido, no se asume nada.
+            }
+
+            const hayPendientes =
+                Object.keys(this._cambiosPendientes).length || this._eliminadosPendientes.size;
+            if (hayPendientes) {
+                const cambios = this._cambiosPendientes;
+                const eliminados = Array.from(this._eliminadosPendientes);
+                this._cambiosPendientes = {};
+                this._eliminadosPendientes = new Set();
+                const resultado = await this.orm.call("fsm.order", "shalom_actualizar_carrito", [
+                    [this.props.orderId],
+                    cambios,
+                    eliminados,
+                ]);
+                this._ultimaActualizadaConocida = resultado.actualizado;
+                this._aplicarCarritoServidor(resultado.carrito);
+                this.actualizarPromos();
+            } else {
+                const resultado = await this.orm.call("fsm.order", "shalom_leer_carrito", [
+                    [this.props.orderId],
+                ]);
+                // Chequeo de nuevo DESPUÉS de esperar la respuesta: el
+                // vendedor pudo haber tocado el carrito MIENTRAS se
+                // esperaba -- si es así, no se aplica esta foto vieja
+                // del servidor (se resuelve solo en el próximo tick,
+                // que va a ver pendientes y hacer el push).
+                const siguenSinPendientes =
+                    !Object.keys(this._cambiosPendientes).length && !this._eliminadosPendientes.size;
+                if (!siguenSinPendientes) {
+                    return;
+                }
+                if (resultado.actualizado === this._ultimaActualizadaConocida) {
+                    return; // nada nuevo -- no re-dibujar la pantalla porque sí
+                }
+                this._ultimaActualizadaConocida = resultado.actualizado;
+                this._aplicarCarritoServidor(resultado.carrito);
+                this.actualizarPromos();
+            }
+        } catch (error) {
+            // Sin conexión u otro error transitorio -- se reintenta
+            // solo en el próximo tick, no interrumpe al vendedor.
+        } finally {
+            this._sincronizando = false;
+        }
     }
 
     /** Aviso "a este cliente le faltan datos" (punto 4, no bloqueante):
@@ -586,6 +903,7 @@ export class OrderScreen extends Component {
         };
         this.actualizarPromos();
         this._guardarBorradorCarrito();
+        this._marcarCambioPendienteCarrito(producto.id);
     }
 
     cambiarCantidad(productoId, delta) {
@@ -601,12 +919,14 @@ export class OrderScreen extends Component {
         }
         this.actualizarPromos();
         this._guardarBorradorCarrito();
+        this._marcarCambioPendienteCarrito(productoId);
     }
 
     quitarDelCarrito(productoId) {
         delete this.state.carrito[productoId];
         this.actualizarPromos();
         this._guardarBorradorCarrito();
+        this._marcarCambioPendienteCarrito(productoId);
     }
 
     /**
@@ -638,6 +958,7 @@ export class OrderScreen extends Component {
         }
         this.actualizarPromos();
         this._guardarBorradorCarrito();
+        this._marcarCambioPendienteCarrito(productoId);
     }
 
     /**
@@ -724,6 +1045,7 @@ export class OrderScreen extends Component {
             {type: "success"}
         );
         this._guardarBorradorCarrito();
+        this._marcarCambioPendienteCarrito(key);
     }
 
     irACatalogo() {
@@ -984,9 +1306,17 @@ export class OrderScreen extends Component {
      * Si el carrito tiene productos sin guardar como cotización, no
      * cierra directo: muestra un aviso propio primero. Si está vacío,
      * cierra sin preguntar.
+     *
+     * SOLO la sesión "principal" (la que abrió el catálogo primero,
+     * ver state.esPrincipal) ve este aviso -- riesgo real reportado:
+     * un vendedor/cliente mirando en paralelo ("Ver en vivo") podía
+     * tocar "Salir sin guardar" y descartar el carrito de OTRO
+     * dispositivo sin darse cuenta de que no era el suyo. Cualquier
+     * sesión que no sea la principal sale directo, sin preguntar y
+     * SIN tocar el carrito compartido para nada.
      */
     intentarSalir() {
-        if (!this.cantidadItems) {
+        if (!this.cantidadItems || !this.state.esPrincipal) {
             cerrarConAnimacion(this.state, () => this.cerrarDeVerdad());
             return;
         }
@@ -999,6 +1329,17 @@ export class OrderScreen extends Component {
 
     confirmarSalirSinGuardar() {
         this.state.confirmandoSalida = false;
+        // Además de limpiar localStorage (ver cerrarDeVerdad), avisarle
+        // al servidor que también limpie x_carrito_borrador -- bug real
+        // reportado: sin esto, el carrito "descartado a propósito" volvía
+        // a aparecer solo al reabrir esta visita desde cualquier
+        // dispositivo, porque el snapshot del servidor seguía ahí y
+        // quedaba como el más nuevo frente a un localStorage ya vacío.
+        // Best-effort: si falla (sin señal en ese instante), no bloquea
+        // la salida -- la limpieza mensual automática es la red de
+        // seguridad para ese caso (ver shalom_limpiar_carritos_viejos
+        // en fsm_order.py).
+        this.orm.call("fsm.order", "shalom_limpiar_carrito", [[this.props.orderId]]).catch(() => {});
         cerrarConAnimacion(this.state, () => this.cerrarDeVerdad());
     }
 
