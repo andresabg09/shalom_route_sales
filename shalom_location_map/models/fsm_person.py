@@ -76,17 +76,28 @@ class FSMPerson(models.Model):
 
     @api.model
     def shalom_mis_rutas(self):
-        """Rutas (fsm.route) asignadas al vendedor logueado -- para el
-        selector de ruta del formulario ampliado de cliente (Editar
-        cliente / Alta rápida). Distinto de
+        """Rutas (fsm.route) para el selector de ruta del formulario
+        ampliado de cliente (Editar cliente / Alta rápida). Distinto de
         shalom_mis_rutas_programadas(): acá se listan las rutas en sí,
-        no sus ocurrencias semanales."""
-        persona = self._shalom_persona_actual()
-        if not persona:
-            return []
-        rutas = self.env["fsm.route"].search(
-            [("fsm_person_id", "=", persona.id)], order="name asc"
-        )
+        no sus ocurrencias semanales.
+
+        Un Administrador de Servicio de Campo ve TODAS las rutas
+        activas -- necesita poder reasignar cualquier cliente a
+        cualquier ruta, no solo a las que él mismo tenga asignadas como
+        vendedor (un admin también puede tener su propio fsm.person, con
+        las rutas que haya manejado antes -- mismo criterio que ya usa
+        shalom_admin_rutas_programadas() para esta misma distinción).
+        Cualquier otro usuario sigue viendo solo las rutas asignadas a
+        su propio fsm.person, como siempre."""
+        if self.env.user.has_group("fieldservice.group_fsm_manager"):
+            rutas = self.env["fsm.route"].search([], order="name asc")
+        else:
+            persona = self._shalom_persona_actual()
+            if not persona:
+                return []
+            rutas = self.env["fsm.route"].search(
+                [("fsm_person_id", "=", persona.id)], order="name asc"
+            )
         return [{"id": r.id, "name": r.name} for r in rutas]
 
     @api.model
