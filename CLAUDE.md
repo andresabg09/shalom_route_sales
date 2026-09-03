@@ -146,22 +146,17 @@ in active use), during low-traffic hours.
    hashes don't match or the update log shows a traceback, stop there
    and figure out why before giving anything else.
 
-   **Everything the user runs on the server is a `.sh` file, no
-   exceptions** — explicit user request, this rule is absolute. This
-   was already true for step 5; it applies just as much to steps 7, 8
-   and 9: the permission-fix commands and the module update command
-   (bundled together per the paragraph above) go into one `.sh` script
-   sent as a file, and the restart command (step 9, sent separately
-   after the STOP checkpoint) is its **own** `.sh` script too — never
-   raw shell commands pasted inline in chat for the user to copy by
-   hand, no matter how short or "safe-looking" the command is (a
-   one-line `docker service update --force crm_odoo` still goes in its
-   own tiny script). Claude never runs these commands itself either —
-   it has no direct access to the production server; the user always
-   executes the script themselves, in their own SSH session already
-   open on the VM (no `scp` needed when they're already logged in —
-   only when the script needs to get from Claude's environment onto
-   the VM in the first place).
+   **Steps 7/8/9 are plain shell commands in chat, not `.sh` files**
+   — explicit user request, overriding an earlier attempt at making
+   this a blanket `.sh`-only rule. Only step 5 (writing new/changed
+   module files) needs a script, because that involves multi-line
+   heredocs that are error-prone to copy by hand. The permission-fix
+   commands, the module update command, and the restart command are
+   short, self-contained shell commands — give them straight in the
+   chat message as code blocks, ready to paste into the user's own
+   already-open SSH session on the VM. Claude never runs these
+   commands itself — it has no direct access to the production
+   server.
 10. **User tests the change live** in production and reports back
     what happened.
 11. **Only once the user confirms it works**, `git commit` + `push` —
