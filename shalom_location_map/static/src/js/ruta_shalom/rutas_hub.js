@@ -90,11 +90,17 @@ export class RutasHub extends Component {
             );
             this.state.schedules = resultado;
 
-            const hoyStr = aFechaStr(hoy);
-            const semanaActual = resultado.find(
-                (s) => s.date_start <= hoyStr && s.date_end >= hoyStr
+            // Por defecto, la semana calendario de HOY -- si no hay
+            // ninguna ruta cuya semana de arranque sea esta, se cae a
+            // "todo el periodo" (mismo criterio que antes, adaptado a
+            // que "periodo" ahora es la clave de un bucket de semana,
+            // no el date_start de una ocurrencia puntual -- ver
+            // semanas()/schedulesFiltrados()).
+            const semanaDeHoy = aFechaStr(desde);
+            const hayRutasEstaSemana = resultado.some(
+                (s) => aFechaStr(inicioSemana(s.date_start + "T00:00:00")) === semanaDeHoy
             );
-            this.state.periodo = semanaActual ? semanaActual.date_start : "todos";
+            this.state.periodo = hayRutasEstaSemana ? semanaDeHoy : "todos";
         } catch (error) {
             this.notification.add(
                 "No se pudieron cargar tus rutas. Revisá tu conexión e intentá de nuevo.",
@@ -105,29 +111,55 @@ export class RutasHub extends Component {
         }
     }
 
+    /** Agrupa las ocurrencias por SEMANA CALENDARIO real (lunes a
+     * domingo, ver inicioSemana()) en la que arranca cada una -- antes
+     * agrupaba por el date_start literal de cada ocurrencia, así que
+     * un vendedor con 11 rutas con fechas de inicio escalonadas (una
+     * empieza el 1, otra el 3, otra el 7...) veía 11 "semanas"
+     * distintas en el filtro, una por ruta, en vez de agrupadas por
+     * semana real -- pedido explícito: "que aparezcan todas las rutas
+     * de mi semana juntas". Cada bucket trae "cantidad" (cuántas rutas
+     * caen en esa semana) para mostrarlo en el filtro. */
     get semanas() {
         const vistas = new Map();
         for (const s of this.state.schedules) {
-            if (!vistas.has(s.date_start)) {
-                vistas.set(s.date_start, {date_start: s.date_start, date_end: s.date_end});
+            const inicio = aFechaStr(inicioSemana(s.date_start + "T00:00:00"));
+            if (!vistas.has(inicio)) {
+                const fin = new Date(inicio + "T00:00:00");
+                fin.setDate(fin.getDate() + 6);
+                vistas.set(inicio, {date_start: inicio, date_end: aFechaStr(fin), cantidad: 0});
             }
+            vistas.get(inicio).cantidad += 1;
         }
         return [...vistas.values()].sort((a, b) => (a.date_start < b.date_start ? -1 : 1));
     }
 
     get schedulesFiltrados() {
         const q = this.state.busqueda.trim().toLowerCase();
-        return this.state.schedules.filter((s) => {
-            if (this.state.periodo !== "todos" && s.date_start !== this.state.periodo) {
-                return false;
+        const filtradas = this.state.schedules.filter((s) => {
+            if (this.state.periodo !== "todos") {
+                const semanaDeEsta = aFechaStr(inicioSemana(s.date_start + "T00:00:00"));
+                if (semanaDeEsta !== this.state.periodo) {
+                    return false;
+                }
             }
             if (q && !s.route_name.toLowerCase().includes(q)) {
                 return false;
             }
             return true;
         });
+        // Visita Exprés SIEMPRE arriba de todo, sea cual sea la
+        // semana filtrada -- pedido explícito: "que se sepa que es
+        // una visita urgente" apenas se abre la pestaña, sin tener
+        // que buscarla entre las demás.
+        return [...filtradas].sort(
+            (a, b) => (b.es_visita_express ? 1 : 0) - (a.es_visita_express ? 1 : 0)
+        );
     }
 
+    /** Etiqueta del filtro de período (menú desplegable) -- une la
+     * semana calendario con cuántas rutas tiene, para elegir sin tener
+     * que abrir cada una ("Semana del 1 al 7 sep · 3 rutas"). */
     etiquetaPeriodo(dateStart) {
         if (dateStart === "todos") {
             return "Todo el periodo";
@@ -138,7 +170,19 @@ export class RutasHub extends Component {
         }
         const inicio = formatoFechaCorta(new Date(semana.date_start + "T00:00:00"));
         const fin = formatoFechaCorta(new Date(semana.date_end + "T00:00:00"));
-        return `Semana del ${inicio} al ${fin}`;
+        const rutas = semana.cantidad === 1 ? "1 ruta" : `${semana.cantidad} rutas`;
+        return `Semana del ${inicio} al ${fin} · ${rutas}`;
+    }
+
+    /** Rango de fechas de ESTA ocurrencia puntual, para la tarjeta de
+     * cada ruta -- a diferencia de etiquetaPeriodo() (que describe la
+     * semana calendario del filtro), acá se muestran las fechas reales
+     * de la ocurrencia tal cual las cargó oficina, aunque no coincidan
+     * exactamente con el lunes/domingo de su semana. */
+    etiquetaRangoSchedule(schedule) {
+        const inicio = formatoFechaCorta(new Date(schedule.date_start + "T00:00:00"));
+        const fin = formatoFechaCorta(new Date(schedule.date_end + "T00:00:00"));
+        return `${inicio} al ${fin}`;
     }
 
     formatoHoras(horas) {

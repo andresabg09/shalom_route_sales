@@ -34,6 +34,23 @@ Agrega a fsm.route:
    recorrido completo de esta ruta. Solo se usa para sugerir la fecha
    de fin al crear/renovar una fsm.route.schedule (ver ese modelo) --
    la fecha real de cada programación concreta siempre es editable.
+
+5. "Visita Exprés": UNA fsm.route POR VENDEDOR (x_es_visita_express=
+   True, fsm_person_id=ese vendedor), creada sola la primera vez que
+   Administración la usa con ese vendedor elegido -- no tiene clientes
+   propios ni ciclo regular. Es el cajón donde Administración mete, a
+   demanda, a quien pide atención antes de que le toque su ruta normal
+   (ej. cliente de Colón que llama pidiendo que lo visiten mañana, sin
+   esperar 2 semanas), y puede haber varias al mismo tiempo -- una por
+   cada vendedor que tenga clientes exprés pendientes, sin pisarse.
+   shalom_confirmar_lote_visita_express() (ver más abajo) es el único
+   método que toca la base -- elegir clientes en el buscador antes de
+   confirmar es todo del lado del frontend, sin efecto hasta ese click.
+   El resto (que aparezca/desaparezca sola en la app del vendedor según
+   tenga o no visitas pendientes, que el ciclo se cuente como completo
+   aunque algún cliente haya dicho "No quiso") es 100% reuso de
+   fsm.route.schedule.estado (ver fsm_route_schedule.py,
+   _compute_estado) -- cero lógica nueva ahí.
 """
 import json
 import logging
@@ -42,8 +59,8 @@ from datetime import datetime, time
 
 import requests
 
-from odoo import _, fields, models
-from odoo.exceptions import UserError
+from odoo import _, api, fields, models
+from odoo.exceptions import AccessError, UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -75,6 +92,15 @@ class FSMRoute(models.Model):
         "al generar el ciclo siguiente con 'Generar próximo ciclo'; la "
         "fecha de fin de cada programación concreta siempre se puede "
         "editar a mano si ese mes es distinto.",
+    )
+    x_es_visita_express = fields.Boolean(
+        string="Es Visita Exprés",
+        default=False,
+        help="Marca las rutas creadas automáticamente para Visita "
+        "Exprés (una por vendedor, ver la sección grande al principio "
+        "de este archivo) -- para poder encontrar la de cada vendedor "
+        "(fsm_person_id) sin depender del nombre. No se pensó para "
+        "tocarse a mano.",
     )
 
     def _shalom_etapas_generar_visitas(self):
@@ -386,4 +412,261 @@ class FSMRoute(models.Model):
                 "sticky": False,
                 "type": "success",
             },
+        }
+
+    # ------------------------------------------------------------------
+    # Visita Exprés (ver el punto 5 del docstring grande de arriba):
+    # atención de un cliente FUERA de su ciclo normal, a demanda de
+    # Administración. Hay UNA fsm.route por vendedor (x_es_visita_
+    # express=True, fsm_person_id=ese vendedor), creada sola la primera
+    # vez que se usa con ese vendedor elegido -- así dos vendedores
+    # pueden tener cada uno su propio lote de clientes exprés al mismo
+    # tiempo, sin pisarse (pedido explícito: "puede ser que haya dos o
+    # tres, cada vendedor con clientes diferentes"). El "aparece/
+    # desaparece solo" en la app del vendedor es 100% reuso de
+    # fsm.route.schedule.estado, no hay nada nuevo ahí.
+    #
+    # Flujo de dos pasos (pedido explícito, para no archivar nada por
+    # error mientras se está armando la lista): elegir varios clientes
+    # con el buscador se queda SOLO del lado del frontend (no toca la
+    # base); recién al tocar "Confirmar Visita Exprés"
+    # (shalom_confirmar_lote_visita_express) se archivan de una las
+    # visitas viejas de todos los elegidos y se crean las nuevas, todo
+    # junto en una sola llamada.
+    # ------------------------------------------------------------------
+
+    def _shalom_verificar_admin_express(self):
+        """Mismo chequeo que usan el resto de las acciones de
+        Administración (ver _shalom_verificar_admin en fsm_order.py) --
+        repetido acá en vez de importado porque Visita Exprés vive en
+        fsm.route, no en fsm.order."""
+        if not self.env.user.has_group("fieldservice.group_fsm_manager"):
+            raise AccessError(_(
+                "Esta acción es solo para el rol Administrador de "
+                "Servicio de Campo."
+            ))
+
+    def _shalom_ruta_express_de(self, vendedor_id):
+        """fsm.route de Visita Exprés de ESTE vendedor (puede no
+        existir todavía -- devuelve recordset vacío en ese caso, se
+        crea recién en shalom_confirmar_lote_visita_express())."""
+        return self.search(
+            [
+                ("x_es_visita_express", "=", True),
+                ("fsm_person_id", "=", vendedor_id),
+            ],
+            limit=1,
+        )
+
+    def _shalom_visita_express_clientes(self, schedule):
+        """Clientes con visita TODAVÍA ABIERTA en esta ocurrencia de
+        Visita Exprés -- a propósito no incluye las ya cerradas (ni
+        vendidas ni "No quiso"/Cancelado): pedido explícito de que la
+        lista se vea "vacía" en cuanto se completa un lote, sin
+        clientes de meses anteriores confundiendo al que va a agregar
+        los nuevos."""
+        ordenes = self.env["fsm.order"].search(
+            [
+                ("x_route_schedule_id", "=", schedule.id),
+                ("stage_id.is_closed", "=", False),
+            ],
+            order="create_date asc",
+        )
+        return [
+            {
+                "order_id": orden.id,
+                "location_id": orden.location_id.id if orden.location_id else False,
+                "cliente_nombre": orden.location_id.name if orden.location_id else "",
+            }
+            for orden in ordenes
+        ]
+
+    @api.model
+    def shalom_visita_express_info(self, vendedor_id):
+        """Estado actual de Visita Exprés PARA ESTE VENDEDOR (el que
+        esté elegido en el selector de "Rutas de mis vendedores"), para
+        pintar el panel apenas se abre: si todavía no tiene ninguna
+        ruta de Visita Exprés propia (nunca se usó con él), o si tiene
+        una ocurrencia abierta con clientes ya confirmados de un lote
+        anterior."""
+        self._shalom_verificar_admin_express()
+        if not vendedor_id:
+            return {"schedule_id": False, "date_start": False, "date_end": False, "clientes": []}
+        ruta_express = self._shalom_ruta_express_de(vendedor_id)
+        schedule = self.env["fsm.route.schedule"]
+        if ruta_express:
+            schedule = self.env["fsm.route.schedule"].search(
+                [
+                    ("route_id", "=", ruta_express.id),
+                    ("estado", "!=", "completada"),
+                ],
+                order="date_start desc",
+                limit=1,
+            )
+        return {
+            "schedule_id": schedule.id if schedule else False,
+            "date_start": schedule.date_start.isoformat() if schedule else False,
+            "date_end": schedule.date_end.isoformat() if schedule else False,
+            "clientes": (
+                ruta_express._shalom_visita_express_clientes(schedule)
+                if ruta_express and schedule else []
+            ),
+        }
+
+    @api.model
+    def shalom_visita_express_clientes(self, schedule_id):
+        """Refresca la lista de clientes CONFIRMADOS de una ocurrencia
+        de Visita Exprés ya abierta (después de archivar una visita
+        desde la misma pantalla) -- ver
+        _shalom_visita_express_clientes()."""
+        self._shalom_verificar_admin_express()
+        schedule = self.env["fsm.route.schedule"].browse(schedule_id)
+        if not schedule.exists():
+            return []
+        return schedule.route_id._shalom_visita_express_clientes(schedule)
+
+    @api.model
+    def shalom_actualizar_fechas_visita_express(self, schedule_id, fecha_inicio, fecha_fin):
+        """Editar Inicio/Fin de una ocurrencia de Visita Exprés YA
+        creada -- a diferencia de una ruta normal, este campo queda
+        SIEMPRE editable acá (pedido explícito: "no quiero que haya una
+        limitación"), no solo antes del primer cliente confirmado.
+        Escribe directo (mismo criterio que date_end en
+        fsm.route.schedule: 100% editable a mano, sin validar que fin
+        sea posterior a inicio -- igual que el formulario nativo)."""
+        self._shalom_verificar_admin_express()
+        schedule = self.env["fsm.route.schedule"].browse(schedule_id)
+        if not schedule.exists() or not schedule.route_id.x_es_visita_express:
+            raise UserError(_(
+                "Esa ocurrencia de Visita Exprés ya no existe -- volvé "
+                "a abrir Visita Exprés e intentá de nuevo."
+            ))
+        schedule.write({"date_start": fecha_inicio, "date_end": fecha_fin})
+        _logger.info(
+            "Fechas de Visita Exprés actualizadas: fsm.route.schedule "
+            "id=%s -> %s / %s.", schedule.id, fecha_inicio, fecha_fin,
+        )
+        return {"date_start": fecha_inicio, "date_end": fecha_fin}
+
+    @api.model
+    def shalom_confirmar_lote_visita_express(self, vendedor_id, fecha_inicio, fecha_fin, location_ids):
+        """Botón "Confirmar Visita Exprés": punto único donde se toca
+        la base, para TODOS los clientes elegidos en el buscador de una
+        sola vez (hasta acá, elegirlos solo los juntaba del lado del
+        frontend, sin tocar nada).
+
+        1. Si este vendedor todavía no tiene su propia ruta de Visita
+           Exprés, se crea ("Visita Exprés - <nombre>",
+           x_es_visita_express=True, fsm_person_id=vendedor_id).
+        2. Si no tiene una ocurrencia abierta (estado != 'completada'),
+           se crea una con las fechas indicadas (`fecha_inicio`/
+           `fecha_fin`, 'YYYY-MM-DD', obligatorias en ese caso -- ver
+           shalom_actualizar_fechas_visita_express() para editarlas
+           después, en cualquier momento).
+        3. Para cada cliente en location_ids: si tenía una visita
+           abierta en su ruta normal (cualquiera), se ARCHIVA directo
+           (active=False) -- a propósito NO se cierra como "No
+           atendido": esa etapa es para "no dio tiempo en el ciclo", y
+           usarla acá confundiría a quien mira Seguimiento de Visitas
+           (pensaría que el vendedor se lo saltó, cuando en realidad
+           pasó a Visita Exprés). La ruta habitual del cliente
+           (fsm_route_id/x_orden_ruta en fsm.location) NO se toca --
+           sigue siendo cliente de esa ruta para su próximo ciclo
+           normal. Un cliente que ya estuviera en ESTA MISMA ocurrencia
+           (reconfirmado por error) se saltea, no duplica la visita.
+
+        Devuelve {"schedule_id", "date_start", "date_end", "clientes"}
+        -- mismo formato que shalom_visita_express_info()."""
+        self._shalom_verificar_admin_express()
+        if not vendedor_id:
+            raise UserError(_("Elegí un vendedor antes de confirmar Visita Exprés."))
+        if not location_ids:
+            raise UserError(_("No hay ningún cliente elegido para confirmar."))
+
+        ruta_express = self._shalom_ruta_express_de(vendedor_id)
+        if not ruta_express:
+            vendedor = self.env["fsm.person"].browse(vendedor_id)
+            ruta_express = self.create({
+                "name": _("Visita Exprés - %s", vendedor.name),
+                "fsm_person_id": vendedor.id,
+                "x_es_visita_express": True,
+            })
+            _logger.info(
+                "Nueva ruta de Visita Exprés creada para fsm.person "
+                "id=%s: fsm.route id=%s.", vendedor_id, ruta_express.id,
+            )
+
+        schedule = self.env["fsm.route.schedule"].search(
+            [
+                ("route_id", "=", ruta_express.id),
+                ("estado", "!=", "completada"),
+            ],
+            order="date_start desc",
+            limit=1,
+        )
+        if not schedule:
+            if not fecha_inicio or not fecha_fin:
+                raise UserError(_(
+                    "Elegí la fecha de inicio y de fin en que se debe "
+                    "visitar a estos clientes antes de confirmar."
+                ))
+            schedule = self.env["fsm.route.schedule"].create({
+                "route_id": ruta_express.id,
+                "date_start": fecha_inicio,
+                "date_end": fecha_fin,
+            })
+            _logger.info(
+                "Nueva ocurrencia de Visita Exprés creada: "
+                "fsm.route.schedule id=%s (%s / %s, vendedor id=%s).",
+                schedule.id, fecha_inicio, fecha_fin, vendedor_id,
+            )
+
+        ya_en_esta_ocurrencia = set(
+            self.env["fsm.order"].search([
+                ("x_route_schedule_id", "=", schedule.id),
+                ("stage_id.is_closed", "=", False),
+            ]).mapped("location_id.id")
+        )
+        stage_nueva, _stage_no_atendido = (
+            ruta_express._shalom_etapas_generar_visitas()
+        )
+        creadas = 0
+        for location_id in location_ids:
+            if location_id in ya_en_esta_ocurrencia:
+                continue
+            location = self.env["fsm.location"].browse(location_id)
+            if not location.exists():
+                continue
+
+            visita_anterior = self.env["fsm.order"].search([
+                ("location_id", "=", location.id),
+                ("stage_id.is_closed", "=", False),
+            ])
+            if visita_anterior:
+                visita_anterior.write({"active": False})
+                _logger.info(
+                    "Cliente enviado a Visita Exprés: fsm.order id=%s de "
+                    "su ruta normal archivada (fsm.location id=%s).",
+                    visita_anterior.ids, location.id,
+                )
+
+            self.env["fsm.order"].create({
+                "name": f"{ruta_express.name} - {location.name}",
+                "location_id": location.id,
+                "fsm_route_id": ruta_express.id,
+                "stage_id": stage_nueva.id,
+                "x_route_schedule_id": schedule.id,
+            })
+            creadas += 1
+
+        _logger.info(
+            "Visita Exprés confirmada para fsm.person id=%s: %s "
+            "cliente(s) agregado(s) (schedule id=%s).",
+            vendedor_id, creadas, schedule.id,
+        )
+        return {
+            "schedule_id": schedule.id,
+            "date_start": schedule.date_start.isoformat(),
+            "date_end": schedule.date_end.isoformat(),
+            "clientes": ruta_express._shalom_visita_express_clientes(schedule),
         }

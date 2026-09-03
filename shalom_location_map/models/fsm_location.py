@@ -488,3 +488,45 @@ class FSMLocation(models.Model):
             "Visitas: fsm.location id=%s ('%s').", self.id, self.name,
         )
         return True
+
+    @api.model
+    def shalom_buscar_clientes_admin(self, texto, excluir_ids=None):
+        """Buscador de Visita Exprés (Administración → Rutas de mis
+        vendedores): busca por nombre en TODA la base, sin acotar a
+        una ruta -- a diferencia de cargarClientesDeRuta() en
+        ClienteForm, que sí está acotado. Devuelve, además del nombre,
+        la ruta y el vendedor de cada resultado -- pedido explícito:
+        hay clientes con nombres idénticos ("Minisuper 38") en zonas
+        distintas (Chorrera, Arraiján, Panamá, Colón...), y sin esta
+        info no había forma de saber cuál de todos era el correcto
+        antes de agregarlo a Visita Exprés.
+
+        excluir_ids: ids de fsm.location a sacar de los resultados
+        (los que ya están agregados en la Visita Exprés actual, para
+        no ofrecer agregarlos dos veces)."""
+        if not self.env.user.has_group("fieldservice.group_fsm_manager"):
+            raise AccessError(_(
+                "Esta acción es solo para el rol Administrador de "
+                "Servicio de Campo."
+            ))
+        texto = (texto or "").strip()
+        if not texto:
+            return []
+        domain = [("name", "ilike", texto)]
+        if excluir_ids:
+            domain.append(("id", "not in", excluir_ids))
+        locations = self.search(domain, limit=15, order="name asc")
+        return [
+            {
+                "id": loc.id,
+                "name": loc.name,
+                "street": loc.street or "",
+                "ruta_nombre": loc.fsm_route_id.name if loc.fsm_route_id else "",
+                "vendedor_nombre": (
+                    loc.fsm_route_id.fsm_person_id.name
+                    if loc.fsm_route_id and loc.fsm_route_id.fsm_person_id
+                    else ""
+                ),
+            }
+            for loc in locations
+        ]

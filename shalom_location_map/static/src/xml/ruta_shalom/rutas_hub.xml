@@ -52,14 +52,17 @@
                 </t>
                 <t t-else="">
                     <button
-                        class="route-card"
+                        t-attf-class="route-card {{schedule.es_visita_express ? 'route-card-express' : ''}}"
                         t-foreach="schedulesFiltrados"
                         t-as="schedule"
                         t-key="schedule.id"
                         t-on-click="() => this.abrir(schedule)"
                     >
                         <div class="route-card-head">
-                            <span class="rname" t-esc="schedule.route_name"/>
+                            <span class="rname">
+                                <i t-if="schedule.es_visita_express" class="fa fa-bolt" aria-hidden="true"/>
+                                <t t-esc="schedule.route_name"/>
+                            </span>
                             <span
                                 class="stop-badge"
                                 t-attf-style="background: var(--shalom-{{claseEstado(schedule.estado)}}-soft); color: var(--shalom-{{claseEstado(schedule.estado)}});"
@@ -71,7 +74,7 @@
                             <span>⏱ <b t-esc="formatoHoras(schedule.tiempo_estimado)"/> estimadas</span>
                             <span>💵 <b t-esc="'$' + schedule.capacidad.toFixed(2)"/> capacidad</span>
                         </div>
-                        <div class="addr" t-esc="etiquetaPeriodo(schedule.date_start)"/>
+                        <div class="addr" t-esc="etiquetaRangoSchedule(schedule)"/>
                     </button>
                 </t>
             </div>

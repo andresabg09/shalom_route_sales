@@ -3,16 +3,31 @@
 import {Component, onWillStart, onWillUnmount, useEffect, useRef, useState} from "@odoo/owl";
 import {registry} from "@web/core/registry";
 import {useService} from "@web/core/utils/hooks";
+import {DateTimeInput} from "@web/core/datetime/datetime_input";
 import {ClienteForm} from "./cliente_form";
 import {OrderScreen} from "./order_screen";
 import {ESTADO_ETIQUETA, estadoDesdeStageName} from "./stage_utils";
 import {getMapboxToken, cargarMapboxGl} from "./mapbox_utils";
+
+const {DateTime} = luxon;
 
 // Cada cuánto se refresca la lista de "Visitas en vivo" (quién tiene
 // el catálogo abierto ahora mismo) -- más espaciado que el heartbeat
 // de visit_sheet.js porque acá es una lista completa, no una sola
 // visita.
 const SHALOM_INTERVALO_LISTA_EN_VIVO_MS = 3000;
+
+/** Clave de localStorage para los clientes "por confirmar" de la
+ * Visita Exprés de UN vendedor (elegidos con el buscador pero
+ * TODAVÍA sin tocar la base) -- pedido explícito: si Administración
+ * sale de la pantalla por accidente (o se olvida de tocar "Confirmar
+ * Visita Exprés"), la lista que ya armó no se puede perder sin aviso;
+ * puede tener 20 clientes cargados. Se guarda en cada cambio y se
+ * restaura sola al reabrir Visita Exprés de ese mismo vendedor; se
+ * borra recién cuando se confirma con éxito. */
+function claveVisitaExpressPendientes(vendedorId) {
+    return `shalom_visita_express_pendientes_${vendedorId}`;
+}
 
 /**
  * Administración (punto 4 de la ronda "administración", ver README.md):
@@ -46,7 +61,7 @@ const ESTADOS_SEGUIMIENTO_DEFAULT = ["cancelado", "no_quiso"];
 
 export class AdminGestion extends Component {
     static template = "shalom_location_map.AdminGestion";
-    static components = {ClienteForm, OrderScreen};
+    static components = {ClienteForm, OrderScreen, DateTimeInput};
     static props = ["*"];
 
     setup() {
@@ -80,6 +95,22 @@ export class AdminGestion extends Component {
             clientesRuta: [],
             busquedaClienteRuta: "",
             clienteResaltadoId: null,
+
+            // -- Visita Exprés: DENTRO del vendedor elegido arriba (es
+            // la Visita Exprés de ESE vendedor, una por cada uno -- ver
+            // docstring grande de la sección más abajo) --
+            visitaExpressAbierta: false,
+            visitaExpressCargando: false,
+            visitaExpressScheduleId: null,
+            visitaExpressFechaInicio: null, // luxon DateTime -- SIEMPRE editable
+            visitaExpressFechaFin: null, // luxon DateTime -- SIEMPRE editable
+            visitaExpressClientes: [], // ya confirmados (fsm.order reales)
+            visitaExpressPendientes: [], // elegidos, TODAVÍA sin confirmar
+            visitaExpressConfirmando: false,
+            visitaExpressBuscadorAbierto: false,
+            visitaExpressBusqueda: "",
+            visitaExpressBuscando: false,
+            visitaExpressResultados: [],
 
             // -- En vivo --
             cargandoEnVivo: true,
@@ -360,6 +391,12 @@ export class AdminGestion extends Component {
         this.state.vendedorSeleccionadoId = Number(ev.target.value);
         this.state.scheduleSeleccionadoId = null;
         this.state.clientesRuta = [];
+        // Visita Exprés es DE un vendedor específico -- si se cambia
+        // de vendedor arriba, se cierra el panel (y se descarta
+        // cualquier cliente elegido sin confirmar) para no quedar
+        // mirando/editando por error la Visita Exprés de otro
+        // vendedor.
+        this.cerrarVisitaExpress();
     }
 
     async elegirRuta(ruta) {
@@ -626,6 +663,355 @@ export class AdminGestion extends Component {
             await this.cargarClientesRuta();
         } catch (error) {
             this.notification.add("No se pudo archivar la visita.", {type: "danger"});
+        }
+    }
+
+    // ==================================================================
+    // Visita Exprés: atención de un cliente FUERA de su ciclo normal,
+    // a demanda ("el cliente llamó pidiendo que lo visiten mañana").
+    // Vive DENTRO del vendedor elegido arriba (state.vendedorSeleccionadoId)
+    // -- es la Visita Exprés de ESE vendedor específico; puede haber
+    // varias al mismo tiempo, una por cada vendedor que la use, sin
+    // pisarse (ver fsm_route.py). Aparece/desaparece sola en la app
+    // del vendedor: eso es 100% del lado del backend
+    // (fsm.route.schedule.estado), acá solo mostramos/ocultamos el
+    // panel según lo que devuelva shalom_visita_express_info().
+    //
+    // Flujo de dos pasos, pedido explícito: elegir clientes con el
+    // buscador solo los junta en visitaExpressPendientes (frontend,
+    // no toca nada todavía) -- recién "Confirmar Visita Exprés"
+    // (confirmarLoteVisitaExpress) manda TODOS juntos al backend, que
+    // ahí sí archiva sus visitas viejas y crea las nuevas de una.
+    // ==================================================================
+
+    /** Botón "Visita Exprés" (dentro del vendedor elegido arriba):
+     * trae el estado actual (ocurrencia abierta con sus clientes ya
+     * confirmados, si hay) en una sola llamada. Un segundo click sobre
+     * la pastilla cierra el panel (mismo gesto que cualquier otra
+     * pastilla de ruta). */
+    async abrirVisitaExpress() {
+        if (this.state.visitaExpressAbierta) {
+            this.cerrarVisitaExpress();
+            return;
+        }
+        if (!this.state.vendedorSeleccionadoId) {
+            this.notification.add("Elegí un vendedor arriba antes de abrir Visita Exprés.", {
+                type: "warning",
+            });
+            return;
+        }
+        this.state.visitaExpressCargando = true;
+        try {
+            const datos = await this.orm.call(
+                "fsm.route", "shalom_visita_express_info", [this.state.vendedorSeleccionadoId]
+            );
+            this._aplicarDatosVisitaExpress(datos);
+            this._restaurarPendientesVisitaExpress();
+        } catch (error) {
+            this.notification.add("No se pudo abrir Visita Exprés.", {type: "danger"});
+        } finally {
+            this.state.visitaExpressCargando = false;
+        }
+    }
+
+    cerrarVisitaExpress() {
+        this.state.visitaExpressAbierta = false;
+        this.state.visitaExpressPendientes = [];
+        this.state.visitaExpressBuscadorAbierto = false;
+        this.state.visitaExpressBusqueda = "";
+        this.state.visitaExpressResultados = [];
+    }
+
+    _aplicarDatosVisitaExpress(datos) {
+        this.state.visitaExpressAbierta = true;
+        this.state.visitaExpressScheduleId = datos.schedule_id || null;
+        // Fecha por defecto = hoy (para las dos) si todavía no hay
+        // ocurrencia -- así no hace falta tocar nada si el lote es
+        // para hoy mismo. Se pisan enseguida si había una fecha
+        // guardada en el "por confirmar" recuperado (ver más abajo).
+        this.state.visitaExpressFechaInicio = datos.date_start
+            ? DateTime.fromISO(datos.date_start)
+            : DateTime.local().startOf("day");
+        this.state.visitaExpressFechaFin = datos.date_end
+            ? DateTime.fromISO(datos.date_end)
+            : DateTime.local().startOf("day");
+        this.state.visitaExpressClientes = datos.clientes || [];
+    }
+
+    /** Fecha de Inicio/Fin del calendario (widget nativo de Odoo, mismo
+     * que ya se usa para programar una ruta) -- SIEMPRE editable,
+     * tenga o no ya una ocurrencia creada (pedido explícito). Si la
+     * ocurrencia ya existe, el cambio se guarda solo, de una, contra
+     * el servidor (shalom_actualizar_fechas_visita_express); si
+     * todavía no existe, solo queda en memoria/localStorage hasta que
+     * se confirme el primer cliente. */
+    async onCambiarFechaInicioVisitaExpress(valor) {
+        this.state.visitaExpressFechaInicio = valor;
+        this._guardarPendientesVisitaExpress();
+        await this._guardarFechasSiYaExisteOcurrencia();
+    }
+
+    async onCambiarFechaFinVisitaExpress(valor) {
+        this.state.visitaExpressFechaFin = valor;
+        this._guardarPendientesVisitaExpress();
+        await this._guardarFechasSiYaExisteOcurrencia();
+    }
+
+    async _guardarFechasSiYaExisteOcurrencia() {
+        if (!this.state.visitaExpressScheduleId) {
+            return;
+        }
+        try {
+            await this.orm.call("fsm.route", "shalom_actualizar_fechas_visita_express", [
+                this.state.visitaExpressScheduleId,
+                this.state.visitaExpressFechaInicio.toISODate(),
+                this.state.visitaExpressFechaFin.toISODate(),
+            ]);
+        } catch (error) {
+            this.notification.add("No se pudieron guardar las fechas.", {type: "danger"});
+        }
+    }
+
+    // -- Memoria de "por confirmar" (ver claveVisitaExpressPendientes
+    // más arriba): guarda/restaura/borra en localStorage la lista de
+    // clientes elegidos con el buscador y todavía sin confirmar (más
+    // las fechas elegidas), por vendedor -- pedido explícito, para no
+    // perderla si Administración sale de la pantalla sin tocar
+    // "Confirmar Visita Exprés". --
+
+    _guardarPendientesVisitaExpress() {
+        if (!this.state.vendedorSeleccionadoId) {
+            return;
+        }
+        try {
+            localStorage.setItem(
+                claveVisitaExpressPendientes(this.state.vendedorSeleccionadoId),
+                JSON.stringify({
+                    pendientes: this.state.visitaExpressPendientes,
+                    fechaInicio: this.state.visitaExpressFechaInicio
+                        ? this.state.visitaExpressFechaInicio.toISODate()
+                        : null,
+                    fechaFin: this.state.visitaExpressFechaFin
+                        ? this.state.visitaExpressFechaFin.toISODate()
+                        : null,
+                })
+            );
+        } catch (error) {
+            // localStorage puede fallar (modo privado del navegador,
+            // cuota llena, etc.) -- no es crítico para seguir armando
+            // el lote en memoria, solo se pierde la posibilidad de
+            // recuperarlo si la pantalla se cierra por accidente.
+        }
+    }
+
+    _borrarPendientesVisitaExpress(vendedorId) {
+        try {
+            localStorage.removeItem(claveVisitaExpressPendientes(vendedorId));
+        } catch (error) {
+            // ver _guardarPendientesVisitaExpress()
+        }
+    }
+
+    /** Llamado al abrir Visita Exprés de un vendedor: si había clientes
+     * "por confirmar" guardados de una sesión anterior (se salió sin
+     * confirmar), los recupera solos, sin preguntar -- mismo criterio
+     * que el borrador de carrito del vendedor (ver order_screen.js). */
+    _restaurarPendientesVisitaExpress() {
+        let crudo;
+        try {
+            crudo = localStorage.getItem(
+                claveVisitaExpressPendientes(this.state.vendedorSeleccionadoId)
+            );
+        } catch (error) {
+            return;
+        }
+        if (!crudo) {
+            return;
+        }
+        let borrador;
+        try {
+            borrador = JSON.parse(crudo);
+        } catch (error) {
+            this._borrarPendientesVisitaExpress(this.state.vendedorSeleccionadoId);
+            return;
+        }
+        if (!borrador.pendientes || !borrador.pendientes.length) {
+            this._borrarPendientesVisitaExpress(this.state.vendedorSeleccionadoId);
+            return;
+        }
+        this.state.visitaExpressPendientes = borrador.pendientes;
+        if (borrador.fechaInicio) {
+            this.state.visitaExpressFechaInicio = DateTime.fromISO(borrador.fechaInicio);
+        }
+        if (borrador.fechaFin) {
+            this.state.visitaExpressFechaFin = DateTime.fromISO(borrador.fechaFin);
+        }
+        this.notification.add(
+            `Se recuperaron ${borrador.pendientes.length} cliente(s) que habías elegido sin ` +
+            `confirmar.`,
+            {type: "info"}
+        );
+    }
+
+    async cargarVisitaExpressClientes() {
+        if (!this.state.visitaExpressScheduleId) {
+            return;
+        }
+        this.state.visitaExpressClientes = await this.orm.call(
+            "fsm.route", "shalom_visita_express_clientes", [this.state.visitaExpressScheduleId]
+        );
+    }
+
+    /** Botón "Archivar visita" de una fila YA CONFIRMADA de Visita
+     * Exprés -- mismo método nativo que el de "Rutas de mis
+     * vendedores" (ver archivarVisita más arriba), solo que acá
+     * refresca la lista de Visita Exprés en vez de la de la ruta
+     * normal. */
+    async archivarVisitaExpress(ev, cliente) {
+        ev.stopPropagation();
+        // eslint-disable-next-line no-alert
+        const acepta = window.confirm(
+            `¿Sacar a "${cliente.cliente_nombre}" de Visita Exprés? Se archiva ` +
+            `(no se borra del todo) -- si te equivocaste, se puede recuperar ` +
+            `buscándola con el filtro de archivados en fsm.order.`
+        );
+        if (!acepta) {
+            return;
+        }
+        try {
+            await this.orm.call("fsm.order", "action_shalom_archivar_visita", [
+                [cliente.order_id],
+            ]);
+            this.notification.add(`"${cliente.cliente_nombre}" sacado de Visita Exprés.`, {
+                type: "success",
+            });
+            await this.cargarVisitaExpressClientes();
+        } catch (error) {
+            this.notification.add("No se pudo archivar la visita.", {type: "danger"});
+        }
+    }
+
+    /** Botón "+": abre el buscador chico -- se queda abierto entre un
+     * agregado y el siguiente (pedido explícito: elegir varios
+     * clientes seguidos sin tener que reabrir nada cada vez). */
+    abrirBuscadorVisitaExpress() {
+        this.state.visitaExpressBuscadorAbierto = true;
+        this.state.visitaExpressBusqueda = "";
+        this.state.visitaExpressResultados = [];
+    }
+
+    cerrarBuscadorVisitaExpress() {
+        this.state.visitaExpressBuscadorAbierto = false;
+    }
+
+    /** Busca fsm.location por nombre en TODA la base (no acotado a una
+     * ruta -- el cliente puede venir de cualquiera), excluyendo a los
+     * que ya están en Visita Exprés (confirmados O todavía pendientes
+     * de confirmar) para no ofrecer agregarlos dos veces por error.
+     * Trae ruta/vendedor/dirección de cada resultado
+     * (shalom_buscar_clientes_admin, en fsm_location.py) -- pedido
+     * explícito: hay clientes con el mismo nombre en zonas distintas,
+     * y sin esa info no se podía saber cuál era el correcto antes de
+     * elegirlo. */
+    async buscarClienteVisitaExpress(ev) {
+        const texto = ev.target.value;
+        this.state.visitaExpressBusqueda = texto;
+        const textoLimpio = texto.trim();
+        if (!textoLimpio) {
+            this.state.visitaExpressResultados = [];
+            return;
+        }
+        this.state.visitaExpressBuscando = true;
+        try {
+            const yaAgregados = [
+                ...this.state.visitaExpressClientes.map((c) => c.location_id),
+                ...this.state.visitaExpressPendientes.map((c) => c.id),
+            ];
+            this.state.visitaExpressResultados = await this.orm.call(
+                "fsm.location", "shalom_buscar_clientes_admin", [textoLimpio, yaAgregados]
+            );
+        } catch (error) {
+            this.notification.add("No se pudo buscar clientes.", {type: "danger"});
+        } finally {
+            this.state.visitaExpressBuscando = false;
+        }
+    }
+
+    /** Tocar un resultado del buscador: lo pasa a la lista "por
+     * confirmar" -- TODAVÍA no toca nada en el servidor, ver docstring
+     * grande de la sección. El buscador se queda abierto para seguir
+     * eligiendo el siguiente ("tin, tin, tin"). */
+    elegirClienteVisitaExpress(resultado) {
+        this.state.visitaExpressPendientes.push(resultado);
+        this.state.visitaExpressResultados = this.state.visitaExpressResultados.filter(
+            (r) => r.id !== resultado.id
+        );
+        this._guardarPendientesVisitaExpress();
+    }
+
+    /** Saca a un cliente de la lista "por confirmar" antes de tocar
+     * "Confirmar Visita Exprés" -- como todavía no se creó nada en el
+     * servidor, esto es solo sacarlo del array del frontend (y del
+     * localStorage). */
+    quitarPendienteVisitaExpress(resultado) {
+        this.state.visitaExpressPendientes = this.state.visitaExpressPendientes.filter(
+            (r) => r.id !== resultado.id
+        );
+        this._guardarPendientesVisitaExpress();
+    }
+
+    /** Botón de flecha (chevron) junto a la ruta/vendedor/dirección de
+     * un resultado del buscador o de un "por confirmar": pedido
+     * explícito -- ese texto viene truncado por defecto (con "…") para
+     * no ocupar tanto espacio al escrolear, sobre todo en celular/
+     * tablet; un toque lo expande a texto completo, otro toque lo
+     * vuelve a truncar. stopPropagation() porque la fila entera
+     * también reacciona al click (agregar/nada) -- este toque es
+     * solo para expandir, no debe disparar eso. */
+    toggleExpandido(item, ev) {
+        ev.stopPropagation();
+        item.expandido = !item.expandido;
+    }
+
+    /** Botón "Confirmar Visita Exprés": el único punto donde esto
+     * toca la base -- manda TODOS los clientes elegidos de una, el
+     * backend (shalom_confirmar_lote_visita_express) archiva sus
+     * visitas viejas y crea las nuevas para todos juntos. */
+    async confirmarLoteVisitaExpress() {
+        if (!this.state.visitaExpressPendientes.length) {
+            return;
+        }
+        if (!this.state.visitaExpressFechaInicio || !this.state.visitaExpressFechaFin) {
+            this.notification.add(
+                "Elegí la fecha de inicio y de fin en que se debe visitar a estos clientes.",
+                {type: "warning"}
+            );
+            return;
+        }
+        this.state.visitaExpressConfirmando = true;
+        try {
+            const datos = await this.orm.call("fsm.route", "shalom_confirmar_lote_visita_express", [
+                this.state.vendedorSeleccionadoId,
+                this.state.visitaExpressFechaInicio.toISODate(),
+                this.state.visitaExpressFechaFin.toISODate(),
+                this.state.visitaExpressPendientes.map((c) => c.id),
+            ]);
+            this.notification.add(
+                `Visita Exprés confirmada: ${this.state.visitaExpressPendientes.length} ` +
+                `cliente(s) agregado(s).`,
+                {type: "success"}
+            );
+            this._borrarPendientesVisitaExpress(this.state.vendedorSeleccionadoId);
+            this.state.visitaExpressPendientes = [];
+            this._aplicarDatosVisitaExpress(datos);
+        } catch (error) {
+            const mensajeServidor = error && error.data && error.data.message;
+            this.notification.add(
+                mensajeServidor || "No se pudo confirmar Visita Exprés.",
+                {type: "danger"}
+            );
+        } finally {
+            this.state.visitaExpressConfirmando = false;
         }
     }
 

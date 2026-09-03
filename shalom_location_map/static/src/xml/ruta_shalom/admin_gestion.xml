@@ -207,12 +207,144 @@
                             t-foreach="vendedorSeleccionado.rutas"
                             t-as="ruta"
                             t-key="ruta.id"
-                            t-attf-class="admin-route-pill {{state.scheduleSeleccionadoId === ruta.id ? 'admin-route-pill-active' : ''}}"
+                            t-attf-class="admin-route-pill {{state.scheduleSeleccionadoId === ruta.id ? 'admin-route-pill-active' : ''}} {{ruta.es_visita_express ? 'admin-route-pill-express' : ''}}"
                             t-on-click="() => this.elegirRuta(ruta)"
                         >
+                            <i t-if="ruta.es_visita_express" class="fa fa-bolt" aria-hidden="true"/>
                             <t t-esc="ruta.route_name"/>
                             <span class="admin-route-pill-count">· <t t-esc="ruta.cantidad_clientes"/></span>
                         </button>
+                    </div>
+
+                    <!-- Visita Exprés: la de ESTE vendedor específico
+                         (el elegido arriba), separada de sus rutas
+                         normales. Ver docstring grande de la sección en
+                         admin_gestion.js. -->
+                    <div class="admin-express-wrap" t-if="vendedorSeleccionado">
+                        <button
+                            t-attf-class="admin-express-pill {{state.visitaExpressAbierta ? 'admin-express-pill-active' : ''}}"
+                            t-on-click="abrirVisitaExpress"
+                        >
+                            <i class="fa fa-bolt" aria-hidden="true"/> Visita Exprés
+                            <span class="admin-express-pill-count" t-if="state.visitaExpressClientes.length">
+                                · <t t-esc="state.visitaExpressClientes.length"/>
+                            </span>
+                        </button>
+
+                        <div class="admin-express-panel" t-if="state.visitaExpressAbierta">
+                            <div t-if="state.visitaExpressCargando" class="shalom-vacio">Cargando…</div>
+                            <t t-else="">
+                                <!-- Inicio/Fin: SIEMPRE editable, tenga
+                                     o no ya una ocurrencia creada
+                                     (pedido explícito). Mismo widget de
+                                     calendario nativo que ya se usa al
+                                     programar una ruta, no un campo de
+                                     texto libre. Si la ocurrencia ya
+                                     existe, cada cambio se guarda solo
+                                     (ver onCambiarFechaInicioVisitaExpress/
+                                     onCambiarFechaFinVisitaExpress en
+                                     admin_gestion.js). -->
+                                <div class="admin-express-fecha-row">
+                                    <div class="admin-express-fecha-campo">
+                                        <label>Fecha de inicio</label>
+                                        <DateTimeInput
+                                            type="'date'"
+                                            value="state.visitaExpressFechaInicio"
+                                            onChange.bind="onCambiarFechaInicioVisitaExpress"
+                                        />
+                                    </div>
+                                    <div class="admin-express-fecha-campo">
+                                        <label>Fecha de fin</label>
+                                        <DateTimeInput
+                                            type="'date'"
+                                            value="state.visitaExpressFechaFin"
+                                            onChange.bind="onCambiarFechaFinVisitaExpress"
+                                        />
+                                    </div>
+                                </div>
+                                <div class="admin-express-header">
+                                    <button class="btn-mini-admin" t-on-click="abrirBuscadorVisitaExpress">
+                                        <i class="fa fa-plus" aria-hidden="true"/> Agregar cliente
+                                    </button>
+                                </div>
+
+                                <div t-if="!state.visitaExpressClientes.length" class="shalom-vacio">
+                                    No hay clientes confirmados en Visita Exprés todavía.
+                                </div>
+                                <div class="admin-stop-list" t-else="">
+                                    <div
+                                        t-foreach="state.visitaExpressClientes"
+                                        t-as="cliente"
+                                        t-key="cliente.order_id"
+                                        class="stop-row admin-cliente-row"
+                                    >
+                                        <span class="nombre" t-esc="cliente.cliente_nombre"/>
+                                        <span
+                                            class="stop-icon-btn"
+                                            title="Editar cliente"
+                                            t-on-click="(ev) => this.abrirEdicionCliente(cliente.location_id, ev)"
+                                        ><i class="fa fa-pencil" aria-hidden="true"/><span class="stop-icon-btn-label">Editar</span></span>
+                                        <span
+                                            class="stop-icon-btn stop-icon-btn-accent"
+                                            title="Buscar GPS por nombre (Google)"
+                                            t-on-click="(ev) => this.buscarGps(ev, cliente.location_id)"
+                                        ><i class="fa fa-crosshairs" aria-hidden="true"/><span class="stop-icon-btn-label">GPS</span></span>
+                                        <span
+                                            class="stop-icon-btn stop-icon-btn-danger"
+                                            title="Archivar visita"
+                                            t-on-click="(ev) => this.archivarVisitaExpress(ev, cliente)"
+                                        ><i class="fa fa-trash-o" aria-hidden="true"/><span class="stop-icon-btn-label">Eliminar</span></span>
+                                    </div>
+                                </div>
+
+                                <!-- Por confirmar: elegidos con el
+                                     buscador pero TODAVÍA sin tocar la
+                                     base. Ver docstring grande de la
+                                     sección en admin_gestion.js. -->
+                                <t t-if="state.visitaExpressPendientes.length">
+                                    <div class="admin-express-pendientes-titulo">
+                                        Por confirmar (<t t-esc="state.visitaExpressPendientes.length"/>)
+                                    </div>
+                                    <div class="admin-stop-list">
+                                        <div
+                                            t-foreach="state.visitaExpressPendientes"
+                                            t-as="pendiente"
+                                            t-key="pendiente.id"
+                                            class="stop-row admin-express-pendiente-row"
+                                        >
+                                            <div class="admin-express-resultado-info">
+                                                <span class="nombre" t-esc="pendiente.name"/>
+                                                <span t-attf-class="admin-express-resultado-sub {{pendiente.expandido ? 'admin-express-resultado-sub-expandido' : ''}}">
+                                                    <t t-esc="pendiente.ruta_nombre || 'Sin ruta'"/>
+                                                    <t t-if="pendiente.vendedor_nombre"> · <t t-esc="pendiente.vendedor_nombre"/></t>
+                                                    <t t-if="pendiente.street"> · <t t-esc="pendiente.street"/></t>
+                                                </span>
+                                            </div>
+                                            <span
+                                                class="stop-icon-btn admin-express-expandir-btn"
+                                                title="Ver completo"
+                                                t-on-click="(ev) => this.toggleExpandido(pendiente, ev)"
+                                            ><i t-attf-class="fa {{pendiente.expandido ? 'fa-chevron-up' : 'fa-chevron-down'}}" aria-hidden="true"/></span>
+                                            <span
+                                                class="stop-icon-btn stop-icon-btn-danger"
+                                                title="Quitar de la lista"
+                                                t-on-click="() => this.quitarPendienteVisitaExpress(pendiente)"
+                                            ><i class="fa fa-times" aria-hidden="true"/></span>
+                                        </div>
+                                    </div>
+                                    <button
+                                        class="btn btn-primary admin-express-confirmar-btn"
+                                        t-att-disabled="state.visitaExpressConfirmando"
+                                        t-on-click="confirmarLoteVisitaExpress"
+                                    >
+                                        <t t-if="state.visitaExpressConfirmando">Confirmando…</t>
+                                        <t t-else="">
+                                            Confirmar Visita Exprés (<t t-esc="state.visitaExpressPendientes.length"/>)
+                                        </t>
+                                    </button>
+                                </t>
+                            </t>
+                        </div>
                     </div>
 
                     <!-- Mapa a la izquierda, lista de clientes a la
@@ -266,17 +398,17 @@
                                         class="stop-icon-btn"
                                         title="Editar cliente"
                                         t-on-click="(ev) => this.abrirEdicionCliente(cliente.locationId, ev)"
-                                    ><i class="fa fa-pencil" aria-hidden="true"/></span>
+                                    ><i class="fa fa-pencil" aria-hidden="true"/><span class="stop-icon-btn-label">Editar</span></span>
                                     <span
                                         class="stop-icon-btn stop-icon-btn-accent"
                                         title="Buscar GPS por nombre (Google)"
                                         t-on-click="(ev) => this.buscarGps(ev, cliente.locationId)"
-                                    ><i class="fa fa-crosshairs" aria-hidden="true"/></span>
+                                    ><i class="fa fa-crosshairs" aria-hidden="true"/><span class="stop-icon-btn-label">GPS</span></span>
                                     <span
                                         class="stop-icon-btn stop-icon-btn-danger"
                                         title="Archivar visita (no borra al cliente)"
                                         t-on-click="(ev) => this.archivarVisita(ev, cliente)"
-                                    ><i class="fa fa-trash-o" aria-hidden="true"/></span>
+                                    ><i class="fa fa-trash-o" aria-hidden="true"/><span class="stop-icon-btn-label">Eliminar</span></span>
                                 </div>
                             </div>
                         </div>
@@ -310,6 +442,60 @@
                 onConfirmado.bind="cerrarEnVivo"
                 onRevisado.bind="cerrarEnVivo"
             />
+
+            <!-- Buscador de Visita Exprés: se queda abierto entre un
+                 agregado y el siguiente. Ver docstring grande de la
+                 sección en admin_gestion.js. -->
+            <div class="confirm-overlay" t-if="state.visitaExpressBuscadorAbierto">
+                <div class="confirm-card admin-express-buscador-card">
+                    <h3>Agregar cliente a Visita Exprés</h3>
+                    <div class="search-row">
+                        <div class="search-box-live">
+                            <span><i class="fa fa-search" aria-hidden="true"/></span>
+                            <input
+                                type="text"
+                                placeholder="Buscar cliente por nombre…"
+                                t-model="state.visitaExpressBusqueda"
+                                t-on-input="buscarClienteVisitaExpress"
+                            />
+                        </div>
+                    </div>
+                    <div t-if="state.visitaExpressBuscando" class="shalom-vacio">Buscando…</div>
+                    <div
+                        t-elif="state.visitaExpressBusqueda.trim() and !state.visitaExpressResultados.length"
+                        class="shalom-vacio"
+                    >
+                        No se encontraron clientes.
+                    </div>
+                    <div class="admin-stop-list" t-else="">
+                        <div
+                            t-foreach="state.visitaExpressResultados"
+                            t-as="resultado"
+                            t-key="resultado.id"
+                            class="stop-row admin-express-resultado-row"
+                            t-on-click="() => this.elegirClienteVisitaExpress(resultado)"
+                        >
+                            <div class="admin-express-resultado-info">
+                                <span class="nombre" t-esc="resultado.name"/>
+                                <span t-attf-class="admin-express-resultado-sub {{resultado.expandido ? 'admin-express-resultado-sub-expandido' : ''}}">
+                                    <t t-esc="resultado.ruta_nombre || 'Sin ruta'"/>
+                                    <t t-if="resultado.vendedor_nombre"> · <t t-esc="resultado.vendedor_nombre"/></t>
+                                    <t t-if="resultado.street"> · <t t-esc="resultado.street"/></t>
+                                </span>
+                            </div>
+                            <span
+                                class="stop-icon-btn admin-express-expandir-btn"
+                                title="Ver completo"
+                                t-on-click="(ev) => this.toggleExpandido(resultado, ev)"
+                            ><i t-attf-class="fa {{resultado.expandido ? 'fa-chevron-up' : 'fa-chevron-down'}}" aria-hidden="true"/></span>
+                            <span class="stop-icon-btn stop-icon-btn-accent"><i class="fa fa-plus" aria-hidden="true"/></span>
+                        </div>
+                    </div>
+                    <div class="edit-actions">
+                        <button class="btn btn-ghost" t-on-click="cerrarBuscadorVisitaExpress">Cerrar</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </t>
 </templates>

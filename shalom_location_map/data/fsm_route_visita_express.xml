@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo noupdate="0">
+    <!--
+        Ruta de Visita Exprés creada en la primera ronda de esta
+        función (ver la sección grande en fsm_route.py, "Visita
+        Exprés"), cuando todavía era una sola ruta fija compartida por
+        todos los vendedores. Ahora el diseño es una ruta POR vendedor
+        (x_es_visita_express=True, fsm_person_id=ese vendedor), creada
+        sola la primera vez que se confirma un lote con ese vendedor
+        elegido (ver shalom_confirmar_lote_visita_express en
+        fsm_route.py): este registro queda acá para no perder lo que
+        se haya probado con él (si ya tenía un vendedor asignado, sigue
+        siendo la Visita Exprés de ESE vendedor de ahora en más; si no
+        tenía ninguno, queda inerte hasta que alguien la use o la borre
+        a mano desde Field Service -> Rutas).
+    -->
+    <record id="shalom_fsm_route_visita_express" model="fsm.route">
+        <field name="name">Visita Exprés</field>
+        <field name="x_es_visita_express">True</field>
+    </record>
+</odoo>

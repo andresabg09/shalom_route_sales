@@ -44,6 +44,19 @@ class FSMPerson(models.Model):
         pasó su fecha de fin estimada; una vez que de verdad se cierra
         del todo (todas las visitas en una etapa cerrada), recién ahí
         puede salir de la ventana por fecha como cualquier otra.
+
+        Caso aparte, solo para Visita Exprés: si Administración archivó
+        (no cerró, ARCHIVÓ) a todos los clientes de un lote -- ver
+        archivarVisitaExpress() en admin_gestion.js --, fsm_order_ids
+        queda vacío (un One2many no trae los archivados) y _compute_estado
+        de fsm_route_schedule.py, al no tener NINGUNA visita para mirar,
+        cae en 'por_iniciar' (no 'completada') -- por diseño correcto
+        para una ruta normal recién creada, pero acá da un falso "todavía
+        activa" que la dejaba visible para siempre en la app del
+        vendedor. Por eso, para rutas de Visita Exprés en particular, se
+        chequea directo si tienen alguna visita ABIERTA ahora mismo --
+        no alcanza con mirar 'estado'.
+
         Devuelve datos ya listos para la pestaña 'Rutas' de la app,
         sin que el frontend tenga que hacer una segunda llamada por
         ruta."""
@@ -59,6 +72,10 @@ class FSMPerson(models.Model):
             ],
             order="date_start asc",
         )
+        schedules = schedules.filtered(
+            lambda s: not s.route_id.x_es_visita_express
+            or s.fsm_order_ids.filtered(lambda o: not o.stage_id.is_closed)
+        )
         return [
             {
                 "id": s.id,
@@ -70,6 +87,11 @@ class FSMPerson(models.Model):
                 "capacidad": s.capacidad,
                 "estado": s.estado,
                 "cantidad_clientes": s.cantidad_clientes,
+                # Para que la tarjeta de Visita Exprés se resalte con
+                # el halo de marca en la app del vendedor -- ver
+                # rutas_hub.js/.xml. x_es_visita_express vive en
+                # fsm.route (ver fsm_route.py).
+                "es_visita_express": s.route_id.x_es_visita_express,
             }
             for s in schedules
         ]
@@ -211,6 +233,11 @@ class FSMPerson(models.Model):
                     "route_name": s.route_id.name,
                     "cantidad_clientes": s.cantidad_clientes,
                     "estado": s.estado,
+                    # Para resaltar la pastilla de esta ruta con el
+                    # halo de marca en Administración -- ver
+                    # admin_gestion.js/.xml (misma idea que ya se hizo
+                    # en rutas_hub.js/.xml para la app del vendedor).
+                    "es_visita_express": s.route_id.x_es_visita_express,
                 }
             )
         return list(vendedores.values())

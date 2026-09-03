@@ -279,6 +279,19 @@
         font-weight: 800;
         font-size: 1.02rem;
     }
+    .route-card-head .rname .fa-bolt {
+        color: var(--shalom-accent);
+        margin-right: 4px;
+    }
+    // Visita Exprés siempre resaltada con un halo del color de marca
+    // (mismo --shalom-accent/-soft que ya usa el resto de la app,
+    // pedido explícito: "que se sepa que es una visita urgente") --
+    // se suma a que ya queda primera en la lista (ver
+    // schedulesFiltrados() en rutas_hub.js), no reemplaza eso.
+    .route-card-express {
+        border-color: var(--shalom-accent);
+        box-shadow: 0 0 0 3px var(--shalom-accent-soft), 0 0 20px 2px var(--shalom-accent-soft);
+    }
     .route-card-stats {
         display: flex;
         flex-wrap: wrap;
@@ -2371,6 +2384,197 @@
         color: var(--shalom-bg);
         opacity: 0.65;
     }
+    // La pastilla de Visita Exprés DENTRO de la lista de rutas del
+    // vendedor (distinta de la pastilla propia .admin-express-pill de
+    // más arriba) -- mismo halo de marca que ya se usa en la app del
+    // vendedor (.route-card-express, rutas_hub.js), pedido explícito:
+    // "que se sepa que está la visita exprés" sin tener que leer el
+    // nombre completo entre las demás rutas numeradas.
+    .admin-route-pill-express {
+        border-color: var(--shalom-accent);
+        box-shadow: 0 0 0 3px var(--shalom-accent-soft), 0 0 20px 2px var(--shalom-accent-soft);
+    }
+    .admin-route-pill-express .fa-bolt {
+        color: var(--shalom-accent);
+        margin-right: 2px;
+    }
+    .admin-route-pill-express.admin-route-pill-active .fa-bolt {
+        color: var(--shalom-bg);
+    }
+    // Visita Exprés: misma forma de pastilla que .admin-route-pill,
+    // pero con su propio color (--shalom-accent) para que se distinga
+    // a simple vista de las rutas normales -- vive siempre arriba,
+    // sin depender de qué vendedor esté elegido (ver admin_gestion.js).
+    .admin-express-wrap {
+        margin-bottom: 14px;
+    }
+    .admin-express-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 16px;
+        border-radius: 999px;
+        border: 1px solid var(--shalom-accent);
+        background: var(--shalom-surface);
+        color: var(--shalom-accent);
+        font-weight: 700;
+        font-size: 0.86rem;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .admin-express-pill-active {
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+    }
+    .admin-express-pill-count {
+        font-weight: 600;
+        opacity: 0.85;
+    }
+    .admin-express-panel {
+        margin-top: 10px;
+        padding: 14px;
+        border-radius: var(--shalom-radius-lg);
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+    }
+    .admin-express-fecha-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 14px;
+    }
+    .admin-express-fecha-campo {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .admin-express-fecha-campo label {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--shalom-ink-muted);
+    }
+    // El <input> que pinta DateTimeInput (widget nativo de Odoo,
+    // clases o_datetime_input/o_input) trae sus propios colores del
+    // tema nativo del backend -- en el tema OSCURO de esta pantalla
+    // quedaba fondo oscuro con texto oscuro, ilegible (pedido
+    // explícito, reportado con captura). !important porque es un
+    // widget nativo, no una clase nuestra -- sin esto, su propio CSS
+    // (cargado aparte, sin garantía de orden) puede pisar la nuestra.
+    .admin-express-fecha-campo .o_datetime_input {
+        background-color: var(--shalom-bg) !important;
+        color: var(--shalom-ink) !important;
+        border: 1px solid var(--shalom-line) !important;
+        border-radius: var(--shalom-radius-sm);
+        padding: 7px 10px;
+        font-family: inherit;
+        font-size: 0.86rem;
+    }
+    .admin-express-header {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 12px;
+        margin-bottom: 10px;
+    }
+    // Fila del resultado del buscador entera es el botón de agregar
+    // (a diferencia de .admin-cliente-row, que reparte Editar/GPS/
+    // Archivar en íconos separados): un solo gesto ("tocar la fila")
+    // alcanza para agregar, pensado para ir rápido agregando varios
+    // clientes seguidos.
+    .admin-express-resultado-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--shalom-line);
+        font-size: 0.86rem;
+        cursor: pointer;
+    }
+    .admin-express-resultado-row:last-child {
+        border-bottom: none;
+    }
+    .admin-express-resultado-info {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+    // Ruta/vendedor/dirección debajo del nombre -- pedido explícito:
+    // distinguir clientes con el mismo nombre en zonas distintas (ej.
+    // varios "Minisuper 38", uno por ciudad) antes de agregarlos.
+    .admin-express-resultado-sub {
+        font-size: 0.76rem;
+        color: var(--shalom-ink-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    // Truncada por defecto (pedido explícito: no ocupar tanto espacio
+    // al escrolear, sobre todo en celular/tablet) -- el botón de
+    // flecha (.admin-express-expandir-btn) la pasa a texto completo
+    // con salto de línea normal, un toque por fila, reversible.
+    .admin-express-resultado-sub-expandido {
+        overflow: visible;
+        text-overflow: unset;
+        white-space: normal;
+    }
+    .admin-express-expandir-btn {
+        flex: none;
+    }
+    // .confirm-card (compartida con otros popups chicos de la app,
+    // como el menú de recompensas) es angosta a propósito para esos
+    // casos -- acá el buscador de Visita Exprés tiene una lista larga
+    // con nombre + ruta/vendedor/dirección por fila, así que necesita
+    // más aire, sobre todo en tablet/celular (pedido explícito: "se ve
+    // muy reducido"). Modificador propio en vez de tocar .confirm-card
+    // para no afectar los demás popups que ya la usan.
+    .admin-express-buscador-card {
+        max-width: 420px;
+    }
+    .admin-express-buscador-card .admin-stop-list {
+        max-height: 56vh;
+    }
+    @media (min-width: 600px) {
+        .admin-express-buscador-card {
+            max-width: 520px;
+        }
+    }
+    // "Por confirmar": elegidos con el buscador, TODAVÍA sin tocar la
+    // base (ver docstring grande de la sección en admin_gestion.js) --
+    // acento de color para distinguirla a simple vista de la lista de
+    // arriba (ya confirmados, .admin-stop-list normal).
+    .admin-express-pendientes-titulo {
+        margin-top: 14px;
+        margin-bottom: 6px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--shalom-accent);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    // Misma estructura que .admin-express-resultado-row (nombre +
+    // subtítulo ruta/vendedor/dirección), pero sin cursor de "click en
+    // la fila" -- acá la única acción es el ícono de sacar.
+    .admin-express-pendiente-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--shalom-line);
+        font-size: 0.86rem;
+        cursor: default;
+    }
+    .admin-express-pendiente-row:last-child {
+        border-bottom: none;
+    }
+    .admin-express-confirmar-btn {
+        display: block;
+        width: 100%;
+        margin-top: 12px;
+    }
     // Mapa a la izquierda, lista de clientes a la derecha -- pedido
     // explícito ("como en el mockup"): apiladas uno debajo del otro se
     // sentía como usar dos pantallas distintas. En mobile (una sola
@@ -2547,5 +2751,78 @@
     // vista de las otras dos incluso sin resaltar la fila.
     .admin-cliente-row .stop-icon-btn-danger {
         color: var(--shalom-alerta);
+    }
+    // Mismos colores, pero SIN el prefijo ".admin-cliente-row" -- los
+    // botones de icono del buscador/"por confirmar" de Visita Exprés
+    // (.admin-express-resultado-row/.admin-express-pendiente-row) no
+    // viven dentro de esa clase, y se estaban quedando sin color.
+    .stop-icon-btn-accent {
+        color: var(--shalom-accent);
+    }
+    .stop-icon-btn-danger {
+        color: var(--shalom-alerta);
+    }
+    // El texto de cada botón (Editar/GPS/Eliminar) -- oculto en
+    // desktop (mismo ícono solo de siempre) y visible recién en
+    // tablet/celular, ver el media query de abajo.
+    .stop-icon-btn-label {
+        display: none;
+    }
+    // Pedido explícito, reportado con capturas: en tablet/celular los
+    // botones de icono solo (Editar/GPS/Eliminar/Marcar revisado/
+    // Archivar cliente) quedaban muy chicos para tocar con el dedo con
+    // confianza -- "sentía que iba a tocar el equivocado". Acá, en vez
+    // de íconos sueltos, pasan a ser botones de verdad (con borde,
+    // fondo, más padding) con su nombre al lado -- 900px es el mismo
+    // corte que ya separa "una sola columna" del resto de Rutas de mis
+    // vendedores (ver @media (min-width: 900px) más arriba).
+    @media (max-width: 899px) {
+        .admin-cliente-row,
+        .admin-express-resultado-row,
+        .admin-express-pendiente-row {
+            flex-wrap: wrap;
+            row-gap: 8px;
+        }
+        .admin-cliente-row .nombre,
+        .admin-express-resultado-info {
+            flex: 1 1 100%;
+        }
+        .stop-icon-btn {
+            flex: 1 1 auto;
+            gap: 6px;
+            min-height: 40px;
+            padding: 8px 12px;
+            border-radius: var(--shalom-radius-sm);
+            border: 1px solid var(--shalom-line);
+            background: var(--shalom-surface);
+            font-size: 1rem;
+        }
+        .stop-icon-btn-label {
+            display: inline;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--shalom-ink);
+            white-space: nowrap;
+        }
+        .stop-icon-btn-accent {
+            border-color: var(--shalom-accent);
+        }
+        .stop-icon-btn-danger {
+            border-color: var(--shalom-alerta);
+        }
+        // Los de Visita Exprés que quedan sin texto (expandir "por
+        // confirmar"/agregar del buscador) igual crecen para ser
+        // fáciles de tocar, sin volverse botones anchos de a uno por
+        // fila -- son acciones secundarias dentro de un popup ya
+        // identificado por su título.
+        .admin-express-expandir-btn,
+        .admin-express-resultado-row .stop-icon-btn-accent {
+            flex: none;
+            min-width: 40px;
+        }
+        .btn-mini-admin {
+            padding: 10px 16px;
+            font-size: 0.88rem;
+        }
     }
 }
