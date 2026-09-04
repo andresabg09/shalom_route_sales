@@ -64,6 +64,15 @@ ESTADOS_VENTA_CONFIRMADA = ("sale", "done")
 # (uno compra cada 2 semanas, otro cada 2 meses).
 TOPE_VENTAS_PROMEDIO_CAPACIDAD = 3
 
+# Días hábiles de BODEGA (lunes a viernes -- bodega no despacha
+# sábado ni domingo, a diferencia del recorrido de venta que sí es
+# lunes a sábado) que tarda un pedido en llegarle al cliente desde
+# que se toma en la visita. Fijo para toda la operación, no varía por
+# ruta. Usado por _shalom_reponer_rutas_vencidas para no contar la
+# periodicidad del ciclo desde que se TOMA el pedido, sino desde que
+# el cliente lo TIENE en mano.
+SHALOM_DIAS_ENTREGA_HABILES_BODEGA = 4
+
 
 class FSMRouteSchedule(models.Model):
     _name = "fsm.route.schedule"
@@ -137,6 +146,25 @@ class FSMRouteSchedule(models.Model):
         "cerradas (Completada, No quiso, Cancelado o No atendido). "
         "Queda guardado (store=True) para poder filtrar por él desde "
         "shalom_mis_rutas_programadas en fsm_person.py.",
+    )
+    x_reposicion_incompleta = fields.Boolean(
+        string="Repuesta sin completar",
+        default=False,
+        readonly=True,
+        help="Se marca sola cuando el cron de reposición automática "
+        "(_shalom_reponer_rutas_vencidas) generó el ciclo SIGUIENTE a "
+        "este mientras este todavía no estaba 'completada' -- señal "
+        "para Administración de que el vendedor pudo dejar clientes "
+        "sin atender; el sistema no bloqueó ni esperó, el ciclo "
+        "siguiente se generó igual en su fecha exacta.",
+    )
+    x_visitas_pendientes_al_reponer = fields.Integer(
+        string="Visitas sin cerrar al reponer",
+        default=0,
+        readonly=True,
+        help="Cuántas fsm.order de este ciclo seguían sin cerrar en "
+        "el momento exacto en que se generó el ciclo siguiente. Queda "
+        "fijo aunque esas visitas se cierren o archiven después.",
     )
     fsm_order_ids = fields.One2many(
         "fsm.order",
@@ -327,26 +355,31 @@ class FSMRouteSchedule(models.Model):
         self.ensure_one()
         return self.route_id.action_generar_visitas_ruta(schedule=self)
 
-    def action_generar_proximo_ciclo(self):
-        """Botón: arranca el ciclo siguiente de esta misma ruta en un
-        solo paso, para no tener que reprogramar cada ruta a mano cada
-        vez que se repite (ej. mensual). Arma la fsm.route.schedule
-        nueva:
-          - date_start = HOY (la fecha real en que se aprieta el
-            botón), nunca "el día siguiente al fin del ciclo
-            anterior" -- si oficina se atrasa en regenerar, no
-            queremos que arranque con fechas ya pasadas.
-          - date_end = esa fecha + la misma cantidad de días que duró
-            ESTE ciclo (date_end - date_start de la programación que
-            se está cerrando), para heredar la duración real sin
-            volver a escribirla a mano.
-        Y le genera las visitas llamando a action_generar_visitas() de
-        la ocurrencia nueva -- toda la lógica de "quién recibe visita
-        nueva, quién queda No atendido" vive en
-        action_generar_visitas_ruta() (fsm_route.py), no acá: ese
-        método ya garantiza que se genera SIEMPRE para todos los
-        clientes de la ruta, cerrando solo lo que haya quedado
-        colgado."""
+    def _shalom_crear_ciclo_siguiente(self, date_start_nuevo=None):
+        """Núcleo compartido entre 'Generar próximo ciclo' (botón
+        manual, ver action_generar_proximo_ciclo) y el cron de
+        reposición automática (ver _shalom_reponer_rutas_vencidas más
+        abajo). Arma la fsm.route.schedule del ciclo siguiente a self
+        y le genera las visitas:
+          - date_end = date_start_nuevo + la misma cantidad de días
+            que duró ESTE ciclo (date_end - date_start de la
+            programación que se está cerrando), para heredar la
+            duración real sin volver a escribirla a mano.
+          - Si date_start_nuevo es None (botón manual), se usa HOY
+            (fields.Date.context_today) -- si oficina se atrasa en
+            regenerar, no queremos que arranque con fechas ya
+            pasadas. Si se pasa un valor (cron), se usa tal cual,
+            DETERMINÍSTICO -- el cron necesita que la grilla de
+            fechas de cada ruta no se corra según cuándo corrió el
+            cron ese día.
+        Toda la lógica de "quién recibe visita nueva, quién queda No
+        atendido" vive en action_generar_visitas_ruta() (fsm_route.py),
+        no acá -- ese método ya garantiza que se genera SIEMPRE para
+        todos los clientes de la ruta, cerrando solo lo que haya
+        quedado colgado.
+
+        Devuelve la fsm.route.schedule nueva, ya con las visitas
+        generadas."""
         self.ensure_one()
 
         if not self.date_start or not self.date_end:
@@ -357,7 +390,8 @@ class FSMRouteSchedule(models.Model):
             )
 
         duracion_dias = (self.date_end - self.date_start).days
-        date_start_nuevo = fields.Date.context_today(self)
+        if date_start_nuevo is None:
+            date_start_nuevo = fields.Date.context_today(self)
         date_end_nuevo = date_start_nuevo + timedelta(days=duracion_dias)
 
         nueva = self.create({
@@ -365,16 +399,24 @@ class FSMRouteSchedule(models.Model):
             "date_start": date_start_nuevo,
             "date_end": date_end_nuevo,
         })
+        nueva.action_generar_visitas()
+        return nueva
 
-        resultado = nueva.action_generar_visitas()
+    def action_generar_proximo_ciclo(self):
+        """Botón: arranca el ciclo siguiente de esta misma ruta en un
+        solo paso, para no tener que reprogramar cada ruta a mano cada
+        vez que se repite (ej. mensual). Delega el armado a
+        _shalom_crear_ciclo_siguiente() (sin fecha fija, o sea "hoy")
+        y solo arma el mensaje de notificación."""
+        self.ensure_one()
+        nueva = self._shalom_crear_ciclo_siguiente()
 
         mensaje = _(
             "Ciclo siguiente de '%(ruta)s' generado (%(inicio)s - "
-            "%(fin)s). %(detalle)s",
+            "%(fin)s).",
             ruta=self.route_id.name,
-            inicio=date_start_nuevo.strftime("%d/%m"),
-            fin=date_end_nuevo.strftime("%d/%m"),
-            detalle=resultado.get("params", {}).get("message", ""),
+            inicio=nueva.date_start.strftime("%d/%m"),
+            fin=nueva.date_end.strftime("%d/%m"),
         )
         _logger.info(mensaje)
 
@@ -388,6 +430,100 @@ class FSMRouteSchedule(models.Model):
                 "type": "success",
             },
         }
+
+    @api.model
+    def _shalom_sumar_dias_habiles_bodega(self, fecha, dias_habiles):
+        """Suma `dias_habiles` días hábiles de BODEGA (lunes a
+        viernes -- no lunes a sábado como el recorrido de venta) a
+        `fecha`, saltando sábado y domingo. Usado por
+        _shalom_reponer_rutas_vencidas para calcular cuándo le llega
+        la mercadería al cliente después de tomarle el pedido."""
+        actual = fecha
+        restantes = dias_habiles
+        while restantes > 0:
+            actual += timedelta(days=1)
+            if actual.weekday() < 5:  # 0=lunes ... 4=viernes
+                restantes -= 1
+        return actual
+
+    @api.model
+    def _shalom_reponer_rutas_vencidas(self):
+        """Cron diario (ver data/reponer_rutas_cron.xml). Recorre las
+        fsm.route activas que NO son Visita Exprés
+        (x_es_visita_express=False) y con periodicidad configurada
+        (x_periodicidad_dias > 0); para cada una mira su última
+        fsm.route.schedule (por date_start desc).
+
+        El vencimiento NO se cuenta desde date_start directo: primero
+        se calcula cuándo le llega la mercadería al cliente
+        (date_start + SHALOM_DIAS_ENTREGA_HABILES_BODEGA días hábiles
+        de bodega) y RECIÉN sobre esa fecha de llegada se suma
+        route.x_periodicidad_dias (calendario) -- el "mes" de
+        periodicidad se cuenta desde que el cliente TIENE la
+        mercadería en mano, no desde que se le tomó el pedido.
+
+        Si hoy >= ese vencimiento, genera el ciclo siguiente con
+        date_start DETERMINÍSTICO (el vencimiento calculado, nunca
+        "hoy") -- exacto, sin margen extra, se haya completado o no
+        el ciclo anterior. Si no se había completado, deja constancia
+        (x_reposicion_incompleta / x_visitas_pendientes_al_reponer)
+        para que Administración lo revise en Seguimiento de Visitas:
+        nunca bloquea ni espera, el ciclo nuevo se genera siempre."""
+        hoy = fields.Date.context_today(self)
+        rutas = self.env["fsm.route"].search([
+            ("x_es_visita_express", "=", False),
+            ("x_periodicidad_dias", ">", 0),
+        ])
+        generados = 0
+        for route in rutas:
+            ultima = self.search(
+                [("route_id", "=", route.id)],
+                order="date_start desc",
+                limit=1,
+            )
+            if not ultima or not ultima.date_start:
+                continue
+
+            fecha_llegada = self._shalom_sumar_dias_habiles_bodega(
+                ultima.date_start, SHALOM_DIAS_ENTREGA_HABILES_BODEGA
+            )
+            vence = fecha_llegada + timedelta(days=route.x_periodicidad_dias)
+            if hoy < vence:
+                continue
+
+            # No duplicar si el cron corre más de una vez el mismo
+            # día o hay reintentos.
+            if self.search_count([
+                ("route_id", "=", route.id),
+                ("date_start", ">=", vence),
+            ]):
+                continue
+
+            if ultima.estado != "completada":
+                pendientes = len(
+                    ultima.fsm_order_ids.filtered(
+                        lambda o: not o.stage_id.is_closed
+                    )
+                )
+                ultima.write({
+                    "x_reposicion_incompleta": True,
+                    "x_visitas_pendientes_al_reponer": pendientes,
+                })
+                _logger.warning(
+                    "Reposición automática fsm.route id=%s ('%s'): "
+                    "el ciclo anterior (schedule id=%s) no estaba "
+                    "completado (%s visita(s) sin cerrar). Se generó "
+                    "igual el ciclo siguiente.",
+                    route.id, route.name, ultima.id, pendientes,
+                )
+
+            ultima._shalom_crear_ciclo_siguiente(date_start_nuevo=vence)
+            generados += 1
+
+        _logger.info(
+            "Reposición automática de rutas: %s ciclo(s) generado(s).",
+            generados,
+        )
 
     def name_get(self):
         result = []

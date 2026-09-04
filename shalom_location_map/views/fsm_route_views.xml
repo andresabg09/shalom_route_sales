@@ -47,6 +47,7 @@
             <xpath expr="//div[hasclass('oe_title')]" position="after">
                 <group>
                     <field name="x_duracion_dias" />
+                    <field name="x_periodicidad_dias" />
                 </group>
             </xpath>
         </field>

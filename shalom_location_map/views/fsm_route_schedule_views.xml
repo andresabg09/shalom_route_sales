@@ -16,7 +16,7 @@
         <field name="name">fsm.route.schedule.list</field>
         <field name="model">fsm.route.schedule</field>
         <field name="arch" type="xml">
-            <list string="Programación de Rutas">
+            <list string="Programación de Rutas" decoration-warning="x_reposicion_incompleta">
                 <field name="route_id" />
                 <field name="fsm_person_id" />
                 <field name="date_start" />
@@ -25,6 +25,7 @@
                 <field name="x_tiempo_estimado" widget="float_time" />
                 <field name="capacidad" widget="monetary" />
                 <field name="estado" widget="badge" decoration-info="estado == 'en_curso'" decoration-success="estado == 'completada'" />
+                <field name="x_reposicion_incompleta" string="Repuesta sin completar" />
             </list>
         </field>
     </record>
@@ -61,6 +62,11 @@
                     <field name="estado" widget="statusbar" statusbar_visible="por_iniciar,en_curso,completada" />
                 </header>
                 <sheet>
+                    <div class="alert alert-warning" role="alert" invisible="not x_reposicion_incompleta">
+                        Este ciclo se repuso SIN completarse: quedaban
+                        <field name="x_visitas_pendientes_al_reponer" class="oe_inline" readonly="1" />
+                        visita(s) sin cerrar cuando se generó el ciclo siguiente. Revisar con el vendedor.
+                    </div>
                     <div class="oe_button_box" name="button_box">
                         <button
                             type="object"

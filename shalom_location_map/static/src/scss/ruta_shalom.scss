@@ -2410,6 +2410,17 @@
     .admin-route-pill-express.admin-route-pill-active .fa-bolt {
         color: var(--shalom-bg);
     }
+    // Ícono de "se repuso sola sin completarse" (x_reposicion_incompleta,
+    // ver _shalom_reponer_rutas_vencidas en fsm_route_schedule.py) --
+    // mismo color de alerta que .gps-warning, para no inventar un
+    // significado de color nuevo.
+    .admin-route-pill-alerta {
+        color: var(--shalom-alerta);
+        margin-right: 2px;
+    }
+    .admin-route-pill-active .admin-route-pill-alerta {
+        color: var(--shalom-bg);
+    }
     // Visita Exprés: misma forma de pastilla que .admin-route-pill,
     // pero con su propio color (--shalom-accent) para que se distinga
     // a simple vista de las rutas normales -- vive siempre arriba,
@@ -2896,6 +2907,26 @@
     .o_shalom_gps_wizard_list .o_data_cell button.btn {
         display: block;
         width: 100%;
+        white-space: normal !important;
+        line-height: 1.25;
+        min-height: 44px; // tap target táctil estándar (~44px)
+        padding: 10px 14px;
+        margin-bottom: 6px; // que no queden pegados al de abajo
+    }
+    .o_shalom_gps_wizard_list .o_data_cell button.btn:last-child {
+        margin-bottom: 0;
+    }
+
+    // Ídem para los botones que NO están dentro de una de estas listas
+    // -- el pie del popup de opciones ("Ninguna es correcta: dejar
+    // como está", "Borrar coordenada actual") y los sueltos en un
+    // <group> ("Ver en mapa la coordenada actual", "Buscar" de
+    // query_busqueda). Ninguno de los dos <form> de este wizard tiene
+    // una clase propia en todo el diálogo, así que se identifica el
+    // modal por CONTENER en algún lado la lista de este wizard.
+    .o_dialog:has(.o_shalom_gps_wizard_list) .btn {
+        min-height: 44px;
+        padding: 10px 14px;
         white-space: normal !important;
         line-height: 1.25;
     }

@@ -211,8 +211,17 @@ class FSMPerson(models.Model):
                 "Esta acción es solo para el rol Administrador de "
                 "Servicio de Campo."
             ))
+        # OR con x_reposicion_incompleta=True: cuando el cron de
+        # reposición automática (_shalom_reponer_rutas_vencidas en
+        # fsm_route_schedule.py) marca un ciclo como incompleto,
+        # también cierra como "No atendido" las visitas que habían
+        # quedado colgadas -- eso recalcula estado a 'completada' acto
+        # seguido, y el ciclo desaparecería de esta lista justo cuando
+        # más interesa que Administración lo vea. Por eso un ciclo
+        # marcado como incompleto se sigue mostrando aunque su estado
+        # ya haya pasado a 'completada'.
         schedules = self.env["fsm.route.schedule"].search(
-            [("estado", "!=", "completada")],
+            ["|", ("estado", "!=", "completada"), ("x_reposicion_incompleta", "=", True)],
             order="fsm_person_id, date_start asc",
         )
         vendedores = {}
@@ -243,6 +252,12 @@ class FSMPerson(models.Model):
                     # Administración pueda ver de un vistazo qué rutas
                     # conviene partir por ser demasiado grandes.
                     "capacidad": s.capacidad,
+                    # Marcados por _shalom_reponer_rutas_vencidas
+                    # (fsm_route_schedule.py) cuando el cron generó el
+                    # ciclo siguiente sin que este se completara --
+                    # ver admin_gestion.xml para el ícono de alerta.
+                    "x_reposicion_incompleta": s.x_reposicion_incompleta,
+                    "x_visitas_pendientes_al_reponer": s.x_visitas_pendientes_al_reponer,
                 }
             )
         return list(vendedores.values())

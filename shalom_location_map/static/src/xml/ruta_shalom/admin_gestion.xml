@@ -211,6 +211,7 @@
                             t-on-click="() => this.elegirRuta(ruta)"
                         >
                             <i t-if="ruta.es_visita_express" class="fa fa-bolt" aria-hidden="true"/>
+                            <i t-if="ruta.x_reposicion_incompleta" class="fa fa-exclamation-triangle admin-route-pill-alerta" aria-hidden="true" t-attf-title="Se repuso sola sin completarse -- quedaron {{ruta.x_visitas_pendientes_al_reponer}} visita(s) sin cerrar"/>
                             <t t-esc="ruta.route_name"/>
                             <span class="admin-route-pill-count">· <t t-esc="ruta.cantidad_clientes"/></span>
                             <span class="admin-route-pill-capacidad">· $<t t-esc="(ruta.capacidad || 0).toFixed(2)"/></span>

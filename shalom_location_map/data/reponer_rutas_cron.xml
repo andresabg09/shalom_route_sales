@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo noupdate="0">
+    <!--
+        Reposición automática diaria de ciclos de ruta vencidos. Ver
+        _shalom_reponer_rutas_vencidas() en fsm_route_schedule.py.
+        Cada fsm.route se repone exactamente cuando se cumple su
+        propia x_periodicidad_dias, contada desde que le llega la
+        mercadería al cliente (date_start del último ciclo + días
+        hábiles de entrega de bodega), sin margen extra, sin
+        esperar a que se haya completado. Rutas de Visita Exprés
+        (x_es_visita_express=True) quedan excluidas. Corre una vez al
+        día: alcanza para una comparación por día calendario.
+    -->
+    <record id="shalom_cron_reponer_rutas_vencidas" model="ir.cron">
+        <field name="name">Shalom: reponer ciclos de ruta vencidos</field>
+        <field name="model_id" ref="model_fsm_route_schedule"/>
+        <field name="state">code</field>
+        <field name="code">model._shalom_reponer_rutas_vencidas()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <!--
+            Se probó a mano desde `odoo shell` contra una ruta real
+            (28 - Chiriquí), de punta a punta y con rollback (nada
+            quedó guardado de esa prueba), antes de activar esto acá.
+            Con noupdate="0" este record se resincroniza en cada
+            actualización del módulo: si esto quedara en False,
+            la PRÓXIMA actualización del módulo desactivaría el cron
+            solo, silenciosamente, pisando cualquier activación hecha
+            a mano desde la UI. Por eso el código tiene que reflejar
+            el estado real ya validado en producción, no arrancar
+            siempre inactivo.
+        -->
+        <field name="active">True</field>
+    </record>
+</odoo>

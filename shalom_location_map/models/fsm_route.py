@@ -102,6 +102,18 @@ class FSMRoute(models.Model):
         "(fsm_person_id) sin depender del nombre. No se pensó para "
         "tocarse a mano.",
     )
+    x_periodicidad_dias = fields.Integer(
+        string="Periodicidad del ciclo (días)",
+        default=30,
+        help="Cada cuántos días se repone SOLA esta ruta (ej. 30 = "
+        "mensual). Se cuenta desde que le llega la mercadería al "
+        "cliente (fecha de inicio del último ciclo + días hábiles de "
+        "entrega de bodega), exacto y sin margen extra, se haya "
+        "completado o no ese ciclo -- ver "
+        "_shalom_reponer_rutas_vencidas en fsm_route_schedule.py. "
+        "Rutas de Visita Exprés (x_es_visita_express) quedan "
+        "excluidas de este mecanismo.",
+    )
 
     def _shalom_etapas_generar_visitas(self):
         """Etapas 'Nueva' y 'No atendido' que necesita tanto
