@@ -1036,6 +1036,62 @@ class FSMOrder(models.Model):
             for orden in ordenes
         ]
 
+    @api.model
+    def shalom_admin_carritos_pendientes(self):
+        """Administración → 'En vivo': además de los catálogos abiertos
+        AHORA (shalom_admin_visitas_en_vivo), lista los que tienen
+        productos cargados en el carrito pero nadie los tocó en los
+        últimos SHALOM_SEGUNDOS_CARRITO_ACTIVO segundos -- pedido
+        explícito: que oficina vea también el carrito "abandonado" de
+        un vendedor que salió del catálogo sin confirmar ni descartar
+        (no se pierde hasta la limpieza mensual, ver
+        shalom_limpiar_carritos_viejos, pero mientras tanto quedaba
+        invisible para administración). Mutuamente excluyente con la
+        lista de 'en vivo': un catálogo abierto ahora mismo aparece
+        SOLO ahí, no acá también."""
+        self._shalom_verificar_admin()
+        limite = fields.Datetime.now() - timedelta(seconds=SHALOM_SEGUNDOS_CARRITO_ACTIVO)
+        ordenes = self.search(
+            [
+                ("stage_id.is_closed", "=", False),
+                ("x_carrito_borrador", "not in", [False, "", "{}"]),
+                "|",
+                ("x_catalogo_heartbeat", "=", False),
+                ("x_catalogo_heartbeat", "<", limite),
+            ],
+            order="x_carrito_actualizado desc",
+        )
+        resultado = []
+        for orden in ordenes:
+            carrito = orden._shalom_carrito_dict()
+            if not carrito:
+                continue
+            cantidad_items = sum(item.get("cantidad") or 0 for item in carrito.values())
+            total = sum(
+                (item.get("cantidad") or 0) * (item.get("list_price") or 0)
+                for item in carrito.values()
+                if not item.get("es_recompensa")
+            )
+            resultado.append(
+                {
+                    "id": orden.id,
+                    "cliente_nombre": orden.location_id.name if orden.location_id else "",
+                    "ruta_nombre": orden.fsm_route_id.name if orden.fsm_route_id else "",
+                    "vendedor_nombre": (
+                        orden.fsm_route_id.fsm_person_id.name
+                        if orden.fsm_route_id and orden.fsm_route_id.fsm_person_id
+                        else ""
+                    ),
+                    "cantidad_items": cantidad_items,
+                    "total": total,
+                    "actualizado": (
+                        fields.Datetime.to_string(orden.x_carrito_actualizado)
+                        if orden.x_carrito_actualizado else False
+                    ),
+                }
+            )
+        return resultado
+
     def _cerrar_visita_completada(self):
         """Mueve esta visita a la etapa Completada -- usado tanto por
         shalom_confirmar_pedido() (venta confirmada) como por

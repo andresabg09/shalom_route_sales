@@ -165,7 +165,7 @@
             </div>
         </div>
 
-        <div class="confirm-overlay" t-if="state.confirmandoSalida">
+        <div class="confirm-overlay confirm-overlay-sobre-cliente-form" t-if="state.confirmandoSalida">
             <div class="confirm-card">
                 <h3>¿Salir sin guardar?</h3>
                 <p>Hiciste cambios en la ficha de este cliente que todavía no

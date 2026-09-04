@@ -1184,6 +1184,25 @@
     .edit-overlay.closing {
         animation: shalom-fondo-out 0.15s ease both;
     }
+    // Bug real reportado: el propio "¿Salir sin guardar?" de
+    // ClienteForm (.confirm-overlay, z-index 95) quedaba TAPADO detrás
+    // de .edit-overlay (z-index 96, ver comentario ahí arriba) --
+    // aparecía dibujado pero no se podía tocar nada. Clase propia para
+    // subirlo por encima SOLO en este caso puntual, sin tocar el
+    // z-index genérico de .confirm-overlay (usado también por
+    // order_screen.js y visit_sheet.js, donde 95 ya alcanza).
+    //
+    // Primer intento (reportado que seguía sin funcionar): un selector
+    // de una sola clase acá tiene la MISMA especificidad que
+    // ".confirm-overlay { z-index: 95 }" de más abajo en este mismo
+    // archivo -- con empate de especificidad gana el que aparece
+    // DESPUÉS en el CSS final, que es ese (95), no este. Con las DOS
+    // clases en el selector (mismo elemento las tiene siempre las dos,
+    // ver cliente_form.xml) la especificidad es mayor y gana siempre,
+    // sin depender del orden de las reglas.
+    .confirm-overlay.confirm-overlay-sobre-cliente-form {
+        z-index: 97;
+    }
     .edit-card {
         animation: shalom-tarjeta-in 0.3s $shalom-curva-sheet both;
         width: 100%;
@@ -2254,6 +2273,17 @@
         font-size: 0.8rem;
         color: var(--shalom-ink-muted);
         margin-bottom: 10px;
+    }
+    // Separador entre la lista de "En vivo" y la de "Carritos
+    // pendientes" (ver admin_gestion.xml) -- mismo bloque de la pestaña,
+    // no una pestaña aparte.
+    .admin-carritos-pendientes-titulo {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--shalom-ink);
+        margin: 22px 0 10px;
+        padding-top: 18px;
+        border-top: 1px solid var(--shalom-line);
     }
     .admin-obs {
         margin-top: 6px;

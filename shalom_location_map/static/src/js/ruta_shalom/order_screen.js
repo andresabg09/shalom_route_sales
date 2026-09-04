@@ -508,6 +508,22 @@ export class OrderScreen extends Component {
         if (this._sincronizando || this._cerrado) {
             return;
         }
+        // Bug real reportado: en pedidos grandes, "Confirmar pedido"/
+        // "Revisar cotización" quedaba cargando y nunca creaba nada,
+        // con "could not serialize access due to concurrent update" en
+        // el servidor. Causa: este tick sigue corriendo cada ~1 seg de
+        // fondo (heartbeat + guardado de carrito) mientras se espera
+        // esa respuesta, y ambas llamadas escriben sobre la MISMA fila
+        // de fsm.order que shalom_confirmar_pedido/
+        // shalom_guardar_borrador_pedido están tocando en su propia
+        // transacción -- en pedidos chicos esa transacción es tan
+        // rápida que casi nunca se cruza con el tick, en pedidos
+        // grandes tarda más y el choque se vuelve casi seguro,
+        // abortando toda la confirmación. Se pausa el tick durante esa
+        // ventana para no competir por la misma fila.
+        if (this.state.confirmando || this.state.guardandoBorrador) {
+            return;
+        }
         this._sincronizando = true;
         try {
             try {

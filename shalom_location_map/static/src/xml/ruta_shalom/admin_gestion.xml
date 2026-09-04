@@ -59,6 +59,42 @@
                         </div>
                     </div>
                 </t>
+
+                <!-- ============ Carritos pendientes (sin finalizar) ============ -->
+                <div class="admin-carritos-pendientes-titulo">Carritos con productos sin finalizar cotización</div>
+                <div t-if="state.cargandoCarritosPendientes" class="shalom-vacio">Cargando…</div>
+                <div t-elif="!state.carritosPendientes.length" class="shalom-vacio">
+                    No hay carritos con productos pendientes.
+                </div>
+                <t t-else="">
+                    <div class="admin-visitas-count">
+                        <t t-esc="state.carritosPendientes.length"/> carrito(s) con productos sin finalizar
+                    </div>
+                    <div class="admin-visitas-list">
+                        <div
+                            t-foreach="state.carritosPendientes"
+                            t-as="carrito"
+                            t-key="carrito.id"
+                            class="stop-card admin-visit-card"
+                            t-on-click="() => this.abrirEnVivo(carrito)"
+                        >
+                            <div class="stop-info">
+                                <div class="name">
+                                    <i class="fa fa-circle" aria-hidden="true" style="color:#f0ad4e;font-size:0.55em;margin-right:6px;"/>
+                                    <t t-esc="carrito.cliente_nombre"/>
+                                </div>
+                                <div class="addr">
+                                    <t t-esc="(carrito.ruta_nombre || 'Sin ruta') + ' · ' + (carrito.vendedor_nombre || 'Sin vendedor')"/>
+                                </div>
+                            </div>
+                            <div class="stop-right">
+                                <span class="stop-badge">
+                                    <t t-esc="carrito.cantidad_items"/> item(s) · $<t t-esc="carrito.total.toFixed(2)"/>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </t>
             </div>
 
             <div class="shalom-body admin-body" t-if="state.tab === 'seguimiento'">

@@ -111,5 +111,22 @@
             onConfirmado.bind="pedidoConfirmado"
             onRevisado.bind="pedidoRevisado"
         />
+
+        <!-- Selector "¿Teléfono o celular?", solo aparece si el
+             cliente tiene los dos cargados, ver llamar() en visit_sheet.js. -->
+        <div class="confirm-overlay" t-if="state.eligiendoTelefono">
+            <div class="confirm-card">
+                <h3><i class="fa fa-phone" aria-hidden="true"/> ¿A cuál número llamar?</h3>
+                <div class="edit-actions">
+                    <button class="btn btn-ghost" t-on-click="elegirTelefono">
+                        Teléfono · <t t-esc="state.visita.telefono"/>
+                    </button>
+                    <button class="btn btn-primary" t-on-click="elegirCelular">
+                        Celular · <t t-esc="state.visita.celular"/>
+                    </button>
+                </div>
+                <button class="btn btn-ghost" style="margin-top:8px;" t-on-click="cerrarSelectorTelefono">Cancelar</button>
+            </div>
+        </div>
     </t>
 </templates>

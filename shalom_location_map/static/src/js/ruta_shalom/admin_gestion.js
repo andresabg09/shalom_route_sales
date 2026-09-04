@@ -138,6 +138,10 @@ export class AdminGestion extends Component {
             visitasEnVivo: [],
             orderIdEnVivo: null,
             clienteEnVivoNombre: "",
+            // -- Carritos pendientes (mismo catálogo, sin nadie tocándolo
+            // ahora mismo -- ver shalom_admin_carritos_pendientes) --
+            cargandoCarritosPendientes: true,
+            carritosPendientes: [],
 
             // -- compartido --
             locationIdEditando: null,
@@ -145,11 +149,17 @@ export class AdminGestion extends Component {
         this._enVivoTimer = null;
 
         onWillStart(async () => {
-            await Promise.all([this.cargarVisitas(), this.cargarVendedores(), this.cargarVisitasEnVivo()]);
+            await Promise.all([
+                this.cargarVisitas(),
+                this.cargarVendedores(),
+                this.cargarVisitasEnVivo(),
+                this.cargarCarritosPendientes(),
+            ]);
         });
-        this._enVivoTimer = setInterval(
-            () => this.cargarVisitasEnVivo(), SHALOM_INTERVALO_LISTA_EN_VIVO_MS
-        );
+        this._enVivoTimer = setInterval(() => {
+            this.cargarVisitasEnVivo();
+            this.cargarCarritosPendientes();
+        }, SHALOM_INTERVALO_LISTA_EN_VIVO_MS);
         onWillUnmount(() => {
             if (this.mapboxMap) {
                 this.mapboxMap.remove();
@@ -365,6 +375,26 @@ export class AdminGestion extends Component {
     cerrarEnVivo() {
         this.state.orderIdEnVivo = null;
         this.cargarVisitasEnVivo();
+        this.cargarCarritosPendientes();
+    }
+
+    /** Carritos con productos cargados pero sin nadie tocándolos ahora
+     * mismo (pedido explícito: verlos también acá, no solo cuando el
+     * vendedor reabre esa visita) -- se abren con el mismo modal/
+     * componente que "en vivo" (abrirEnVivo), es el mismo catálogo. */
+    async cargarCarritosPendientes() {
+        if (!this.state.carritosPendientes.length) {
+            this.state.cargandoCarritosPendientes = true;
+        }
+        try {
+            this.state.carritosPendientes = await this.orm.call(
+                "fsm.order", "shalom_admin_carritos_pendientes", []
+            );
+        } catch (error) {
+            console.error("shalom: error al cargar carritos pendientes", error);
+        } finally {
+            this.state.cargandoCarritosPendientes = false;
+        }
     }
 
     // ==================================================================

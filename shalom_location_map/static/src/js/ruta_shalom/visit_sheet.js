@@ -77,6 +77,9 @@ export class VisitSheet extends Component {
             // visita se guardó hace poco -- ver
             // SHALOM_INTERVALO_HEARTBEAT_MS más arriba.
             carritoActivo: false,
+            // Selector de "¿Teléfono o celular?" -- solo se muestra si
+            // el cliente tiene los dos cargados, ver llamar().
+            eligiendoTelefono: false,
         });
         this._onMoverArrastre = (ev) => this.moverArrastre(ev);
         this._onSoltarArrastre = (ev) => this.soltarArrastre(ev);
@@ -139,6 +142,7 @@ export class VisitSheet extends Component {
                 const [loc] = await this.orm.read("fsm.location", [orden.location_id[0]], [
                     "name",
                     "phone",
+                    "mobile",
                     "street",
                     "street2",
                     "partner_id",
@@ -152,6 +156,7 @@ export class VisitSheet extends Component {
                 direccion: locacion ? locacion.street : "",
                 direccion2: locacion ? locacion.street2 : "",
                 telefono: locacion ? locacion.phone : "",
+                celular: locacion ? locacion.mobile : "",
                 orden: orden.x_cliente_orden_ruta,
                 estado: estadoDesdeStageName(orden.stage_name),
                 observaciones: orden.x_observaciones_visita || "",
@@ -290,12 +295,38 @@ export class VisitSheet extends Component {
         }
     }
 
+    /** Antes solo miraba "teléfono" -- bug real reportado: si el
+     * cliente solo tenía celular cargado (o al revés), el botón
+     * "Llamar" quedaba inutilizable aunque hubiera un número válido.
+     * Ahora: si hay uno solo de los dos, llama directo con ese; si hay
+     * los dos, deja elegir con un mini popup (elegirTelefono/
+     * elegirCelular) en vez de asumir cuál usar. */
     llamar() {
-        if (!this.state.visita.telefono) {
-            this.notification.add("Este cliente no tiene teléfono guardado.", {type: "warning"});
+        const {telefono, celular} = this.state.visita;
+        if (telefono && celular) {
+            this.state.eligiendoTelefono = true;
             return;
         }
+        const numero = telefono || celular;
+        if (!numero) {
+            this.notification.add("Este cliente no tiene teléfono ni celular guardado.", {type: "warning"});
+            return;
+        }
+        window.open(`tel:${numero}`, "_self");
+    }
+
+    elegirTelefono() {
+        this.state.eligiendoTelefono = false;
         window.open(`tel:${this.state.visita.telefono}`, "_self");
+    }
+
+    elegirCelular() {
+        this.state.eligiendoTelefono = false;
+        window.open(`tel:${this.state.visita.celular}`, "_self");
+    }
+
+    cerrarSelectorTelefono() {
+        this.state.eligiendoTelefono = false;
     }
 
     irConMaps() {
