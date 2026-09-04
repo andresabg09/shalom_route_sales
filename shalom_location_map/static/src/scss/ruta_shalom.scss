@@ -27,6 +27,11 @@
     --shalom-no_quiso-soft: #efe1e6;
     --shalom-cancelado: #5c6470;
     --shalom-cancelado-soft: #e3e5e9;
+    // Distinto del gris de --shalom-cancelado (que ya es gris) para
+    // que "No atendido" y "Cancelado" no se confundan uno con otro en
+    // la lista de chips de Seguimiento de Visitas -- un slate-azulado.
+    --shalom-no_atendido: #52708a;
+    --shalom-no_atendido-soft: #e2e8ee;
     --shalom-info: #2461c7;
     --shalom-info-soft: #dfe9fa;
     // Rojo de alerta para el aviso "sin GPS" -- deliberadamente más
@@ -57,6 +62,8 @@
         --shalom-no_quiso-soft: #33212a;
         --shalom-cancelado: #9aa2ae;
         --shalom-cancelado-soft: #2b2e34;
+        --shalom-no_atendido: #9db4c9;
+        --shalom-no_atendido-soft: #232b33;
         --shalom-info: #7aaaf5;
         --shalom-info-soft: #1c2c47;
         // Más claro que el rojo de modo día -- un rojo oscuro se hunde
@@ -431,6 +438,13 @@
     .stop-card.st-no_quiso .stop-badge {
         background: var(--shalom-no_quiso-soft);
         color: var(--shalom-no_quiso);
+    }
+    // Solo lo genera Seguimiento de Visitas (admin_gestion.js,
+    // estadoSeguimientoDesdeStageName) -- no aparece en ningún otro
+    // lado de la app.
+    .stop-card.st-no_atendido .stop-badge {
+        background: var(--shalom-no_atendido-soft);
+        color: var(--shalom-no_atendido);
     }
     .stop-card.st-cancelado .stop-badge {
         background: var(--shalom-cancelado-soft);
@@ -2133,6 +2147,11 @@
         border-color: var(--shalom-no_quiso);
         background: var(--shalom-no_quiso-soft);
         color: var(--shalom-no_quiso);
+    }
+    .admin-filters .chip-active.st-no_atendido {
+        border-color: var(--shalom-no_atendido);
+        background: var(--shalom-no_atendido-soft);
+        color: var(--shalom-no_atendido);
     }
     .admin-filters .chip-active.st-completado {
         border-color: var(--shalom-completado);

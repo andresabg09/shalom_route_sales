@@ -1422,6 +1422,7 @@ class FSMOrder(models.Model):
         "cancelado": "fieldservice.fsm_stage_cancelled",
         "completado": "fieldservice.fsm_stage_completed",
         "no_quiso": "shalom_location_map.shalom_fsm_stage_no_quiso",
+        "no_atendido": "shalom_location_map.shalom_fsm_stage_no_atendido",
     }
 
     @api.model

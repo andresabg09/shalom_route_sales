@@ -57,7 +57,28 @@ function claveVisitaExpressPendientes(vendedorId) {
  * venta -- tocar un pin abre ClienteForm directo.
  */
 
-const ESTADOS_SEGUIMIENTO_DEFAULT = ["cancelado", "no_quiso"];
+const ESTADOS_SEGUIMIENTO_DEFAULT = ["cancelado", "no_quiso", "no_atendido"];
+
+// Extensión LOCAL de ESTADO_ETIQUETA (stage_utils.js) solo para esta
+// pantalla ("Seguimiento de Visitas") -- "No atendido" NO se agrega
+// al diccionario compartido a propósito, para no cambiar cómo se ve
+// en ningún otro lado de la app (ej. las tarjetas de "Rutas de mis
+// vendedores" más abajo en este mismo archivo, o la app del
+// vendedor), donde una visita "No atendido" sigue etiquetándose como
+// "Pendiente" tal cual estaba.
+const ESTADO_ETIQUETA_SEGUIMIENTO = {...ESTADO_ETIQUETA, no_atendido: "No atendido"};
+
+/** Igual que estadoDesdeStageName (stage_utils.js), pero reconociendo
+ * también "No atendido" -- solo se usa para cargar la lista de
+ * "Seguimiento de Visitas" (ver cargarVisitas), no para
+ * clientesRuta/"Rutas de mis vendedores", que sigue usando
+ * estadoDesdeStageName tal cual (fuera de alcance de este fix). */
+function estadoSeguimientoDesdeStageName(stageName) {
+    if (stageName === "No atendido") {
+        return "no_atendido";
+    }
+    return estadoDesdeStageName(stageName);
+}
 
 export class AdminGestion extends Component {
     static template = "shalom_location_map.AdminGestion";
@@ -171,11 +192,11 @@ export class AdminGestion extends Component {
     // ==================================================================
 
     get estadosDisponibles() {
-        return ["cancelado", "no_quiso", "completado", "pendiente"];
+        return ["cancelado", "no_quiso", "no_atendido", "completado", "pendiente"];
     }
 
     etiquetaEstado(estado) {
-        return ESTADO_ETIQUETA[estado] || estado;
+        return ESTADO_ETIQUETA_SEGUIMIENTO[estado] || estado;
     }
 
     /** Vendedores presentes en el listado actual de visitas (no el de
@@ -249,7 +270,7 @@ export class AdminGestion extends Component {
             // la app, sin reinventarlo acá.
             this.state.visitas = visitas.map((v) => ({
                 ...v,
-                estado: estadoDesdeStageName(v.estado_nombre),
+                estado: estadoSeguimientoDesdeStageName(v.estado_nombre),
             }));
         } catch (error) {
             console.error("shalom: error al cargar seguimiento de visitas", error);
