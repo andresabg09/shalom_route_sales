@@ -2707,6 +2707,38 @@
         color: var(--shalom-ink-muted);
         font-weight: 600;
     }
+    // Leyenda de colores del mapa (ver COLOR_PIN_POR_ESTADO en
+    // admin_gestion.js) -- abajo a la izquierda, para no pisar el
+    // .admin-mapa-chip que ya ocupa la esquina de arriba.
+    .admin-mapa-leyenda {
+        position: absolute;
+        left: 16px;
+        bottom: 16px;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 12px;
+        background: var(--shalom-surface);
+        border-radius: var(--shalom-radius-sm);
+        padding: 8px 14px;
+        font-size: 0.74rem;
+        font-weight: 600;
+        color: var(--shalom-ink-muted);
+        box-shadow: var(--shalom-shadow);
+        max-width: calc(100% - 32px);
+    }
+    .admin-mapa-leyenda-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    .admin-mapa-leyenda-punto {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex: 0 0 auto;
+    }
     .admin-mapa {
         width: 100%;
         height: 46vh;
@@ -2902,6 +2934,1348 @@
         .btn-mini-admin {
             padding: 10px 16px;
             font-size: 0.88rem;
+        }
+    }
+
+    // ==================================================================
+    // Administración -- rediseño completo (mockup "Administración Ruta
+    // Shalom" aprobado). Sistema visual propio bajo &.o_shalom_admin_screen,
+    // con clases NUEVAS "adm-*" (ver admin_gestion.xml) -- a propósito, no
+    // reusa .stop-card/.chip/.segmented/etc. de la app del vendedor, así
+    // que no hace falta pelear especificidad con nada: es autocontenido.
+    // ==================================================================
+    &.o_shalom_admin_screen {
+        // -- Encabezado: título + pestañas en la misma fila --
+        .adm-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            row-gap: 12px;
+            padding: 20px 24px 16px;
+        }
+        .adm-header-title {
+            min-width: 0;
+        }
+        .adm-h1 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            letter-spacing: -0.015em;
+        }
+        .adm-sub {
+            font-size: 0.8rem;
+            color: var(--shalom-ink-muted);
+            margin-top: 4px;
+        }
+        .adm-tabs {
+            display: flex;
+            flex: 0 0 auto;
+            gap: 4px;
+            background: var(--shalom-surface-2);
+            border-radius: 999px;
+            padding: 4px;
+        }
+        .adm-tab {
+            flex: 0 0 auto;
+            height: 34px;
+            padding: 0 18px;
+            border: none;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--shalom-ink-muted);
+            font-size: 0.82rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .adm-tab-active {
+            background: var(--shalom-accent);
+            color: var(--shalom-accent-ink);
+        }
+        // Desktop: texto largo. Celular: corto (ver media query de
+        // abajo) -- calcado de Movil.dc.html ("Visitas"/"Rutas"/"En
+        // vivo"), pedido explícito: el texto largo no entraba y
+        // "En vivo" quedaba tapado, obligando a un scroll lateral feo.
+        .adm-tab-short {
+            display: none;
+        }
+        @media (max-width: 899px) {
+            .adm-header {
+                padding: 16px 16px 14px;
+            }
+            .adm-tabs {
+                flex: 1 1 100%;
+            }
+            .adm-tab {
+                flex: 1;
+                padding: 0 6px;
+            }
+            .adm-tab-full {
+                display: none;
+            }
+            .adm-tab-short {
+                display: inline;
+            }
+
+            // Pastillas de ruta: solo el nombre, sin cantidad/capacidad
+            // (calcado de Movil.dc.html) -- con los dos datos no entraban
+            // cómodas y empujaban el mapa fuera de vista.
+            .adm-chip-meta {
+                display: none;
+            }
+
+            // Campo de vendedor a todo el ancho, en su propia fila
+            // (calcado de Movil.dc.html) -- de lado a lado con las
+            // pastillas de ruta no quedaba espacio para ninguno de los
+            // dos.
+            .adm-toprow {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            .adm-field-vendedor {
+                width: 100%;
+            }
+            .adm-field-select select {
+                max-width: none;
+                flex: 1;
+            }
+
+            // Mapa más grande -- pedido explícito, quedaba muy chico
+            // una vez que lo de arriba dejó de empujarlo.
+            .adm-map {
+                height: 260px;
+            }
+            .adm-rutas-list-card {
+                min-height: 260px;
+            }
+        }
+
+        .adm-body {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 4px 24px 26px;
+        }
+        @media (max-width: 899px) {
+            .adm-body {
+                padding: 4px 16px 24px;
+            }
+        }
+
+        .adm-empty {
+            color: var(--shalom-ink-muted);
+            font-size: 0.86rem;
+            padding: 20px 4px;
+            line-height: 1.5;
+        }
+        .adm-count {
+            font-size: 0.78rem;
+            color: var(--shalom-ink-muted);
+            margin-bottom: 10px;
+        }
+        .adm-count-inline {
+            margin: 10px 0 0;
+        }
+        .adm-section-label {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            color: var(--shalom-ink-muted);
+            margin-bottom: 11px;
+        }
+        .adm-section-label-sep {
+            margin-top: 24px;
+            padding-top: 18px;
+            border-top: 1px solid var(--shalom-line);
+        }
+        .adm-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            flex: none;
+            background: var(--shalom-ink-muted);
+        }
+        .adm-dot-alerta { background: var(--shalom-alerta); }
+        .adm-dot-pendiente { background: var(--shalom-pendiente); }
+        .adm-dot-completado { background: var(--shalom-completado); }
+        .adm-dot-no_quiso { background: var(--shalom-no_quiso); }
+        .adm-dot-no_atendido { background: var(--shalom-no_atendido); }
+        .adm-dot-cancelado { background: var(--shalom-cancelado); }
+
+        // -- Búsqueda / campos tipo "field" (select disfrazado) --
+        .adm-search {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            background: var(--shalom-surface);
+            border: 1px solid var(--shalom-line);
+            border-radius: var(--shalom-radius-sm);
+            padding: 0 12px;
+            height: 38px;
+            color: var(--shalom-ink-muted);
+        }
+        .adm-search input {
+            flex: 1;
+            min-width: 0;
+            border: none;
+            background: transparent;
+            outline: none;
+            font-family: inherit;
+            font-size: 0.82rem;
+            color: var(--shalom-ink);
+        }
+        .adm-search input::placeholder {
+            color: var(--shalom-ink-muted);
+        }
+        .adm-field {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--shalom-surface);
+            border: 1px solid var(--shalom-line);
+            border-radius: var(--shalom-radius-sm);
+            height: 38px;
+            padding: 0 12px;
+            font-size: 0.8rem;
+            position: relative;
+        }
+        .adm-field + .adm-field {
+            margin-top: 8px;
+        }
+        .adm-field label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: var(--shalom-ink-muted);
+            white-space: nowrap;
+        }
+        .adm-field-select {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-weight: 600;
+            min-width: 0;
+        }
+        .adm-field-select select {
+            appearance: none;
+            -webkit-appearance: none;
+            border: none;
+            background: transparent;
+            font-family: inherit;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--shalom-ink);
+            padding-right: 18px;
+            max-width: 160px;
+            cursor: pointer;
+            // Bug real reportado: sin esto, un nombre + "-- N rutas"
+            // más largo que el campo se cortaba a la mitad de una
+            // palabra ("...10 ru"). Con esto trunca prolijo con "…".
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        // select nativo sale con los colores de sistema del navegador --
+        // se fuerza el fondo/texto acá para que las opciones abiertas
+        // no queden ilegibles en modo oscuro.
+        .adm-field-select select option {
+            background: var(--shalom-surface);
+            color: var(--shalom-ink);
+        }
+        .adm-field-select > .fa-chevron-down {
+            position: absolute;
+            right: 0;
+            pointer-events: none;
+            color: var(--shalom-ink-muted);
+            font-size: 0.7rem;
+        }
+        .adm-field-vendedor {
+            width: 220px;
+            flex: 0 0 auto;
+        }
+
+        // -- Bloques de la barra lateral --
+        .adm-side-block + .adm-side-block {
+            margin-top: 20px;
+        }
+        .adm-side-label {
+            font-size: 0.67rem;
+            font-weight: 700;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            color: var(--shalom-ink-muted);
+            margin-bottom: 11px;
+            display: block;
+        }
+        .adm-side-label-pendiente {
+            color: var(--shalom-pendiente);
+        }
+
+        // -- Chips (filtros de estado, rutas) --
+        .adm-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        // Pedido explícito: con 9-11 rutas por vendedor (algunos
+        // vendedores llegan a eso), la barrita de scroll horizontal
+        // quedaba muy incómoda de usar. Envuelve en varias líneas en
+        // vez de forzar scroll lateral.
+        .adm-chip-row-scroll {
+            flex-wrap: wrap;
+            overflow-x: visible;
+        }
+        .adm-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            height: 32px;
+            padding: 0 13px;
+            border-radius: 999px;
+            border: 1px solid var(--shalom-line);
+            background: var(--shalom-surface);
+            color: var(--shalom-ink-muted);
+            font-family: inherit;
+            font-size: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            flex: 0 0 auto;
+        }
+        .adm-chip-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            flex: none;
+        }
+        .adm-chip-meta {
+            color: var(--shalom-ink-muted);
+            font-weight: 600;
+        }
+        .adm-chip-alerta {
+            color: var(--shalom-pendiente);
+        }
+        .adm-chip-active.adm-chip-cancelado { border-color: var(--shalom-cancelado); background: var(--shalom-cancelado-soft); color: var(--shalom-cancelado); }
+        .adm-chip-active.adm-chip-no_quiso { border-color: var(--shalom-no_quiso); background: var(--shalom-no_quiso-soft); color: var(--shalom-no_quiso); }
+        .adm-chip-active.adm-chip-no_atendido { border-color: var(--shalom-no_atendido); background: var(--shalom-no_atendido-soft); color: var(--shalom-no_atendido); }
+        .adm-chip-active.adm-chip-completado { border-color: var(--shalom-completado); background: var(--shalom-completado-soft); color: var(--shalom-completado); }
+        .adm-chip-active.adm-chip-pendiente { border-color: var(--shalom-pendiente); background: var(--shalom-pendiente-soft); color: var(--shalom-pendiente); }
+        // Chips de ruta (sin estado propio): activa = acento.
+        .adm-chip-active:not([class*="adm-chip-cancelado"]):not([class*="adm-chip-no_quiso"]):not([class*="adm-chip-no_atendido"]):not([class*="adm-chip-completado"]):not([class*="adm-chip-pendiente"]) {
+            border-color: var(--shalom-accent);
+            background: var(--shalom-accent);
+            color: var(--shalom-accent-ink);
+        }
+        .adm-chip-express {
+            color: var(--shalom-accent);
+        }
+        .adm-chip-vip {
+            font-weight: 700;
+        }
+
+        // -- Tarjetas / listas genéricas --
+        .adm-card {
+            background: var(--shalom-surface);
+            border: 1px solid var(--shalom-line);
+            border-radius: var(--shalom-radius-md);
+            // var(--shalom-shadow) en vez de un rgba fijo a propósito:
+            // ese valor cambia por tema (sombra tenue cálida en modo
+            // claro, mucho más marcada en oscuro) -- un rgba fijo
+            // pensado para claro quedaba casi invisible en oscuro, que
+            // es el modo real donde se probó esto (bug real reportado:
+            // "todo se ve plano, nada flota como en la lámina").
+            box-shadow: var(--shalom-shadow);
+        }
+        .adm-card-pad {
+            padding: 13px 14px 0;
+        }
+        .adm-card-list {
+            background: var(--shalom-surface);
+            border: 1px solid var(--shalom-line);
+            border-radius: var(--shalom-radius-md);
+            // var(--shalom-shadow) en vez de un rgba fijo a propósito:
+            // ese valor cambia por tema (sombra tenue cálida en modo
+            // claro, mucho más marcada en oscuro) -- un rgba fijo
+            // pensado para claro quedaba casi invisible en oscuro, que
+            // es el modo real donde se probó esto (bug real reportado:
+            // "todo se ve plano, nada flota como en la lámina").
+            box-shadow: var(--shalom-shadow);
+            overflow: hidden;
+            max-height: 62vh;
+            overflow-y: auto;
+        }
+        // Dentro de una .adm-card ya se ve la caja -- la lista de
+        // adentro no necesita su propio borde/sombra, solo las
+        // líneas entre filas.
+        .adm-card-list-flush {
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            box-shadow: none;
+            max-height: none;
+            overflow: visible;
+        }
+
+        // -- Fila de "Seguimiento de Visitas" / "En vivo" --
+        .adm-row {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            padding: 14px 16px;
+            border-top: 1px solid var(--shalom-surface-2);
+            cursor: pointer;
+        }
+        .adm-row:first-child {
+            border-top: 0;
+        }
+        .adm-row-riel {
+            position: absolute;
+            left: 0;
+            top: 10px;
+            bottom: 10px;
+            width: 3px;
+            border-radius: 0 999px 999px 0;
+            background: var(--shalom-line);
+        }
+        .adm-row-completado .adm-row-riel { background: var(--shalom-completado); }
+        .adm-row-pendiente .adm-row-riel { background: var(--shalom-pendiente); }
+        .adm-row-no_quiso .adm-row-riel { background: var(--shalom-no_quiso); }
+        .adm-row-no_atendido .adm-row-riel { background: var(--shalom-no_atendido); }
+        .adm-row-cancelado .adm-row-riel { background: var(--shalom-cancelado); }
+        .adm-row-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .adm-row-name {
+            font-size: 0.92rem;
+            font-weight: 600;
+            letter-spacing: -0.005em;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+        .adm-row-edit-ic {
+            color: var(--shalom-ink-muted);
+            font-size: 0.78rem;
+        }
+        .adm-row-meta {
+            font-size: 0.78rem;
+            color: var(--shalom-ink-muted);
+            margin-top: 3px;
+        }
+        .adm-row-meta-row {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            margin-top: 3px;
+        }
+        .adm-row-meta-expandida {
+            white-space: normal;
+        }
+        .adm-row-obs {
+            font-size: 0.78rem;
+            color: var(--shalom-ink-muted);
+            margin-top: 6px;
+            padding-left: 10px;
+            border-left: 2px solid var(--shalom-surface-2);
+        }
+        .adm-row-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex: 0 0 auto;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .adm-row-estado {
+            font-size: 0.72rem;
+            font-weight: 700;
+        }
+        .adm-row-completado .adm-row-estado { color: var(--shalom-completado); }
+        .adm-row-pendiente .adm-row-estado { color: var(--shalom-pendiente); }
+        .adm-row-no_quiso .adm-row-estado { color: var(--shalom-no_quiso); }
+        .adm-row-no_atendido .adm-row-estado { color: var(--shalom-no_atendido); }
+        .adm-row-cancelado .adm-row-estado { color: var(--shalom-cancelado); }
+        .adm-row-fecha {
+            font-size: 0.78rem;
+            color: var(--shalom-ink-muted);
+        }
+        .adm-row-monto {
+            text-align: right;
+            flex: 0 0 auto;
+        }
+        .adm-row-monto-total {
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+        .adm-row-monto-detalle {
+            font-size: 0.74rem;
+            color: var(--shalom-ink-muted);
+            margin-top: 2px;
+        }
+        .adm-row-actions {
+            display: flex;
+            gap: 6px;
+            flex: 0 0 auto;
+        }
+
+        // -- Pastilla chica (En vivo / catálogo abierto) --
+        .adm-pill {
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 999px;
+            flex: 0 0 auto;
+        }
+        .adm-pill-alerta {
+            color: var(--shalom-alerta);
+            background: var(--shalom-accent-soft);
+        }
+
+        // -- Botones de acción (Editar/GPS/Eliminar/Revisar/etc.) --
+        .adm-actbtn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            height: 30px;
+            padding: 0 11px;
+            border-radius: 8px;
+            border: 1px solid var(--shalom-line);
+            background: var(--shalom-surface);
+            color: var(--shalom-ink-muted);
+            font-family: inherit;
+            font-size: 0.71rem;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .adm-actbtn-accent {
+            border-color: var(--shalom-accent-soft);
+            background: var(--shalom-accent-soft);
+            color: var(--shalom-accent);
+        }
+        .adm-actbtn-danger {
+            border-color: var(--shalom-cancelado-soft);
+            color: var(--shalom-alerta);
+        }
+        .adm-actbtn-done {
+            border-color: var(--shalom-accent-soft);
+            background: var(--shalom-accent-soft);
+            color: var(--shalom-accent);
+        }
+        .adm-btn-primary {
+            border: none;
+            width: 100%;
+            height: 44px;
+            border-radius: var(--shalom-radius-sm);
+            background: var(--shalom-accent);
+            color: var(--shalom-accent-ink);
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .adm-btn-primary:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+        .adm-btn-ghost {
+            border: 1px solid var(--shalom-line);
+            background: var(--shalom-surface);
+            color: var(--shalom-ink);
+            height: 40px;
+            padding: 0 18px;
+            border-radius: var(--shalom-radius-sm);
+            font-family: inherit;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        // -- Grillas: Seguimiento (filtros + lista) --
+        .adm-seg-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .adm-seg-side {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .adm-seg-main {
+            min-width: 0;
+            min-height: 0;
+        }
+        @media (min-width: 900px) {
+            .adm-seg-grid {
+                flex-direction: row;
+                align-items: flex-start;
+            }
+            .adm-seg-side {
+                flex: 0 0 268px;
+            }
+            .adm-seg-main {
+                flex: 1;
+            }
+        }
+
+        // -- Barra superior de "Rutas de mis vendedores" --
+        .adm-toprow {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .adm-vsep {
+            width: 1px;
+            height: 26px;
+            background: var(--shalom-line);
+            flex: none;
+        }
+
+        // -- Visita Exprés --
+        .adm-express-card {
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .adm-express-head {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 16px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--shalom-accent);
+        }
+        .adm-express-head-title {
+            color: var(--shalom-ink);
+        }
+        .adm-express-head-sub {
+            margin-left: auto;
+            font-size: 0.76rem;
+            font-weight: 600;
+            color: var(--shalom-ink-muted);
+        }
+        .adm-express-fechas {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+            padding: 0 16px 16px;
+        }
+        .adm-datefield-wrap .o_datetime_input {
+            width: 100%;
+            height: 38px;
+            border: 1px solid var(--shalom-line);
+            border-radius: var(--shalom-radius-sm);
+            padding: 0 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: var(--shalom-surface);
+            color: var(--shalom-ink);
+        }
+        .adm-express-subhead {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 13px 16px;
+            border-top: 1px solid var(--shalom-surface-2);
+        }
+        .adm-express-pendientes {
+            background: var(--shalom-bg);
+            border-top: 1px solid var(--shalom-line);
+            padding: 14px 16px 16px;
+        }
+        .adm-pendiente-card {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--shalom-surface);
+            border: 1px solid var(--shalom-line);
+            border-radius: var(--shalom-radius-sm);
+            padding: 11px 13px;
+            margin-bottom: 8px;
+        }
+        .adm-express-confirmar-btn {
+            margin-top: 4px;
+        }
+
+        // -- Mapa + lista de "Rutas de mis vendedores" --
+        .adm-rutas-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        @media (min-width: 900px) {
+            .adm-rutas-grid {
+                flex-direction: row;
+                align-items: flex-start;
+            }
+            .adm-map-wrap {
+                flex: 1.1 1 0;
+            }
+            .adm-rutas-list-card {
+                flex: 0.9 1 0;
+            }
+        }
+        .adm-map-wrap {
+            position: relative;
+            border: 1px solid var(--shalom-line);
+            border-radius: var(--shalom-radius-md);
+            overflow: hidden;
+            background: var(--shalom-surface-2);
+        }
+        .adm-map {
+            width: 100%;
+            height: 46vh;
+            min-height: 340px;
+        }
+        .adm-map-chip {
+            position: absolute;
+            left: 16px;
+            top: 16px;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--shalom-surface);
+            border-radius: var(--shalom-radius-sm);
+            padding: 8px 14px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            box-shadow: var(--shalom-shadow);
+        }
+        .adm-map-chip-meta {
+            color: var(--shalom-ink-muted);
+            font-weight: 600;
+        }
+        .adm-map-legend {
+            position: absolute;
+            left: 16px;
+            bottom: 16px;
+            z-index: 1;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 12px;
+            background: var(--shalom-surface);
+            border-radius: var(--shalom-radius-sm);
+            padding: 8px 14px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--shalom-ink-muted);
+            box-shadow: var(--shalom-shadow);
+            max-width: calc(100% - 32px);
+        }
+        .adm-map-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .adm-map-legend-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            flex: none;
+        }
+        // Pedido explícito: la lista de clientes de una ruta (puede
+        // tener 60+ paradas) no puede crecer sin límite -- hacía que
+        // la página entera scrolleara sin fin. Misma altura que el
+        // mapa de al lado (46vh/340px mínimo) para que las dos cajas
+        // se vean parejas, con su propio scroll interno.
+        .adm-rutas-list-card {
+            align-self: flex-start;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            max-height: 46vh;
+            min-height: 340px;
+        }
+        .adm-rutas-list-card .adm-card-pad {
+            flex: none;
+        }
+        .adm-rutas-list-card .adm-card-list-flush {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+        }
+
+        // -- Filas de cliente de una ruta (idx + nombre + acciones) --
+        .adm-cliente-row {
+            padding: 12px 14px;
+            border-top: 1px solid var(--shalom-surface-2);
+        }
+        .adm-cliente-row:first-child {
+            border-top: 0;
+        }
+        .adm-cliente-row-resaltado {
+            background: var(--shalom-accent-soft);
+        }
+        .adm-cliente-row-top {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+            cursor: pointer;
+        }
+        .adm-cliente-idx {
+            width: 27px;
+            height: 27px;
+            flex: none;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.72rem;
+            font-weight: 700;
+            background: var(--shalom-surface-2);
+            color: var(--shalom-ink-muted);
+        }
+        .adm-cliente-row-completado .adm-cliente-idx { background: var(--shalom-completado-soft); color: var(--shalom-completado); }
+        .adm-cliente-row-pendiente .adm-cliente-idx { background: var(--shalom-pendiente-soft); color: var(--shalom-pendiente); }
+        .adm-cliente-row-no_quiso .adm-cliente-idx { background: var(--shalom-no_quiso-soft); color: var(--shalom-no_quiso); }
+        .adm-cliente-row-no_atendido .adm-cliente-idx { background: var(--shalom-no_atendido-soft); color: var(--shalom-no_atendido); }
+        .adm-cliente-row-cancelado .adm-cliente-idx { background: var(--shalom-cancelado-soft); color: var(--shalom-cancelado); }
+        .adm-cliente-row-resaltado .adm-cliente-idx {
+            background: var(--shalom-accent);
+            color: var(--shalom-accent-ink);
+        }
+        .adm-cliente-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .adm-badge-alerta {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: var(--shalom-alerta);
+            background: var(--shalom-accent-soft);
+            padding: 3px 8px;
+            border-radius: 999px;
+        }
+        .adm-cliente-row .adm-row-actions {
+            margin: 10px 0 0 38px;
+        }
+
+        // -- Modal (buscador de Visita Exprés) --
+        .adm-modal-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 95;
+            background: rgba(20, 10, 15, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .adm-modal {
+            width: 100%;
+            max-width: 480px;
+            max-height: 82vh;
+            background: var(--shalom-surface);
+            border-radius: var(--shalom-radius-lg);
+            box-shadow: var(--shalom-shadow);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .adm-modal-head {
+            padding: 18px 20px 14px;
+            flex: none;
+        }
+        .adm-modal-title {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+        .adm-modal-sub {
+            font-size: 0.78rem;
+            color: var(--shalom-ink-muted);
+            margin-top: 4px;
+        }
+        .adm-modal-search {
+            padding: 0 20px 14px;
+            flex: none;
+        }
+        .adm-modal-body {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            border-top: 1px solid var(--shalom-surface-2);
+        }
+        .adm-modal-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 13px 20px;
+            border-bottom: 1px solid var(--shalom-surface-2);
+            cursor: pointer;
+        }
+        .adm-modal-icon {
+            width: 30px;
+            height: 30px;
+            flex: none;
+            border-radius: 8px;
+            border: 1px solid var(--shalom-line);
+            background: var(--shalom-surface);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--shalom-ink-muted);
+            cursor: pointer;
+        }
+        .adm-modal-foot {
+            padding: 14px 20px;
+            border-top: 1px solid var(--shalom-surface-2);
+            display: flex;
+            justify-content: flex-end;
+            flex: none;
+        }
+
+        // ==============================================================
+        // Mobile (calcado de Movil.dc.html, mockup aprobado) -- pedido
+        // explícito: hasta acá el rediseño se veía "cortado, como para
+        // computadora nada más". Consolidado en un solo bloque para no
+        // repetir el breakpoint por todos lados.
+        // ==============================================================
+        @media (max-width: 899px) {
+            // -- Campos, chips, tabs: más grandes para el dedo --
+            .adm-search {
+                height: 44px;
+            }
+            .adm-field {
+                height: 44px;
+            }
+            .adm-chip {
+                height: 40px;
+            }
+            .adm-actbtn {
+                height: 38px;
+                font-size: 0.76rem;
+            }
+
+            // -- Seguimiento de Visitas: la fila de acciones pasa a su
+            // propia línea, a lo ancho, en vez de apretarse contra el
+            // texto (mismo criterio que Movil.dc.html: los botones no
+            // caben cómodos al lado del nombre en una pantalla angosta).
+            .adm-row {
+                flex-wrap: wrap;
+                row-gap: 10px;
+            }
+            .adm-row-right {
+                flex: 1 1 100%;
+                justify-content: flex-start;
+                gap: 12px;
+            }
+
+            // -- Rutas de mis vendedores --
+            // .adm-toprow/.adm-field-vendedor/.adm-map/.adm-rutas-list-card
+            // ya quedaron definidos más arriba, junto con las pestañas
+            // cortas y las pastillas de ruta sin metadata (mismo pedido,
+            // una sola vuelta) -- acá solo lo que faltaba.
+            .adm-vsep {
+                display: none;
+            }
+            .adm-chip-row-scroll {
+                width: 100%;
+            }
+            .adm-rutas-list-card {
+                max-height: 46vh;
+            }
+            // Botones Editar/GPS/Eliminar: fila propia, a lo ancho,
+            // igual que en Movil.dc.html -- de a uno no entran cómodos
+            // al lado del nombre del cliente.
+            .adm-cliente-row .adm-row-actions {
+                margin: 12px 0 0;
+                width: 100%;
+            }
+            .adm-cliente-row .adm-actbtn {
+                flex: 1;
+                justify-content: center;
+            }
+
+            // -- Visita Exprés: fechas en una sola columna --
+            .adm-express-fechas {
+                grid-template-columns: 1fr;
+            }
+            .adm-express-subhead {
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            .adm-express-head {
+                flex-wrap: wrap;
+                row-gap: 4px;
+            }
+            .adm-express-head-sub {
+                margin-left: 0;
+                flex: 1 1 100%;
+            }
+
+            // -- Modal de buscador --
+            .adm-modal {
+                max-height: 88vh;
+            }
+        }
+    }
+
+    // ======================================================================
+    // ClienteForm -- rediseño completo (mockup "EditarCliente.dc.html"
+    // aprobado). Clases NUEVAS "clf-*", FUERA de &.o_shalom_admin_screen a
+    // propósito: este formulario lo usa el vendedor (catálogo, hoja de
+    // visita, pestaña Clientes) además de Administración -- pedido
+    // explícito: que el rediseño se vea en todos lados. .edit-field,
+    // .categ-selector/.categ-menu, .btn-primary/.btn-ghost,
+    // .confirm-overlay/.confirm-card siguen existiendo tal cual para
+    // order_screen.js/visit_sheet.js -- no se tocan.
+    // ======================================================================
+    .clf-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 96;
+        background: rgba(20, 10, 15, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: shalom-fondo-in 0.15s ease both;
+    }
+    .clf-overlay.clf-closing {
+        animation: shalom-fondo-out 0.15s ease both;
+    }
+    .clf-card {
+        width: 100%;
+        max-width: 580px;
+        max-height: 92vh;
+        background: var(--shalom-surface);
+        border-radius: var(--shalom-radius-lg);
+        box-shadow: var(--shalom-shadow);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        color: var(--shalom-ink);
+    }
+    .clf-head {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 18px 22px 16px;
+        border-bottom: 1px solid var(--shalom-surface-2);
+        flex: none;
+    }
+    .clf-back {
+        width: 34px;
+        height: 34px;
+        flex: none;
+        border-radius: 9px;
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+    .clf-head-title {
+        font-size: 1.03rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+    }
+    .clf-hint {
+        font-size: 0.78rem;
+        color: var(--shalom-ink-muted);
+        padding: 12px 22px 0;
+        margin: 0;
+        flex: none;
+    }
+    .clf-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 18px 22px;
+    }
+    .clf-empty {
+        color: var(--shalom-ink-muted);
+        font-size: 0.85rem;
+        padding: 10px 4px;
+    }
+
+    .clf-photo-row {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .clf-photo {
+        width: 92px;
+        height: 92px;
+        flex: none;
+        border-radius: 14px;
+        background: var(--shalom-surface-2);
+        border: 1px dashed var(--shalom-line);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        cursor: pointer;
+        color: var(--shalom-ink-muted);
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-align: center;
+        overflow: hidden;
+    }
+    .clf-photo i {
+        font-size: 1.4rem;
+    }
+    .clf-photo-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .clf-photo-input {
+        display: none;
+    }
+    .clf-photo-fields {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .clf-field + .clf-field {
+        margin-top: 8px;
+    }
+    .clf-label {
+        display: block;
+        font-size: 0.67rem;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+        color: var(--shalom-ink-muted);
+        margin-bottom: 7px;
+    }
+    .clf-input {
+        width: 100%;
+        height: 42px;
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-sm);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        font-family: inherit;
+        font-size: 0.82rem;
+        padding: 0 13px;
+    }
+    .clf-input::placeholder {
+        color: var(--shalom-ink-muted);
+    }
+    .clf-row2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 18px;
+    }
+    @media (max-width: 599px) {
+        .clf-row2 {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .clf-gps-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        width: 100%;
+        height: 44px;
+        margin-top: 18px;
+        border: 1px solid var(--shalom-accent-soft);
+        border-radius: var(--shalom-radius-sm);
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+        font-family: inherit;
+        font-size: 0.85rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .clf-gps-warning {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: var(--shalom-alerta);
+        margin-top: 8px;
+    }
+
+    .clf-dropdown-wrap {
+        position: relative;
+    }
+    .clf-dropdown-btn {
+        width: 100%;
+        height: 42px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-sm);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        font-family: inherit;
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 0 13px;
+        cursor: pointer;
+    }
+    .clf-dropdown-btn .fa-chevron-down {
+        color: var(--shalom-ink-muted);
+        font-size: 0.7rem;
+    }
+    .clf-dropdown-menu {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 6px);
+        z-index: 5;
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-sm);
+        box-shadow: var(--shalom-shadow);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        max-height: 260px;
+    }
+    .clf-dropdown-search {
+        flex: none;
+        border: none;
+        border-bottom: 1px solid var(--shalom-surface-2);
+        outline: none;
+        background: transparent;
+        font-family: inherit;
+        font-size: 0.8rem;
+        color: var(--shalom-ink);
+        padding: 10px 13px;
+    }
+    .clf-dropdown-list {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+    }
+    .clf-dropdown-item {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: transparent;
+        color: var(--shalom-ink);
+        font-family: inherit;
+        font-size: 0.8rem;
+        padding: 10px 13px;
+        cursor: pointer;
+    }
+    .clf-dropdown-item:hover {
+        background: var(--shalom-surface-2);
+    }
+    .clf-dropdown-item-active {
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+        font-weight: 700;
+    }
+
+    .clf-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 16px 22px;
+        border-top: 1px solid var(--shalom-surface-2);
+        background: var(--shalom-bg);
+        flex: none;
+    }
+    .clf-btn-ghost {
+        height: 44px;
+        padding: 0 20px;
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-sm);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        font-family: inherit;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .clf-btn-primary {
+        height: 44px;
+        padding: 0 22px;
+        border: none;
+        border-radius: var(--shalom-radius-sm);
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        font-family: inherit;
+        font-size: 0.85rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .clf-btn-primary:disabled {
+        opacity: 0.6;
+        cursor: default;
+    }
+
+    // "¿Salir sin guardar?" -- clase e z-index PROPIOS (97, por encima
+    // del 96 de .clf-overlay), no el genérico .confirm-overlay/.confirm-card
+    // que usan otras pantallas -- misma lección del bug de z-index de la
+    // ronda anterior (empate de especificidad), pero acá ya no hace falta
+    // pelear nada: es su propia clase, sin compartir con nadie.
+    .clf-confirm-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 97;
+        background: rgba(20, 10, 15, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: shalom-fondo-in 0.12s ease both;
+    }
+    .clf-confirm-card {
+        width: 100%;
+        max-width: 340px;
+        background: var(--shalom-surface);
+        border-radius: var(--shalom-radius-lg);
+        box-shadow: var(--shalom-shadow);
+        padding: 20px;
+        color: var(--shalom-ink);
+    }
+    .clf-confirm-title {
+        font-size: 1rem;
+        font-weight: 700;
+        margin-bottom: 10px;
+    }
+    .clf-confirm-text {
+        font-size: 0.82rem;
+        color: var(--shalom-ink-muted);
+        line-height: 1.55;
+        margin: 0 0 16px;
+    }
+
+    @media (max-width: 599px) {
+        .clf-overlay {
+            padding: 0;
+            align-items: flex-end;
+        }
+        .clf-card {
+            max-width: none;
+            max-height: 94vh;
+            border-radius: var(--shalom-radius-lg) var(--shalom-radius-lg) 0 0;
         }
     }
 }

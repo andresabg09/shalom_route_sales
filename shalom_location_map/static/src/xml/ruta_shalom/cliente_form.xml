@@ -1,162 +1,182 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <templates xml:space="preserve">
     <t t-name="shalom_location_map.ClienteForm">
-        <div class="edit-overlay open" t-att-class="state.cerrando ? 'closing' : ''">
-            <div class="edit-card cliente-form-card" t-att-class="state.cerrando ? 'closing' : ''">
-                <div class="cliente-form-header">
-                    <button class="icon-btn" t-on-click="intentarCancelar" title="Atrás">←</button>
-                    <h3 t-esc="props.modo === 'crear' ? 'Cliente nuevo' : 'Editar cliente'"/>
+        <!-- Rediseño (mockup "EditarCliente.dc.html" aprobado). Clases
+             NUEVAS con prefijo "clf-", a propósito: .edit-field,
+             .categ-selector/.categ-menu, .btn-primary/.btn-ghost,
+             .confirm-overlay/.confirm-card los usan TAMBIÉN
+             order_screen.js/visit_sheet.js (diálogos del vendedor):
+             tocarlos sueltos les cambiaría la cara a pantallas que
+             nadie pidió cambiar acá. Mismo criterio que
+             admin_gestion.xml. Ningún campo/botón/handler se quitó,
+             ver diff de esta ronda contra la versión anterior. -->
+        <div class="clf-overlay" t-att-class="state.cerrando ? 'clf-closing' : ''">
+            <div class="clf-card" t-att-class="state.cerrando ? 'clf-closing' : ''">
+                <div class="clf-head">
+                    <button class="clf-back" t-on-click="intentarCancelar" title="Atrás">
+                        <i class="fa fa-arrow-left" aria-hidden="true"/>
+                    </button>
+                    <div class="clf-head-title" t-esc="props.modo === 'crear' ? 'Cliente nuevo' : 'Editar cliente'"/>
                 </div>
-                <p class="alta-hint" t-if="props.modo === 'crear'">
+                <p class="clf-hint" t-if="props.modo === 'crear'">
                     Alta rápida desde la calle -- si no elegís ruta, oficina la
                     asigna después.
                 </p>
 
-                <div t-if="state.cargando" class="shalom-vacio">Cargando…</div>
-                <t t-else="">
-                    <div class="foto-picker">
-                        <label class="foto-picker-label" for="shalom-cliente-foto">
-                            <img t-if="state.fotoPreviewUrl" class="foto-preview" t-att-src="state.fotoPreviewUrl" alt=""/>
-                            <span t-else="" class="foto-picker-placeholder"><i class="fa fa-camera" aria-hidden="true"/> Foto del local</span>
-                        </label>
-                        <input
-                            id="shalom-cliente-foto"
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            class="foto-picker-input"
-                            t-on-change="onFotoSeleccionada"
-                        />
-                    </div>
+                <div class="clf-body">
+                    <div t-if="state.cargando" class="clf-empty">Cargando…</div>
+                    <t t-else="">
+                        <div class="clf-photo-row">
+                            <label class="clf-photo" for="shalom-cliente-foto">
+                                <img t-if="state.fotoPreviewUrl" class="clf-photo-img" t-att-src="state.fotoPreviewUrl" alt=""/>
+                                <t t-else="">
+                                    <i class="fa fa-camera" aria-hidden="true"/>
+                                    <span>Foto del local</span>
+                                </t>
+                            </label>
+                            <input
+                                id="shalom-cliente-foto"
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                class="clf-photo-input"
+                                t-on-change="onFotoSeleccionada"
+                            />
+                            <div class="clf-photo-fields">
+                                <div class="clf-field">
+                                    <label class="clf-label" for="shalom-cf-name">Nombre comercial</label>
+                                    <input class="clf-input" id="shalom-cf-name" type="text" t-model="state.campos.name" t-on-input="marcarModificado"/>
+                                </div>
+                                <div class="clf-field">
+                                    <label class="clf-label" for="shalom-cf-contacto">Nombre del contacto</label>
+                                    <input
+                                        class="clf-input"
+                                        id="shalom-cf-contacto"
+                                        type="text"
+                                        placeholder="Ej: Delia Rodríguez"
+                                        t-model="state.campos.nombreContacto"
+                                        t-on-input="marcarModificado"
+                                    />
+                                </div>
+                            </div>
+                        </div>
 
-                    <div class="edit-field">
-                        <label for="shalom-cf-name">Nombre comercial</label>
-                        <input id="shalom-cf-name" type="text" t-model="state.campos.name" t-on-input="marcarModificado"/>
-                    </div>
-                    <div class="edit-field">
-                        <label for="shalom-cf-contacto">Nombre del contacto</label>
-                        <input
-                            id="shalom-cf-contacto"
-                            type="text"
-                            placeholder="Ej: Delia Rodríguez"
-                            t-model="state.campos.nombreContacto"
-                            t-on-input="marcarModificado"
-                        />
-                    </div>
-                    <div class="edit-field">
-                        <label for="shalom-cf-street">Dirección</label>
-                        <input id="shalom-cf-street" type="text" t-model="state.campos.street" t-on-input="marcarModificado"/>
-                        <input
-                            id="shalom-cf-street2"
-                            type="text"
-                            class="street2-input"
-                            placeholder="Calle 2 / referencia (opcional)"
-                            t-model="state.campos.street2"
-                            t-on-input="marcarModificado"
-                        />
-                    </div>
-                    <div class="edit-field-row">
-                        <div class="edit-field">
-                            <label for="shalom-cf-phone">Teléfono</label>
-                            <input id="shalom-cf-phone" type="text" t-model="state.campos.phone" t-on-input="marcarModificado"/>
+                        <div class="clf-field">
+                            <label class="clf-label" for="shalom-cf-street">Dirección</label>
+                            <input class="clf-input" id="shalom-cf-street" type="text" t-model="state.campos.street" t-on-input="marcarModificado"/>
                         </div>
-                        <div class="edit-field">
-                            <label for="shalom-cf-mobile">Celular</label>
-                            <input id="shalom-cf-mobile" type="text" t-model="state.campos.mobile" t-on-input="marcarModificado"/>
+                        <div class="clf-field">
+                            <input
+                                class="clf-input"
+                                id="shalom-cf-street2"
+                                type="text"
+                                placeholder="Calle 2 / referencia (opcional)"
+                                t-model="state.campos.street2"
+                                t-on-input="marcarModificado"
+                            />
                         </div>
-                    </div>
-                    <div class="edit-field-row">
-                        <div class="edit-field">
-                            <label for="shalom-cf-email">Correo electrónico</label>
-                            <input id="shalom-cf-email" type="email" t-model="state.campos.email" t-on-input="marcarModificado"/>
-                        </div>
-                        <div class="edit-field">
-                            <label for="shalom-cf-vat">RUC</label>
-                            <input id="shalom-cf-vat" type="text" t-model="state.campos.vat" t-on-input="marcarModificado"/>
-                        </div>
-                    </div>
 
-                    <button class="btn btn-secondary gps-btn" t-on-click="capturarGps">
-                        <i class="fa fa-crosshairs" aria-hidden="true"/> Registrar coordenadas
-                        <t t-if="state.lat"> (capturadas)</t>
-                        <span class="gps-warning" t-if="!state.lat and !state.lng">
+                        <div class="clf-row2">
+                            <div class="clf-field">
+                                <label class="clf-label" for="shalom-cf-phone">Teléfono</label>
+                                <input class="clf-input" id="shalom-cf-phone" type="text" t-model="state.campos.phone" t-on-input="marcarModificado"/>
+                            </div>
+                            <div class="clf-field">
+                                <label class="clf-label" for="shalom-cf-mobile">Celular</label>
+                                <input class="clf-input" id="shalom-cf-mobile" type="text" t-model="state.campos.mobile" t-on-input="marcarModificado"/>
+                            </div>
+                            <div class="clf-field">
+                                <label class="clf-label" for="shalom-cf-email">Correo electrónico</label>
+                                <input class="clf-input" id="shalom-cf-email" type="email" t-model="state.campos.email" t-on-input="marcarModificado"/>
+                            </div>
+                            <div class="clf-field">
+                                <label class="clf-label" for="shalom-cf-vat">RUC</label>
+                                <input class="clf-input" id="shalom-cf-vat" type="text" t-model="state.campos.vat" t-on-input="marcarModificado"/>
+                            </div>
+                        </div>
+
+                        <button class="clf-gps-btn" t-on-click="capturarGps">
+                            <i class="fa fa-crosshairs" aria-hidden="true"/> Registrar coordenadas
+                            <t t-if="state.lat"> (capturadas)</t>
+                        </button>
+                        <div class="clf-gps-warning" t-if="!state.lat and !state.lng">
                             <i class="fa fa-exclamation-triangle" aria-hidden="true"/> Este cliente no tiene ubicación GPS
-                        </span>
-                    </button>
+                        </div>
 
-                    <div class="edit-field">
-                        <label>Ruta</label>
-                        <div class="categ-selector-wrap">
-                            <button class="categ-selector-btn" t-on-click="toggleMenuRuta">
-                                <span t-esc="etiquetaRutaActual"/>
-                                <span class="chev">▾</span>
-                            </button>
-                            <div class="categ-menu" t-if="state.rutaMenuAbierto">
-                                <input
-                                    type="text"
-                                    class="categ-menu-search"
-                                    placeholder="Buscar ruta…"
-                                    t-model="state.busquedaRuta"
-                                />
-                                <div class="categ-menu-list">
-                                    <button
-                                        class="categ-menu-item"
-                                        t-att-class="state.rutaId === 'sin_asignar' ? 'categ-menu-item active' : 'categ-menu-item'"
-                                        t-on-click="() => this.elegirRuta('sin_asignar')"
-                                    >Sin asignar</button>
-                                    <button
-                                        t-foreach="rutasFiltradas"
-                                        t-as="ruta"
-                                        t-key="ruta.id"
-                                        t-att-class="state.rutaId === ruta.id ? 'categ-menu-item active' : 'categ-menu-item'"
-                                        t-on-click="() => this.elegirRuta(ruta.id)"
-                                    ><t t-esc="ruta.name"/></button>
-                                    <div t-if="!rutasFiltradas.length" class="shalom-vacio">Sin resultados.</div>
+                        <div class="clf-row2">
+                            <div class="clf-field">
+                                <label class="clf-label">Ruta</label>
+                                <div class="clf-dropdown-wrap">
+                                    <button class="clf-dropdown-btn" t-on-click="toggleMenuRuta">
+                                        <span t-esc="etiquetaRutaActual"/>
+                                        <i class="fa fa-chevron-down" aria-hidden="true"/>
+                                    </button>
+                                    <div class="clf-dropdown-menu" t-if="state.rutaMenuAbierto">
+                                        <input
+                                            type="text"
+                                            class="clf-dropdown-search"
+                                            placeholder="Buscar ruta…"
+                                            t-model="state.busquedaRuta"
+                                        />
+                                        <div class="clf-dropdown-list">
+                                            <button
+                                                t-attf-class="clf-dropdown-item {{state.rutaId === 'sin_asignar' ? 'clf-dropdown-item-active' : ''}}"
+                                                t-on-click="() => this.elegirRuta('sin_asignar')"
+                                            >Sin asignar</button>
+                                            <button
+                                                t-foreach="rutasFiltradas"
+                                                t-as="ruta"
+                                                t-key="ruta.id"
+                                                t-attf-class="clf-dropdown-item {{state.rutaId === ruta.id ? 'clf-dropdown-item-active' : ''}}"
+                                                t-on-click="() => this.elegirRuta(ruta.id)"
+                                            ><t t-esc="ruta.name"/></button>
+                                            <div t-if="!rutasFiltradas.length" class="clf-empty">Sin resultados.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="clf-field" t-if="state.rutaId !== 'sin_asignar'">
+                                <label class="clf-label">Va después de</label>
+                                <div class="clf-dropdown-wrap">
+                                    <button class="clf-dropdown-btn" t-on-click="toggleMenuClienteAnterior">
+                                        <span t-esc="etiquetaClienteAnteriorActual"/>
+                                        <i class="fa fa-chevron-down" aria-hidden="true"/>
+                                    </button>
+                                    <div class="clf-dropdown-menu" t-if="state.clienteAnteriorMenuAbierto">
+                                        <input
+                                            type="text"
+                                            class="clf-dropdown-search"
+                                            placeholder="Buscar cliente…"
+                                            t-model="state.busquedaClienteAnterior"
+                                        />
+                                        <div class="clf-dropdown-list">
+                                            <div t-if="state.cargandoClientesDeRuta" class="clf-empty">Cargando…</div>
+                                            <t t-else="">
+                                                <button
+                                                    t-attf-class="clf-dropdown-item {{state.clienteAnteriorId === 'ninguno' ? 'clf-dropdown-item-active' : ''}}"
+                                                    t-on-click="() => this.elegirClienteAnterior('ninguno')"
+                                                >Primero de la ruta</button>
+                                                <button
+                                                    t-foreach="clientesDeRutaFiltrados"
+                                                    t-as="cliente"
+                                                    t-key="cliente.id"
+                                                    t-attf-class="clf-dropdown-item {{state.clienteAnteriorId === cliente.id ? 'clf-dropdown-item-active' : ''}}"
+                                                    t-on-click="() => this.elegirClienteAnterior(cliente.id)"
+                                                ><t t-esc="cliente.name"/></button>
+                                                <div t-if="!clientesDeRutaFiltrados.length" class="clf-empty">Sin resultados.</div>
+                                            </t>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </t>
+                </div>
 
-                    <div class="edit-field" t-if="state.rutaId !== 'sin_asignar'">
-                        <label>Va después de</label>
-                        <div class="categ-selector-wrap">
-                            <button class="categ-selector-btn" t-on-click="toggleMenuClienteAnterior">
-                                <span t-esc="etiquetaClienteAnteriorActual"/>
-                                <span class="chev">▾</span>
-                            </button>
-                            <div class="categ-menu" t-if="state.clienteAnteriorMenuAbierto">
-                                <input
-                                    type="text"
-                                    class="categ-menu-search"
-                                    placeholder="Buscar cliente…"
-                                    t-model="state.busquedaClienteAnterior"
-                                />
-                                <div class="categ-menu-list">
-                                    <div t-if="state.cargandoClientesDeRuta" class="shalom-vacio">Cargando…</div>
-                                    <t t-else="">
-                                        <button
-                                            class="categ-menu-item"
-                                            t-att-class="state.clienteAnteriorId === 'ninguno' ? 'categ-menu-item active' : 'categ-menu-item'"
-                                            t-on-click="() => this.elegirClienteAnterior('ninguno')"
-                                        >Primero de la ruta</button>
-                                        <button
-                                            t-foreach="clientesDeRutaFiltrados"
-                                            t-as="cliente"
-                                            t-key="cliente.id"
-                                            t-att-class="state.clienteAnteriorId === cliente.id ? 'categ-menu-item active' : 'categ-menu-item'"
-                                            t-on-click="() => this.elegirClienteAnterior(cliente.id)"
-                                        ><t t-esc="cliente.name"/></button>
-                                        <div t-if="!clientesDeRutaFiltrados.length" class="shalom-vacio">Sin resultados.</div>
-                                    </t>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </t>
-
-                <div class="edit-actions">
-                    <button class="btn btn-ghost" t-on-click="intentarCancelar">Cancelar</button>
-                    <button class="btn btn-primary" t-on-click="guardar" t-att-disabled="state.guardando || state.cargando">
+                <div class="clf-foot">
+                    <button class="clf-btn-ghost" t-on-click="intentarCancelar">Cancelar</button>
+                    <button class="clf-btn-primary" t-on-click="guardar" t-att-disabled="state.guardando || state.cargando">
                         <t t-if="state.guardando">Guardando…</t>
                         <t t-elif="props.modo === 'crear'">Crear cliente</t>
                         <t t-else="">Guardar</t>
@@ -165,14 +185,14 @@
             </div>
         </div>
 
-        <div class="confirm-overlay confirm-overlay-sobre-cliente-form" t-if="state.confirmandoSalida">
-            <div class="confirm-card">
-                <h3>¿Salir sin guardar?</h3>
-                <p>Hiciste cambios en la ficha de este cliente que todavía no
+        <div class="clf-confirm-overlay" t-if="state.confirmandoSalida">
+            <div class="clf-confirm-card">
+                <div class="clf-confirm-title">¿Salir sin guardar?</div>
+                <p class="clf-confirm-text">Hiciste cambios en la ficha de este cliente que todavía no
                     guardaste. Si salís ahora, se pierden.</p>
-                <div class="edit-actions">
-                    <button class="btn btn-ghost" t-on-click="seguirEditando">Seguir editando</button>
-                    <button class="btn btn-primary" t-on-click="confirmarSalirSinGuardar">Salir sin guardar</button>
+                <div class="clf-foot">
+                    <button class="clf-btn-ghost" t-on-click="seguirEditando">Seguir editando</button>
+                    <button class="clf-btn-primary" t-on-click="confirmarSalirSinGuardar">Salir sin guardar</button>
                 </div>
             </div>
         </div>

@@ -69,16 +69,34 @@ const ESTADOS_SEGUIMIENTO_DEFAULT = ["cancelado", "no_quiso", "no_atendido"];
 const ESTADO_ETIQUETA_SEGUIMIENTO = {...ESTADO_ETIQUETA, no_atendido: "No atendido"};
 
 /** Igual que estadoDesdeStageName (stage_utils.js), pero reconociendo
- * también "No atendido" -- solo se usa para cargar la lista de
- * "Seguimiento de Visitas" (ver cargarVisitas), no para
- * clientesRuta/"Rutas de mis vendedores", que sigue usando
- * estadoDesdeStageName tal cual (fuera de alcance de este fix). */
+ * también "No atendido" -- usado tanto por "Seguimiento de Visitas"
+ * (cargarVisitas) como por "Rutas de mis vendedores" (cargarClientesRuta,
+ * para el color del pin en el mapa -- pedido explícito: un ciclo viejo
+ * que quedó con visitas colgadas, marcadas "No atendido" por el cron
+ * de reposición automática, se sigue mostrando en esta pantalla junto
+ * con el ciclo nuevo, ver shalom_admin_rutas_programadas). Antes solo
+ * se usaba para Seguimiento -- clientesRuta se quedaba con
+ * estadoDesdeStageName y "No atendido" se veía igual que "Pendiente"
+ * en el mapa. */
 function estadoSeguimientoDesdeStageName(stageName) {
     if (stageName === "No atendido") {
         return "no_atendido";
     }
     return estadoDesdeStageName(stageName);
 }
+
+/** Color del pin en el mapa de "Rutas de mis vendedores", uno por
+ * estado -- mismos colores que ya usan las tarjetas de "Seguimiento de
+ * Visitas" (.stop-badge en ruta_shalom.scss), para que el significado
+ * de cada color sea el mismo en toda la app. Ver también
+ * .admin-mapa-leyenda en admin_gestion.xml. */
+const COLOR_PIN_POR_ESTADO = {
+    completado: "var(--shalom-completado)",
+    pendiente: "var(--shalom-pendiente)",
+    no_quiso: "var(--shalom-no_quiso)",
+    no_atendido: "var(--shalom-no_atendido)",
+    cancelado: "var(--shalom-cancelado)",
+};
 
 export class AdminGestion extends Component {
     static template = "shalom_location_map.AdminGestion";
@@ -459,6 +477,17 @@ export class AdminGestion extends Component {
         // Owl termina de pintar el DOM -- ver el comentario grande ahí.
     }
 
+    /** Leyenda de colores del mapa (ver COLOR_PIN_POR_ESTADO) -- orden
+     * fijo, no el de aparición en clientesRuta, para que no salte de
+     * lugar entre una ruta y otra. */
+    get leyendaEstadosMapa() {
+        return ["completado", "pendiente", "no_quiso", "no_atendido", "cancelado"].map((estado) => ({
+            estado,
+            etiqueta: ESTADO_ETIQUETA_SEGUIMIENTO[estado] || estado,
+            color: COLOR_PIN_POR_ESTADO[estado],
+        }));
+    }
+
     get clientesRutaFiltrados() {
         const texto = this.state.busquedaClienteRuta.trim().toLowerCase();
         if (!texto) {
@@ -501,7 +530,7 @@ export class AdminGestion extends Component {
                     orden: o.x_cliente_orden_ruta,
                     lat: o.x_cliente_lat,
                     lng: o.x_cliente_lng,
-                    estado: estadoDesdeStageName(o.stage_name),
+                    estado: estadoSeguimientoDesdeStageName(o.stage_name),
                     ventaMasAlta: loc ? loc.x_venta_mas_alta : 0,
                 };
             });
@@ -567,11 +596,13 @@ export class AdminGestion extends Component {
             conCoordenadas.forEach((c) => {
                 const pinEl = document.createElement("div");
                 pinEl.className = "shalom-marker-numero";
+                // Pedido explícito: un color por estado (ver
+                // COLOR_PIN_POR_ESTADO), no solo "cancelado vs. el
+                // resto" como antes -- así se ve de un vistazo quién
+                // fue atendido y quién no en el mapa de cada ruta.
                 pinEl.style.setProperty(
                     "--pin-color",
-                    c.estado === "cancelado" || (!c.lat && !c.lng)
-                        ? "var(--shalom-alerta)"
-                        : "var(--shalom-accent)"
+                    COLOR_PIN_POR_ESTADO[c.estado] || "var(--shalom-accent)"
                 );
                 pinEl.title = c.nombre;
                 if (c.orden) {
