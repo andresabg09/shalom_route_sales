@@ -272,3 +272,47 @@ the short version:
   if the user didn't ask.
 - **Product/UX decisions** (as opposed to technical ones): ask the user
   directly instead of assuming.
+
+## En curso: rediseño visual de Administración (sin commitear todavía)
+
+Pendiente de terminar, iniciado a pedido explícito del usuario ("más
+profesional, refinado, minimalista"). Contexto para retomarlo en un
+chat nuevo sin releer la conversación original (fue muy larga):
+
+- **Mockup de referencia** (Claude Design, navegable): 
+  https://claude.ai/code/artifact/87f54901-0943-4f0c-a051-1774bf3d9d62 —
+  5 láminas: escritorio, celular, Visita Exprés desplegada, buscador de
+  Visita Exprés, Editar cliente. El usuario ya lo aprobó como objetivo
+  visual final.
+- **Estado del código (working tree, sin commitear)**: `admin_gestion.xml`
+  fue reescrito de punta a punta con clases nuevas propias, prefijo
+  `adm-*` (ej. `adm-tab`, `adm-row`, `adm-chip`, `adm-card-list`) —
+  **a propósito** no reusa `.stop-card`/`.chip`/`.segmented`/etc., que
+  también usa la app del vendedor (ruta_detalle, order_screen,
+  rutas_hub, clientes) — así el rediseño no depende de ganarle en
+  especificidad CSS a nada compartido. `ruta_shalom.scss` tiene el CSS
+  completo para ese sistema `adm-*`, anidado bajo
+  `&.o_shalom_admin_screen`. Se verificó (diff de handlers/t-model/
+  t-on-change/componentes contra la versión en git) que NINGÚN botón o
+  control se perdió en la reescritura.
+- **Último problema sin resolver**: tras desplegar esta versión, la
+  pantalla se veía sin NINGÚN estilo aplicado (ni siquiera el CSS base
+  que ya funcionaba antes) -- texto plano, sin tarjetas, sin colores de
+  layout. Se confirmó del lado del servidor que el CSS nuevo SÍ está en
+  el bundle que Odoo sirve (`grep` sobre el archivo real del
+  `ir_attachment` que Odoo entrega, contando ocurrencias de `adm-tab` >
+  0) y que no hay ningún traceback de compilación en los logs. Quedó
+  pendiente probar en una ventana de incógnito nueva, sin extensiones,
+  para descartar caché del navegador o algo intermedio (proxy/CDN de
+  EasyPanel) antes de seguir tocando código.
+- **Antes de seguir**: repetir esa prueba de incógnito. Si ahí tampoco
+  se ve el rediseño, investigar caché/proxy en vez de seguir cambiando
+  CSS -- ya se descartó que sea un problema de especificidad o de
+  compilación.
+- **No commitear ni pushear** `admin_gestion.xml`/`ruta_shalom.scss`
+  hasta que el usuario confirme en producción que el rediseño se ve
+  bien -- misma regla de siempre (ver "End-to-end workflow" y "Git
+  commits" arriba). El color por estado en el mapa de "Rutas de mis
+  vendedores" y el fix del popup de Editar cliente (tapado por
+  z-index) SÍ están confirmados por el usuario y solo esperan
+  commitearse junto con este rediseño, a pedido explícito suyo.
