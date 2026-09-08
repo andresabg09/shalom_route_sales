@@ -1246,6 +1246,41 @@
         font-family: inherit;
         font-size: 0.9rem;
     }
+    // Mismo look que .edit-field input, para el <select> de Forma de
+    // Pago del pop-up de "Confirmar pedido" (order_screen.xml) -- no
+    // existía un select dentro de .edit-field todavía.
+    .edit-field select {
+        width: 100%;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-bg);
+        color: var(--shalom-ink);
+        border-radius: var(--shalom-radius-sm);
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 0.9rem;
+    }
+    // El select nativo abierto sale con los colores de sistema del
+    // navegador (no hereda background/color de arriba) -- bug real
+    // reportado en modo oscuro: las opciones quedaban ilegibles
+    // (texto claro sobre fondo claro). Mismo fix que ya usa
+    // .adm-field-select select option en Administración.
+    .edit-field select option {
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+    }
+    // DateTimeInput nativo de Odoo (Fecha especial de entrega) con el
+    // mismo look que .edit-field input/select -- mismo criterio que
+    // .adm-datefield-wrap .o_datetime_input en Administración.
+    .edit-field-fecha .o_datetime_input {
+        width: 100%;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-bg);
+        color: var(--shalom-ink);
+        border-radius: var(--shalom-radius-sm);
+        padding: 10px 12px;
+        font-family: inherit;
+        font-size: 0.9rem;
+    }
     .edit-actions {
         display: flex;
         gap: 8px;
