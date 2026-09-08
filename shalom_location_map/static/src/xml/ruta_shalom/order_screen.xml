@@ -324,6 +324,18 @@
                                 onChange.bind="onCambiarFechaEntregaEspecial"
                             />
                         </div>
+                        <!-- Puramente informativo (custom_itbms_required, ver
+                             shalom_confirmar_pedido en fsm_order.py): no
+                             toca ningún cálculo de impuestos de esta orden,
+                             es para que Dianke (el proveedor que entrega la
+                             mercadería, no Shalom) sepa si cobrar ITBMS. -->
+                        <div class="edit-field">
+                            <label>Incluye ITBMS</label>
+                            <select t-on-change="onCambiarIncluyeItbms">
+                                <option value="true" t-att-selected="state.incluyeItbms">Sí</option>
+                                <option value="false" t-att-selected="!state.incluyeItbms">No</option>
+                            </select>
+                        </div>
                     </t>
                     <div class="edit-actions">
                         <button class="btn btn-ghost" t-on-click="cancelarFormaPago">Cancelar</button>

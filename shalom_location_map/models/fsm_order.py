@@ -66,8 +66,8 @@ Extiende fsm.order (la tarea/orden de visita a un cliente) con:
     se cerró el último.
 
 11. Pop-up OBLIGATORIO de Forma de Pago + Fecha especial de entrega
-    (opcional) al "Confirmar pedido" (order_screen.js), NUNCA al
-    "Revisar cotización" (esa ruta solo guarda un borrador, no
+    (opcional) + Incluye ITBMS al "Confirmar pedido" (order_screen.js),
+    NUNCA al "Revisar cotización" (esa ruta solo guarda un borrador, no
     confirma nada -- se pide recién cuando esa cotización se confirme
     de verdad, desde acá o después desde el navegador). El bug real
     que motivó esto: shalom_confirmar_pedido() llamaba a
@@ -77,14 +77,20 @@ Extiende fsm.order (la tarea/orden de visita a un cliente) con:
     de Odoo que la app no interpreta, la orden quedaba SIN confirmar
     de verdad, pero el método seguía corriendo igual y cerraba la
     visita como Completada. Ahora shalom_confirmar_pedido() recibe
-    payment_method (obligatorio) y special_delivery_date (opcional),
-    los escribe en la sale.order ANTES de confirmar, y confirma con
+    payment_method (obligatorio), special_delivery_date (opcional) e
+    includes_itbms (obligatorio, default True), los escribe en la
+    sale.order ANTES de confirmar, y confirma con
     with_context(skip_payment_method_check=True) -- la misma clave
     exacta que stock_picking_sale_buttons espera para no volver a
-    preguntar. shalom_ultima_forma_pago() precarga el pop-up con la
-    última forma de pago que ese cliente usó (editable igual);
-    shalom_formas_pago_disponibles() expone las opciones del Selection
-    (ver PAYMENT_METHOD_SELECTION más arriba) para pintar el <select>.
+    preguntar. includes_itbms (custom_itbms_required, también de
+    stock_picking_sale_buttons) es puramente informativo -- NO toca
+    ningún cálculo de impuestos de la orden acá, es para que Dianke
+    (el proveedor que entrega la mercadería, no Shalom) sepa si cobrar
+    ITBMS al entregar. shalom_ultima_forma_pago_e_itbms() precarga el
+    pop-up con la última Forma de Pago e Incluye ITBMS que ese cliente
+    tuvo (las dos editables igual); shalom_formas_pago_disponibles()
+    expone las opciones del Selection (ver PAYMENT_METHOD_SELECTION
+    más arriba) para pintar el <select> de Forma de Pago.
 
 Nota: "Orden de Ruta" (x_cliente_orden_ruta) es un campo related con
 store=True hacia fsm.location.x_orden_ruta -- es literalmente el mismo
@@ -637,16 +643,19 @@ class FSMOrder(models.Model):
                 )
         sale_order._update_programs_and_rewards()
 
-    def shalom_confirmar_pedido(self, lineas, payment_method, special_delivery_date=False):
+    def shalom_confirmar_pedido(
+        self, lineas, payment_method, special_delivery_date=False, includes_itbms=True
+    ):
         """Llamado desde la app del vendedor al tocar "Confirmar
         pedido": crea o reutiliza la cotización vinculada a esta visita
         (mismo criterio anti-duplicado que action_crear_cotizacion),
         reemplaza sus líneas por las del carrito recibido, carga Forma
-        de Pago (obligatoria) y Fecha especial de entrega (opcional),
-        la CONFIRMA (action_confirm -- pasa a venta real y reserva
-        stock) y cierra la visita moviéndola a la etapa Completada. La
-        factura se genera después, aparte, en oficina -- este método no
-        toca facturación.
+        de Pago (obligatoria), Fecha especial de entrega (opcional) e
+        Incluye ITBMS (obligatorio), la CONFIRMA (action_confirm --
+        pasa a venta real y reserva stock) y cierra la visita
+        moviéndola a la etapa Completada. La factura se genera
+        después, aparte, en oficina -- este método no toca
+        facturación.
 
         lineas: lista de dicts {"product_id": int, "qty": float,
         "es_recompensa": bool, "regla_id": int|False}, uno por producto
@@ -658,7 +667,13 @@ class FSMOrder(models.Model):
         pop-up obligatorio de order_screen.js antes de llegar acá,
         nunca vacío. special_delivery_date: 'YYYY-MM-DD' o False (sin
         fecha especial -- el sistema calcula automático 3-4 días
-        hábiles, este método no toca ese cálculo).
+        hábiles, este método no toca ese cálculo). includes_itbms:
+        booleano, también pedido siempre por el mismo pop-up --
+        PURAMENTE INFORMATIVO, no toca ningún cálculo de impuestos de
+        esta orden: se guarda en custom_itbms_required (de
+        stock_picking_sale_buttons, igual que custom_payment_method)
+        para que Dianke (el proveedor que entrega la mercadería, no
+        Shalom) sepa si cobrar ITBMS al entregar.
 
         with_context(skip_payment_method_check=True): OBLIGATORIO --
         es la clave exacta que stock_picking_sale_buttons usa para
@@ -708,6 +723,7 @@ class FSMOrder(models.Model):
         sale_order.write({
             "custom_payment_method": payment_method,
             "custom_special_delivery_date": special_delivery_date or False,
+            "custom_itbms_required": includes_itbms,
         })
         sale_order.with_context(skip_payment_method_check=True).action_confirm()
         self._cerrar_visita_completada()
@@ -744,15 +760,20 @@ class FSMOrder(models.Model):
         return [{"value": valor, "label": etiqueta} for valor, etiqueta in PAYMENT_METHOD_SELECTION]
 
     @api.model
-    def shalom_ultima_forma_pago(self, location_id):
+    def shalom_ultima_forma_pago_e_itbms(self, location_id):
         """Precarga del pop-up obligatorio de "Confirmar pedido": la
-        última Forma de Pago (custom_payment_method) que el cliente de
-        esta Ubicación usó en alguna sale.order anterior, o False si
-        nunca usó ninguna -- el vendedor la puede cambiar igual, no
-        es obligatorio dejarla."""
+        última Forma de Pago e Incluye ITBMS (custom_payment_method/
+        custom_itbms_required) que el cliente de esta Ubicación tuvo
+        en alguna sale.order anterior -- el vendedor las puede cambiar
+        igual, no es obligatorio dejar lo precargado.
+
+        Devuelve {"payment_method": valor|False, "includes_itbms":
+        bool} -- includes_itbms default True (sin historial previo, se
+        asume que sí incluye, mismo criterio que el default del campo
+        en stock_picking_sale_buttons)."""
         location = self.env["fsm.location"].browse(location_id)
         if not location.exists() or not location.partner_id:
-            return False
+            return {"payment_method": False, "includes_itbms": True}
         ultima = self.env["sale.order"].search(
             [
                 ("partner_id", "=", location.partner_id.id),
@@ -761,7 +782,12 @@ class FSMOrder(models.Model):
             order="date_order desc",
             limit=1,
         )
-        return ultima.custom_payment_method or False
+        if not ultima:
+            return {"payment_method": False, "includes_itbms": True}
+        return {
+            "payment_method": ultima.custom_payment_method or False,
+            "includes_itbms": ultima.custom_itbms_required,
+        }
 
     @api.model
     def shalom_estado_promociones_carrito(self, lineas):

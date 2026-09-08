@@ -230,12 +230,12 @@ export class OrderScreen extends Component {
             // por el mismo aviso, ver confirmarPedido()/revisarCotizacion().
             accionPendienteAvisoDatos: null,
             // Pop-up OBLIGATORIO de Forma de Pago + Fecha especial de
-            // entrega, SOLO en el flujo de "Confirmar pedido" (nunca
-            // en "Revisar cotización") -- ver _abrirPopupFormaPago()
-            // más abajo y el punto 11 del docstring grande de
-            // fsm_order.py. formasPagoDisponibles se carga una sola
-            // vez (es catálogo fijo, no depende del cliente) y se
-            // reusa en cada apertura.
+            // entrega + Incluye ITBMS, SOLO en el flujo de "Confirmar
+            // pedido" (nunca en "Revisar cotización") -- ver
+            // _abrirPopupFormaPago() más abajo y el punto 11 del
+            // docstring grande de fsm_order.py. formasPagoDisponibles
+            // se carga una sola vez (es catálogo fijo, no depende del
+            // cliente) y se reusa en cada apertura.
             mostrandoFormaPago: false,
             cargandoFormaPago: false,
             formasPagoDisponibles: [], // [{value, label}]
@@ -248,6 +248,11 @@ export class OrderScreen extends Component {
             // con hoy resaltado, sin escribir día/mes/año a mano) y
             // que el popover se reposicione solo en celular.
             fechaEntregaEspecial: null,
+            // Puramente informativo (custom_itbms_required, ver
+            // shalom_confirmar_pedido en fsm_order.py) -- no toca
+            // ningún cálculo de impuestos acá, es para que Dianke (el
+            // proveedor que entrega, no Shalom) sepa si cobrar ITBMS.
+            incluyeItbms: true,
             // "Principal" (ver el docstring grande de
             // CLAVE_SESION_CATALOGO más arriba): true hasta el primer
             // heartbeat -- así, si esta pestaña está sola (caso normal,
@@ -681,11 +686,12 @@ export class OrderScreen extends Component {
     // "datos del cliente" (condicional, arriba), este SIEMPRE
     // aparece antes de _confirmarPedidoDeVerdad(), sin excepción.
 
-    /** Abre el pop-up y lo precarga: Forma de Pago con la última que
-     * usó este cliente (shalom_ultima_forma_pago, editable igual) y
-     * Fecha especial de entrega vacía por defecto. formasPagoDisponibles
-     * se pide una sola vez (catálogo fijo, no depende del cliente) y
-     * se reusa en cada apertura siguiente del carrito. */
+    /** Abre el pop-up y lo precarga: Forma de Pago e Incluye ITBMS con
+     * la última elección de este cliente (shalom_ultima_forma_pago_e_itbms,
+     * las dos editables igual) y Fecha especial de entrega vacía por
+     * defecto. formasPagoDisponibles se pide una sola vez (catálogo
+     * fijo, no depende del cliente) y se reusa en cada apertura
+     * siguiente del carrito. */
     async _abrirPopupFormaPago() {
         this.state.mostrandoFormaPago = true;
         this.state.cargandoFormaPago = true;
@@ -698,11 +704,18 @@ export class OrderScreen extends Component {
                     []
                 );
             }
-            this.state.formaPagoSeleccionada = this.state.locationId
-                ? await this.orm.call("fsm.order", "shalom_ultima_forma_pago", [
-                      this.state.locationId,
-                  ])
-                : false;
+            if (this.state.locationId) {
+                const ultima = await this.orm.call(
+                    "fsm.order",
+                    "shalom_ultima_forma_pago_e_itbms",
+                    [this.state.locationId]
+                );
+                this.state.formaPagoSeleccionada = ultima.payment_method;
+                this.state.incluyeItbms = ultima.includes_itbms;
+            } else {
+                this.state.formaPagoSeleccionada = false;
+                this.state.incluyeItbms = true;
+            }
             if (!this.state.formaPagoSeleccionada && this.state.formasPagoDisponibles.length) {
                 this.state.formaPagoSeleccionada = this.state.formasPagoDisponibles[0].value;
             }
@@ -727,6 +740,14 @@ export class OrderScreen extends Component {
      * onCambiarFechaInicioVisitaExpress en admin_gestion.js. */
     onCambiarFechaEntregaEspecial(valor) {
         this.state.fechaEntregaEspecial = valor;
+    }
+
+    /** onChange del <select> "Incluye ITBMS" -- el value del <option>
+     * es el string "true"/"false" (no un booleano real, limitación del
+     * <select> nativo), se convierte acá antes de guardarlo en el
+     * estado. */
+    onCambiarIncluyeItbms(ev) {
+        this.state.incluyeItbms = ev.target.value === "true";
     }
 
     /** Botón "Confirmar pedido" del pop-up: Forma de Pago es
@@ -1329,6 +1350,7 @@ export class OrderScreen extends Component {
                 lineas,
                 this.state.formaPagoSeleccionada,
                 this.state.fechaEntregaEspecial ? this.state.fechaEntregaEspecial.toISODate() : false,
+                this.state.incluyeItbms,
             ]);
             this.notification.add(
                 `Pedido confirmado: ${resultado.sale_order_name} ($${resultado.total.toFixed(2)}).`,
