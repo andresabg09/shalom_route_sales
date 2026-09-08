@@ -3471,6 +3471,15 @@
             background: var(--shalom-accent-soft);
             color: var(--shalom-accent);
         }
+        // Botón "+ Añadir cliente a esta ruta", debajo del buscador de
+        // la lista de clientes de la ruta -- ancho completo (a
+        // diferencia de un .adm-actbtn suelto de una fila) porque acá
+        // no comparte espacio con nada más en esa franja.
+        .adm-agregar-visita-btn {
+            width: 100%;
+            justify-content: center;
+            margin: 10px 0 12px;
+        }
         .adm-btn-primary {
             border: none;
             width: 100%;

@@ -45,6 +45,22 @@
                     <field name="mi_lat" invisible="1" />
                     <span invisible="not mi_lat">Tu ubicación ya está guardada -- las próximas búsquedas van a mostrar distancia.</span>
                 </group>
+                <!-- Borra el GPS de TODOS los clientes de la lista de
+                     abajo (line_ids) de una sola vez, ni uno más (ver
+                     el docstring grande de
+                     action_borrar_todas_las_coordenadas() en
+                     shalom_buscar_gps_wizard.py). Invisible si la
+                     lista está vacía (no tiene sentido mostrarlo). -->
+                <group invisible="not line_ids">
+                    <button
+                        name="action_borrar_todas_las_coordenadas"
+                        type="object"
+                        string="Borrar TODAS las coordenadas de esta lista"
+                        icon="fa-trash"
+                        class="btn-danger"
+                        confirm="Esto vacía el GPS de TODOS los clientes que están AHORA MISMO en la lista de abajo (no toca ningún otro cliente fuera de esta lista). No se puede deshacer. ¿Confirmás?"
+                    />
+                </group>
                 <field name="line_ids" nolabel="1">
                     <list create="0" delete="0" class="o_shalom_gps_wizard_list">
                         <field name="location_id" readonly="1" force_save="1" />

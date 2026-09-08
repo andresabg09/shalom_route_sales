@@ -530,3 +530,53 @@ class FSMLocation(models.Model):
             }
             for loc in locations
         ]
+
+    @api.model
+    def shalom_buscar_clientes_faltantes_ruta(self, route_id, schedule_id):
+        """Botón "+ Añadir cliente a esta ruta" (Administración → Rutas
+        de mis vendedores, debajo del buscador "Buscar cliente en esta
+        ruta…"): clientes que YA pertenecen a esta ruta (fsm_route_id)
+        pero todavía NO tienen ninguna visita generada en esta
+        ocurrencia puntual (x_route_schedule_id) -- caso típico: el
+        cliente se agregó a la ruta después de generar el ciclo, o se
+        olvidó incluirlo al generar visitas.
+
+        A diferencia de shalom_buscar_clientes_admin() (Visita Exprés,
+        busca en TODA la base), acá el universo ya está acotado a una
+        sola ruta -- se devuelven TODOS los candidatos de una vez, sin
+        filtro de texto; el pop-up filtra por nombre del lado del
+        cliente.
+
+        "Ya tiene visita" se calcula igual que el chequeo de duplicado
+        de fsm.route.schedule.action_agregar_visita() (quien termina
+        creando la fsm.order al elegir un resultado acá): cualquier
+        fsm.order activa de esta ocurrencia, esté abierta o cerrada --
+        una visita archivada (ej. con "Eliminar" en esta misma
+        pantalla) sí vuelve a contar como "falta", para poder
+        reagregarla."""
+        if not self.env.user.has_group("fieldservice.group_fsm_manager"):
+            raise AccessError(_(
+                "Esta acción es solo para el rol Administrador de "
+                "Servicio de Campo."
+            ))
+        if not route_id or not schedule_id:
+            return []
+        ya_con_visita = set(
+            self.env["fsm.order"].search(
+                [("x_route_schedule_id", "=", schedule_id)]
+            ).mapped("location_id.id")
+        )
+        locations = self.search(
+            [("fsm_route_id", "=", route_id)],
+            order="x_orden_ruta asc, name asc",
+        )
+        return [
+            {
+                "id": loc.id,
+                "name": loc.name,
+                "street": loc.street or "",
+                "orden": loc.x_orden_ruta,
+            }
+            for loc in locations
+            if loc.id not in ya_con_visita
+        ]

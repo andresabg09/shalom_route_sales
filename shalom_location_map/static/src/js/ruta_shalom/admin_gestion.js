@@ -135,6 +135,13 @@ export class AdminGestion extends Component {
             busquedaClienteRuta: "",
             clienteResaltadoId: null,
 
+            // -- "+ Añadir cliente a esta ruta" (clientes YA en la
+            // ruta, sin visita todavía en esta ocurrencia) --
+            agregarVisitaAbierto: false,
+            agregarVisitaCargando: false,
+            agregarVisitaBusqueda: "",
+            agregarVisitaCandidatos: [],
+
             // -- Visita Exprés: DENTRO del vendedor elegido arriba (es
             // la Visita Exprés de ESE vendedor, una por cada uno -- ver
             // docstring grande de la sección más abajo) --
@@ -496,6 +503,20 @@ export class AdminGestion extends Component {
         return this.state.clientesRuta.filter((c) => c.nombre.toLowerCase().includes(texto));
     }
 
+    /** Filtrado del pop-up "+ Añadir cliente a esta ruta" -- del lado
+     * del cliente, sin volver a pedir nada al servidor (ver
+     * abrirAgregarVisita(): el universo ya viene acotado a una sola
+     * ruta, a diferencia del buscador de Visita Exprés). */
+    get agregarVisitaFiltrados() {
+        const texto = this.state.agregarVisitaBusqueda.trim().toLowerCase();
+        if (!texto) {
+            return this.state.agregarVisitaCandidatos;
+        }
+        return this.state.agregarVisitaCandidatos.filter((c) =>
+            c.name.toLowerCase().includes(texto)
+        );
+    }
+
     async cargarClientesRuta() {
         this.state.cargandoClientesRuta = true;
         this.state.clientesRuta = [];
@@ -764,6 +785,74 @@ export class AdminGestion extends Component {
             await this.cargarClientesRuta();
         } catch (error) {
             this.notification.add("No se pudo archivar la visita.", {type: "danger"});
+        }
+    }
+
+    /** Botón "+ Añadir cliente a esta ruta" (debajo del buscador de la
+     * lista): abre el pop-up con los clientes que YA pertenecen a
+     * esta ruta (fsm_route_id) pero todavía no tienen visita en esta
+     * ocurrencia -- caso típico: el cliente se agregó a la ruta
+     * después de generar el ciclo, o se olvidó incluirlo (ver
+     * shalom_buscar_clientes_faltantes_ruta en fsm_location.py). Trae
+     * TODOS los candidatos de una sola vez -- el buscador de texto de
+     * adentro filtra esa misma lista del lado del cliente
+     * (agregarVisitaFiltrados), sin ida y vuelta al servidor por cada
+     * letra como en el buscador de Visita Exprés (ese sí busca en
+     * TODA la base, acá el universo ya está acotado a una ruta). */
+    async abrirAgregarVisita() {
+        if (!this.rutaSeleccionada) {
+            return;
+        }
+        this.state.agregarVisitaAbierto = true;
+        this.state.agregarVisitaBusqueda = "";
+        this.state.agregarVisitaCargando = true;
+        try {
+            this.state.agregarVisitaCandidatos = await this.orm.call(
+                "fsm.location",
+                "shalom_buscar_clientes_faltantes_ruta",
+                [this.rutaSeleccionada.route_id, this.state.scheduleSeleccionadoId]
+            );
+        } catch (error) {
+            this.notification.add("No se pudieron cargar los clientes de la ruta.", {
+                type: "danger",
+            });
+        } finally {
+            this.state.agregarVisitaCargando = false;
+        }
+    }
+
+    cerrarAgregarVisita() {
+        this.state.agregarVisitaAbierto = false;
+    }
+
+    /** Tocar un cliente del pop-up: agrega la visita DE UNA (mismo
+     * método que ya usa el wizard nativo "Agregar cliente a esta
+     * ocurrencia", fsm.route.schedule.action_agregar_visita) y lo
+     * saca de la lista -- a propósito NO cierra el pop-up, para poder
+     * seguir tocando otros clientes seguidos sin tener que reabrirlo
+     * cada vez (mismo pedido explícito que el buscador de Visita
+     * Exprés, aunque acá cada toque ya toca la base -- no hay paso de
+     * "por confirmar"). Refresca la lista/mapa de la ruta detrás para
+     * que el cliente recién agregado aparezca ahí también. */
+    async elegirClienteAgregarVisita(candidato) {
+        try {
+            await this.orm.call("fsm.route.schedule", "action_agregar_visita", [
+                [this.state.scheduleSeleccionadoId],
+                candidato.id,
+            ]);
+            this.state.agregarVisitaCandidatos = this.state.agregarVisitaCandidatos.filter(
+                (c) => c.id !== candidato.id
+            );
+            this.notification.add(`Visita de "${candidato.name}" agregada a la ruta.`, {
+                type: "success",
+            });
+            await this.cargarClientesRuta();
+        } catch (error) {
+            const mensajeServidor = error && error.data && error.data.message;
+            this.notification.add(
+                mensajeServidor || "No se pudo agregar la visita.",
+                {type: "danger"}
+            );
         }
     }
 

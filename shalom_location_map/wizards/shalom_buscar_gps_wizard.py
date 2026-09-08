@@ -275,6 +275,42 @@ class ShalomBuscarGpsWizard(models.TransientModel):
         self.write({"mi_lat": lat, "mi_lng": lng})
         return True
 
+    def action_borrar_todas_las_coordenadas(self):
+        """Botón 'Borrar TODAS las coordenadas de esta lista' (encabezado
+        del wizard): mismo efecto que 'Borrar coordenada actual' de cada
+        fila (ShalomBuscarGpsWizardLine.action_borrar_coordenada), pero
+        aplicado de una sola vez a TODOS los clientes que están AHORA
+        MISMO en line_ids -- ni uno más.
+
+        A propósito NO vuelve a ejecutar ningún domain/filtro: opera
+        sobre line_ids tal cual está cargado en memoria en ESTA corrida
+        del wizard (sea de 1, de 20 o de los 200 de
+        LIMITE_UBICACIONES_POR_CORRIDA), así que nunca puede alcanzar a
+        ningún fsm.location que no esté en pantalla en este momento --
+        pedido explícito, para no arriesgar borrar coordenadas ya
+        recopiladas de clientes fuera de esta lista.
+
+        Las filas se QUEDAN en la lista después (igual que 'Borrar
+        coordenada actual' por fila) -- siguen sin GPS real, así que
+        van a volver a aparecer en la próxima 'Buscar / recargar
+        lista'."""
+        self.ensure_one()
+        locations = self.line_ids.mapped("location_id")
+        if not locations:
+            raise UserError(_("La lista está vacía -- no hay nada para borrar."))
+        locations.write({"partner_latitude": 0.0, "partner_longitude": 0.0})
+        locations.write({"x_gps_wizard_revisado": False})
+        _logger.info(
+            "Wizard de GPS: borrado en lote de %s coordenada(s) -- solo "
+            "de los clientes que estaban en esta corrida del wizard "
+            "(fsm.location ids=%s).",
+            len(locations), locations.ids,
+        )
+        return _notificacion(
+            _("Se borraron las coordenadas de %s cliente(s) -- solo los "
+              "que estaban en esta lista.") % len(locations)
+        )
+
 
 class ShalomBuscarGpsWizardLine(models.TransientModel):
     _name = "shalom.buscar.gps.wizard.line"
