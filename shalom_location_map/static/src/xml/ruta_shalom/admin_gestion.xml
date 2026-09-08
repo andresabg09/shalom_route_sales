@@ -425,18 +425,28 @@
                         </div>
 
                         <div class="adm-card adm-rutas-list-card">
-                            <div class="adm-card-pad" t-if="state.clientesRuta.length">
-                                <div class="adm-search">
-                                    <i class="fa fa-search" aria-hidden="true"/>
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar cliente en esta ruta…"
-                                        t-model="state.busquedaClienteRuta"
-                                    />
-                                </div>
-                                <div class="adm-count adm-count-inline">
-                                    <t t-esc="clientesRutaFiltrados.length"/> paradas en orden de ruta
-                                </div>
+                            <div class="adm-card-pad">
+                                <t t-if="state.clientesRuta.length">
+                                    <div class="adm-search">
+                                        <i class="fa fa-search" aria-hidden="true"/>
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar cliente en esta ruta…"
+                                            t-model="state.busquedaClienteRuta"
+                                        />
+                                    </div>
+                                    <div class="adm-count adm-count-inline">
+                                        <t t-esc="clientesRutaFiltrados.length"/> paradas en orden de ruta
+                                    </div>
+                                </t>
+                                <!-- Cliente que ya está en la ruta (fsm_route_id) pero
+                                     todavía no tiene visita en esta ocurrencia (caso
+                                     típico: se agregó a la ruta después de generar el
+                                     ciclo, o se olvidó incluirlo). Ver docstring grande
+                                     de abrirAgregarVisita() en admin_gestion.js. -->
+                                <button class="adm-actbtn adm-agregar-visita-btn" t-on-click="abrirAgregarVisita">
+                                    <i class="fa fa-plus" aria-hidden="true"/> Añadir cliente a esta ruta
+                                </button>
                             </div>
 
                             <div t-if="state.cargandoClientesRuta" class="adm-empty">Cargando clientes…</div>
@@ -574,6 +584,66 @@
                     </div>
                     <div class="adm-modal-foot">
                         <button class="adm-btn-ghost" t-on-click="cerrarBuscadorVisitaExpress">Cerrar</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- "+ Añadir cliente a esta ruta": clientes de ESTA ruta
+                 sin visita todavía en esta ocurrencia. A diferencia
+                 del buscador de Visita Exprés de arriba, acá el
+                 universo ya viene acotado (una sola ruta): se trae
+                 todo de una vez al abrir y el buscador de texto
+                 filtra del lado del cliente, sin ida y vuelta al
+                 servidor por cada letra. Tocar un resultado agrega la
+                 visita DE UNA (no junta "por confirmar" como Visita
+                 Exprés) y se queda en la lista de abajo, sin cerrar el
+                 pop-up, para seguir agregando varios seguidos. Ver
+                 docstring grande de abrirAgregarVisita() en
+                 admin_gestion.js. -->
+            <div class="adm-modal-overlay" t-if="state.agregarVisitaAbierto">
+                <div class="adm-modal">
+                    <div class="adm-modal-head">
+                        <div class="adm-modal-title">Añadir cliente a esta ruta</div>
+                        <div class="adm-modal-sub">Clientes de esta ruta que todavía no tienen visita en este ciclo</div>
+                    </div>
+                    <div class="adm-modal-search">
+                        <div class="adm-search">
+                            <i class="fa fa-search" aria-hidden="true"/>
+                            <input
+                                type="text"
+                                placeholder="Buscar cliente…"
+                                t-model="state.agregarVisitaBusqueda"
+                            />
+                        </div>
+                    </div>
+                    <div class="adm-modal-body">
+                        <div t-if="state.agregarVisitaCargando" class="adm-empty">Cargando…</div>
+                        <div t-elif="!state.agregarVisitaCandidatos.length" class="adm-empty">
+                            No hay clientes de esta ruta sin visita en este ciclo.
+                        </div>
+                        <div
+                            t-elif="!agregarVisitaFiltrados.length"
+                            class="adm-empty"
+                        >
+                            No se encontraron clientes con ese nombre.
+                        </div>
+                        <t t-else="">
+                            <div
+                                t-foreach="agregarVisitaFiltrados"
+                                t-as="candidato"
+                                t-key="candidato.id"
+                                class="adm-modal-row"
+                                t-on-click="() => this.elegirClienteAgregarVisita(candidato)"
+                            >
+                                <div class="adm-row-info">
+                                    <div class="adm-row-name" t-esc="candidato.name"/>
+                                    <div class="adm-row-meta" t-esc="candidato.street || 'Sin dirección'"/>
+                                </div>
+                            </div>
+                        </t>
+                    </div>
+                    <div class="adm-modal-foot">
+                        <button class="adm-btn-ghost" t-on-click="cerrarAgregarVisita">Cerrar</button>
                     </div>
                 </div>
             </div>

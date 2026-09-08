@@ -2,9 +2,12 @@
 
 import {Component, onWillStart, onWillUnmount, useEffect, useRef, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
+import {DateTimeInput} from "@web/core/datetime/datetime_input";
 import {normalizarAccionActWindow} from "./action_utils";
 import {cerrarConAnimacion} from "./animacion_utils";
 import {ClienteForm} from "./cliente_form";
+
+const {DateTime} = luxon;
 
 /**
  * Catálogo + carrito (Fase 3): se abre de pantalla completa desde el
@@ -162,7 +165,7 @@ function shalomFechaServidorAMs(fechaServidor) {
 
 export class OrderScreen extends Component {
     static template = "shalom_location_map.OrderScreen";
-    static components = {ClienteForm};
+    static components = {ClienteForm, DateTimeInput};
     static props = {
         orderId: Number,
         clienteNombre: String,
@@ -226,6 +229,30 @@ export class OrderScreen extends Component {
             // venta) o "revisar" (Revisar cotización): las dos pasan
             // por el mismo aviso, ver confirmarPedido()/revisarCotizacion().
             accionPendienteAvisoDatos: null,
+            // Pop-up OBLIGATORIO de Forma de Pago + Fecha especial de
+            // entrega + Incluye ITBMS, SOLO en el flujo de "Confirmar
+            // pedido" (nunca en "Revisar cotización") -- ver
+            // _abrirPopupFormaPago() más abajo y el punto 11 del
+            // docstring grande de fsm_order.py. formasPagoDisponibles
+            // se carga una sola vez (es catálogo fijo, no depende del
+            // cliente) y se reusa en cada apertura.
+            mostrandoFormaPago: false,
+            cargandoFormaPago: false,
+            formasPagoDisponibles: [], // [{value, label}]
+            formaPagoSeleccionada: false,
+            // null (sin fecha especial) o luxon DateTime -- mismo
+            // widget nativo de calendario que ya usa admin_gestion.js
+            // para Visita Exprés (DateTimeInput), no un <input
+            // type="date"> a mano: pedido explícito, para que el
+            // selector sea el mismo que el resto de Odoo (calendario
+            // con hoy resaltado, sin escribir día/mes/año a mano) y
+            // que el popover se reposicione solo en celular.
+            fechaEntregaEspecial: null,
+            // Puramente informativo (custom_itbms_required, ver
+            // shalom_confirmar_pedido en fsm_order.py) -- no toca
+            // ningún cálculo de impuestos acá, es para que Dianke (el
+            // proveedor que entrega, no Shalom) sepa si cobrar ITBMS.
+            incluyeItbms: true,
             // "Principal" (ver el docstring grande de
             // CLAVE_SESION_CATALOGO más arriba): true hasta el primer
             // heartbeat -- así, si esta pestaña está sola (caso normal,
@@ -643,7 +670,7 @@ export class OrderScreen extends Component {
         if (accion === "revisar") {
             await this._revisarCotizacionDeVerdad();
         } else {
-            await this._confirmarPedidoDeVerdad();
+            await this._abrirPopupFormaPago();
         }
     }
 
@@ -651,6 +678,91 @@ export class OrderScreen extends Component {
      * cliente le faltan datos" antes de confirmar/revisar. */
     get _debeAvisarDatosFaltantes() {
         return this.state.datosFaltantes.length > 0 && !this.state.omitirAvisoDatosFaltantes;
+    }
+
+    // -- Pop-up OBLIGATORIO de Forma de Pago + Fecha especial de
+    // entrega, SOLO al confirmar un pedido -- ver el punto 11 del
+    // docstring grande de fsm_order.py. A diferencia del aviso de
+    // "datos del cliente" (condicional, arriba), este SIEMPRE
+    // aparece antes de _confirmarPedidoDeVerdad(), sin excepción.
+
+    /** Abre el pop-up y lo precarga: Forma de Pago e Incluye ITBMS con
+     * la última elección de este cliente (shalom_ultima_forma_pago_e_itbms,
+     * las dos editables igual) y Fecha especial de entrega vacía por
+     * defecto. formasPagoDisponibles se pide una sola vez (catálogo
+     * fijo, no depende del cliente) y se reusa en cada apertura
+     * siguiente del carrito. */
+    async _abrirPopupFormaPago() {
+        this.state.mostrandoFormaPago = true;
+        this.state.cargandoFormaPago = true;
+        this.state.fechaEntregaEspecial = null;
+        try {
+            if (!this.state.formasPagoDisponibles.length) {
+                this.state.formasPagoDisponibles = await this.orm.call(
+                    "fsm.order",
+                    "shalom_formas_pago_disponibles",
+                    []
+                );
+            }
+            if (this.state.locationId) {
+                const ultima = await this.orm.call(
+                    "fsm.order",
+                    "shalom_ultima_forma_pago_e_itbms",
+                    [this.state.locationId]
+                );
+                this.state.formaPagoSeleccionada = ultima.payment_method;
+                this.state.incluyeItbms = ultima.includes_itbms;
+            } else {
+                this.state.formaPagoSeleccionada = false;
+                this.state.incluyeItbms = true;
+            }
+            if (!this.state.formaPagoSeleccionada && this.state.formasPagoDisponibles.length) {
+                this.state.formaPagoSeleccionada = this.state.formasPagoDisponibles[0].value;
+            }
+        } catch (error) {
+            console.error("shalom: error al preparar el pop-up de forma de pago", error);
+            this.notification.add("No se pudieron cargar las formas de pago.", {
+                type: "danger",
+            });
+        } finally {
+            this.state.cargandoFormaPago = false;
+        }
+    }
+
+    /** Botón "Cancelar" del pop-up: vuelve al carrito sin confirmar
+     * nada (no toca la base). */
+    cancelarFormaPago() {
+        this.state.mostrandoFormaPago = false;
+    }
+
+    /** onChange del DateTimeInput de Fecha especial de entrega --
+     * valor es un luxon DateTime (o null si se borra), igual que
+     * onCambiarFechaInicioVisitaExpress en admin_gestion.js. */
+    onCambiarFechaEntregaEspecial(valor) {
+        this.state.fechaEntregaEspecial = valor;
+    }
+
+    /** onChange del <select> "Incluye ITBMS" -- el value del <option>
+     * es el string "true"/"false" (no un booleano real, limitación del
+     * <select> nativo), se convierte acá antes de guardarlo en el
+     * estado. */
+    onCambiarIncluyeItbms(ev) {
+        this.state.incluyeItbms = ev.target.value === "true";
+    }
+
+    /** Botón "Confirmar pedido" del pop-up: Forma de Pago es
+     * obligatoria (Fecha especial de entrega no). Recién acá se sigue
+     * con el flujo real -- window.confirm() nativo + shalom_confirmar_pedido
+     * (ver _confirmarPedidoDeVerdad). */
+    async confirmarFormaPago() {
+        if (!this.state.formaPagoSeleccionada) {
+            this.notification.add("Elegí una forma de pago antes de confirmar.", {
+                type: "warning",
+            });
+            return;
+        }
+        this.state.mostrandoFormaPago = false;
+        await this._confirmarPedidoDeVerdad();
     }
 
     async cargarProductos() {
@@ -1215,7 +1327,7 @@ export class OrderScreen extends Component {
             this.state.mostrandoAvisoConfirmar = true;
             return;
         }
-        await this._confirmarPedidoDeVerdad();
+        await this._abrirPopupFormaPago();
     }
 
     async _confirmarPedidoDeVerdad() {
@@ -1236,6 +1348,9 @@ export class OrderScreen extends Component {
             const resultado = await this.orm.call("fsm.order", "shalom_confirmar_pedido", [
                 [this.props.orderId],
                 lineas,
+                this.state.formaPagoSeleccionada,
+                this.state.fechaEntregaEspecial ? this.state.fechaEntregaEspecial.toISODate() : false,
+                this.state.incluyeItbms,
             ]);
             this.notification.add(
                 `Pedido confirmado: ${resultado.sale_order_name} ($${resultado.total.toFixed(2)}).`,

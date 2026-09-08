@@ -27,6 +27,18 @@
         # hoy permite reclamar recompensas desde el formulario nativo de
         # Ventas.
         "sale_loyalty",
+        # stock_picking_sale_buttons -- para shalom_confirmar_pedido()
+        # (fsm_order.py): a diferencia de shalom_estado_promociones_carrito
+        # (que reimplementa su criterio sin importarlo, ver ese método),
+        # acá SÍ hace falta depender de verdad: se escriben sus campos
+        # custom_payment_method/custom_special_delivery_date en la
+        # sale.order y se confirma con el contexto exacto
+        # (skip_payment_method_check) que su action_confirm() espera
+        # para no volver a pedir Forma de Pago. Ya está instalado en
+        # producción (confirmado por el usuario, que mantiene ese
+        # módulo); se declara como dependencia real en vez de asumirlo
+        # en silencio, igual que "loyalty"/"sale_loyalty" arriba.
+        "stock_picking_sale_buttons",
     ],
     "data": [
         "security/ir.model.access.csv",

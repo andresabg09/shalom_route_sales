@@ -285,6 +285,69 @@
                 </div>
             </div>
 
+            <!-- Pop-up OBLIGATORIO de Forma de Pago + Fecha especial de
+                 entrega, SOLO al confirmar un pedido (nunca al revisar
+                 cotización): ver el punto 11 del docstring grande de
+                 fsm_order.py y _abrirPopupFormaPago() en
+                 order_screen.js. A diferencia del interstitial de
+                 arriba (condicional), este siempre aparece antes de
+                 _confirmarPedidoDeVerdad(), sin excepción. -->
+            <div class="confirm-overlay" t-if="state.mostrandoFormaPago">
+                <div class="confirm-card">
+                    <h3><i class="fa fa-credit-card" aria-hidden="true"/> Forma de pago</h3>
+                    <p>Antes de confirmar, indicá cómo va a pagar "<t t-esc="props.clienteNombre"/>".</p>
+                    <div t-if="state.cargandoFormaPago" class="edit-field">Cargando…</div>
+                    <t t-else="">
+                        <div class="edit-field">
+                            <label>Forma de pago</label>
+                            <select t-model="state.formaPagoSeleccionada">
+                                <option
+                                    t-foreach="state.formasPagoDisponibles"
+                                    t-as="opcion"
+                                    t-key="opcion.value"
+                                    t-att-value="opcion.value"
+                                ><t t-esc="opcion.label"/></option>
+                            </select>
+                        </div>
+                        <!-- Mismo widget nativo de calendario que ya usa
+                             admin_gestion.js para Visita Exprés (DateTimeInput),
+                             no un <input type="date"> a mano: pedido explícito,
+                             para que sea el mismo selector que el resto de Odoo
+                             (calendario con hoy resaltado, sin escribir día/mes/
+                             año a mano) y que el popover se reposicione solo en
+                             celular. -->
+                        <div class="edit-field edit-field-fecha">
+                            <label>Fecha especial de entrega (opcional)</label>
+                            <DateTimeInput
+                                type="'date'"
+                                value="state.fechaEntregaEspecial"
+                                onChange.bind="onCambiarFechaEntregaEspecial"
+                            />
+                        </div>
+                        <!-- Puramente informativo (custom_itbms_required, ver
+                             shalom_confirmar_pedido en fsm_order.py): no
+                             toca ningún cálculo de impuestos de esta orden,
+                             es para que Dianke (el proveedor que entrega la
+                             mercadería, no Shalom) sepa si cobrar ITBMS. -->
+                        <div class="edit-field">
+                            <label>Incluye ITBMS</label>
+                            <select t-on-change="onCambiarIncluyeItbms">
+                                <option value="true" t-att-selected="state.incluyeItbms">Sí</option>
+                                <option value="false" t-att-selected="!state.incluyeItbms">No</option>
+                            </select>
+                        </div>
+                    </t>
+                    <div class="edit-actions">
+                        <button class="btn btn-ghost" t-on-click="cancelarFormaPago">Cancelar</button>
+                        <button
+                            class="btn btn-primary"
+                            t-att-disabled="state.cargandoFormaPago"
+                            t-on-click="confirmarFormaPago"
+                        >Confirmar pedido</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="confirm-overlay" t-if="state.recompensaMenuAbierto">
                 <div class="confirm-card">
                     <h3>Elegí la recompensa</h3>
