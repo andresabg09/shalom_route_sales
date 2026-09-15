@@ -36,10 +36,16 @@ import {capturarMejorPosicionGps} from "./gps_utils";
  * Un solo componente reusado desde cuatro lugares (hoja de visita,
  * pestaña Clientes, popup del pin en el mapa de RutaDetalle, banner de
  * OrderScreen) -- por eso se registra SOLO acá en la pila de
- * navegación (ver setup()/intentarCancelar() más abajo, y back_stack.js
- * para el mecanismo completo): el Atrás de Android cierra el
- * formulario en cualquiera de los cuatro casos sin que cada pantalla
- * que lo abre tenga que saber nada de esto.
+ * navegación (ver setup()/cancelar()/guardar() más abajo, y
+ * back_stack.js para el mecanismo completo): el Atrás de Android
+ * cierra el formulario en cualquiera de los cuatro casos sin que cada
+ * pantalla que lo abre tenga que saber nada de esto. A diferencia de
+ * otros niveles (visita, catálogo), este SÍ puede auto-registrarse en
+ * su propio setup()/cierre sin riesgo de duplicar una entrada -- nunca
+ * hace falta "reabrirlo solo" tras un recargado: si Odoo recarga la
+ * app mientras este formulario está abierto, es porque el Atrás que
+ * disparó ese recargado es justamente el que lo está cerrando (no
+ * tiene hijos propios, siempre es el nivel más profundo).
  */
 
 const RUTA_SIN_ASIGNAR = "sin_asignar";
@@ -100,27 +106,30 @@ export class ClienteForm extends Component {
             }
         });
 
-        // Mismo patrón que visit_sheet.js/order_screen.js: el Atrás de
-        // Android llama a intentarCancelar(), la MISMA función del
-        // botón "←" propio -- así también respeta el aviso de "salir
-        // sin guardar" si se tocó algo. A diferencia de VisitSheet/
-        // OrderScreen, intentarCancelar() puede NO cerrar de verdad
-        // (si hay cambios sin guardar, muestra el aviso en su lugar en
-        // vez de cerrar) -- en ese caso este nivel se vuelve a
-        // registrar, para que el PRÓXIMO Atrás siga actuando sobre ESE
-        // aviso (o sobre el formulario) en vez de saltarse todo y
-        // cerrar lo que hubiera más atrás en la pila. cerrarNivel() en
-        // onWillUnmount es el respaldo por si el formulario se cierra
-        // por otra vía (idempotente, no pasa nada si el Atrás ya lo
-        // sacó él mismo).
-        this._nivelBack = () => {
-            this.intentarCancelar();
-            if (this.state.confirmandoSalida) {
-                abrirNivel(this._nivelBack);
-            }
-        };
-        abrirNivel(this._nivelBack);
-        onWillUnmount(() => cerrarNivel(this._nivelBack));
+        // Se registra como un nivel de la pila de navegación apenas se
+        // monta -- ver cancelar()/guardar() más abajo, los dos únicos
+        // caminos de cierre intencional, y el comentario grande de
+        // back_stack.js. OJO -- ya NO es posible interceptar el Atrás
+        // real para mostrar el aviso de "salir sin guardar" (no hay
+        // forma de "cancelar" una navegación real del navegador, ver
+        // ese mismo comentario grande): si hay cambios sin guardar y
+        // se sale por Atrás en vez del botón "←"/Cancelar propio, se
+        // pierden sin aviso -- mismo criterio ya aceptado para el
+        // carrito de OrderScreen.
+        abrirNivel({tipo: "cliente_form"});
+        this._nivelCerrado = false;
+        onWillUnmount(() => this._cerrarMiNivel());
+    }
+
+    /** Saca este nivel de la pila de navegación -- una sola vez, sin
+     * importar cuántos caminos de cierre disparen esto (cancelar(),
+     * guardar(), el respaldo de onWillUnmount). */
+    _cerrarMiNivel() {
+        if (this._nivelCerrado) {
+            return;
+        }
+        this._nivelCerrado = true;
+        cerrarNivel();
     }
 
     /** Cualquier cambio en un campo pasa por acá -- controla si hace
@@ -446,7 +455,7 @@ export class ClienteForm extends Component {
                 }
                 this.notification.add("Datos del cliente actualizados.", {type: "success"});
             }
-            cerrarNivel(this._nivelBack);
+            this._cerrarMiNivel();
             cerrarConAnimacion(this.state, () => this.props.onGuardado());
         } catch (error) {
             console.error("shalom: error al guardar cliente", error);
@@ -486,7 +495,7 @@ export class ClienteForm extends Component {
     }
 
     cancelar() {
-        cerrarNivel(this._nivelBack);
+        this._cerrarMiNivel();
         cerrarConAnimacion(this.state, () => this.props.onCancelar());
     }
 }

@@ -5,7 +5,7 @@ import {useService} from "@web/core/utils/hooks";
 import {DateTimeInput} from "@web/core/datetime/datetime_input";
 import {normalizarAccionActWindow} from "./action_utils";
 import {cerrarConAnimacion} from "./animacion_utils";
-import {abrirNivel, cerrarNivel} from "./back_stack";
+import {abrirNivel, cerrarNivel, marcarRetorno} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
 
 const {DateTime} = luxon;
@@ -32,27 +32,26 @@ const {DateTime} = luxon;
  *   nativa, para que el vendedor ajuste precios/promociones ahí --
  *   esa funcionalidad ya existe en Ventas, no se duplica acá.
  *
- * Cierre: se probó primero con history.pushState/popstate (nav_historial)
- * para que el botón Atrás de Android cerrara un nivel a la vez, pero
- * eso choca con el router propio del web client de Odoo 18 -- cualquier
- * history.back() disparado por esta app terminaba interfiriendo con
- * la navegación de Odoo (el síntoma más claro: "Revisar cotización"
- * guardaba el borrador bien, pero nunca redirigía al formulario de la
- * cotización, porque el history.back() de antes de eso se comía la
- * navegación). Por eso el cierre sigue siendo 100% estado interno, sin
- * tocar el historial del navegador directamente -- pero ahora SÍ se
- * registra en la pila de navegación propia (back_stack.js, que nunca
- * llama a history.back(), solo a pushState hacia adelante -- ver el
- * comentario grande ahí para el porqué esta vez no repite el choque):
- * el catálogo pasa a ser un nivel (Atrás de Android lo cierra en vez
- * de salir del módulo) y el carrito es un segundo nivel adentro del
- * catálogo (Atrás desde el carrito vuelve al catálogo, no cierra todo
- * de un salto) -- ver setup()/irACarrito()/irACatalogo()/cerrarDeVerdad()
- * más abajo. A propósito el cierre por Atrás de Android NO pasa por
- * intentarSalir() (pedido explícito): si el carrito tiene productos
- * sin guardar, Atrás cierra directo -- el aviso propio queda
- * reservado para el botón "←" del header -- se sigue confiando en el
- * snapshot de localStorage de 30 min para recuperarlo (ver más abajo).
+ * Cierre: se probó primero con history.pushState/popstate propios y se
+ * sacó por completo por chocar con el router de Odoo 18 (el síntoma
+ * más claro: "Revisar cotización" guardaba el borrador bien, pero
+ * nunca redirigía al formulario de Ventas, porque un history.back()
+ * de antes se comía la navegación). Un segundo diseño (intra-sesión,
+ * ya también reemplazado) intentaba interceptar el Atrás con una
+ * "pila" en memoria -- funcionaba en su propia lógica, pero se
+ * descubrió que Odoo recarga la acción del cliente (ShalomRutaApp)
+ * entera en CUALQUIER Atrás real, sin esperar a que el código de la
+ * app reaccione, así que no alcanzaba. El mecanismo actual (ver
+ * back_stack.js) ya no intercepta nada: el catálogo y el carrito
+ * empujan/cierran su propio nivel (abrirNivel/cerrarNivel) y, si Odoo
+ * recarga todo, ShalomRutaApp reconstruye la pantalla exacta a partir
+ * de lo guardado -- ver el comentario grande de back_stack.js para el
+ * mecanismo completo. Como consecuencia de esto, el cierre por Atrás
+ * de Android real YA NO PUEDE mostrar el aviso de "salir sin guardar"
+ * (no hay forma de "cancelar" una navegación real del navegador) --
+ * mismo criterio que ya se había decidido explícitamente para ese
+ * caso: se sigue confiando en el snapshot de localStorage de 30 min
+ * para recuperar el carrito si hace falta (ver más abajo).
  */
 
 // Debajo de esta cantidad se muestra el aviso de stock bajo; en cero o
@@ -174,6 +173,12 @@ export class OrderScreen extends Component {
     static components = {ClienteForm, DateTimeInput};
     static props = {
         orderId: Number,
+        // Lo que sigue en la pila de navegación guardada después de
+        // este catálogo (ver el comentario grande de back_stack.js) --
+        // vacío en la apertura normal ("Tomar pedido"); trae
+        // {tipo:"carrito"} cuando se está reconstruyendo tras un
+        // Atrás/recargado con el carrito abierto.
+        pilaRestante: {type: Array, optional: true},
         clienteNombre: String,
         onCerrar: Function,
         onConfirmado: {type: Function, optional: true},
@@ -201,9 +206,18 @@ export class OrderScreen extends Component {
         this._sesionId = shalomIdSesionCatalogo();
         this._sesionCerrada = false; // guarda para no llamar shalom_cerrar_sesion_catalogo dos veces
 
+        // Auto-abre el carrito si props.pilaRestante lo indica (ver el
+        // comentario grande de back_stack.js) -- reconstrucción tras
+        // un Atrás/recargado con el carrito abierto.
+        const nivelInicial =
+            this.props.pilaRestante && this.props.pilaRestante.length
+                ? this.props.pilaRestante[0]
+                : null;
+        const carritoInicial = !!(nivelInicial && nivelInicial.tipo === "carrito");
+
         this.state = useState({
             cargando: true,
-            pantalla: "catalogo", // catalogo | carrito
+            pantalla: carritoInicial ? "carrito" : "catalogo",
             productos: [],
             busqueda: "",
             categoriaSeleccionada: CATEGORIA_TODAS,
@@ -283,31 +297,21 @@ export class OrderScreen extends Component {
             await this._reconciliarCarritoServidorInicial();
         });
 
-        // Nivel de la pila de navegación para esta pantalla (ver el
-        // comentario grande al principio del archivo) -- a propósito NO
-        // usa atras()/intentarSalir() (esos muestran el aviso de
-        // "salir sin guardar") ni cerrarDeVerdad() (ese limpia el
-        // borrador de recuperación): el Atrás de Android cierra directo
-        // vía cerrarPorAndroid(), sin aviso y sin perder el borrador de
-        // 30 min. El sub-nivel de irACarrito() es un nivel APARTE,
-        // encima de este.
-        this._nivelBack = () => cerrarConAnimacion(this.state, () => this.cerrarPorAndroid());
-        abrirNivel(this._nivelBack);
-        // Nivel del carrito (ver irACarrito()/irACatalogo()) -- null
-        // mientras se está en el catálogo, no hay nada que registrar
-        // todavía.
-        this._nivelCarrito = null;
-
+        // El nivel de navegación de ESTA pantalla (el catálogo en sí)
+        // lo empuja/cierra quien la abre -- VisitSheet.tomarPedido()/
+        // cerrarPedido() -- no acá (ver el comentario grande al
+        // principio del archivo: si esta pantalla se auto-abre al
+        // reconstruir tras un Atrás/recargado, ESE nivel ya está
+        // representado en lo guardado, empujarlo de nuevo acá
+        // duplicaría la entrada). El carrito, en cambio, es un
+        // sub-nivel que SÍ maneja esta misma pantalla directo -- ver
+        // irACarrito()/irACatalogo() más abajo.
         onWillUnmount(() => {
             this.detenerEscaneo();
             if (this._syncTimer) {
                 clearInterval(this._syncTimer);
             }
             this._cerrarSesionCatalogo();
-            cerrarNivel(this._nivelBack);
-            if (this._nivelCarrito) {
-                cerrarNivel(this._nivelCarrito);
-            }
         });
         this._syncTimer = setInterval(() => this._tickSincronizacionCarrito(), SHALOM_SYNC_INTERVALO_MS);
 
@@ -1206,15 +1210,11 @@ export class OrderScreen extends Component {
         this._marcarCambioPendienteCarrito(key);
     }
 
+    /** Solo se llega acá desde el header "←" cuando pantalla ya es
+     * "carrito" (ver atras()) -- siempre hay un nivel de carrito
+     * propio para cerrar acá. */
     irACatalogo() {
-        // Saca el nivel del carrito de la pila si estaba (ver
-        // irACarrito()) -- idempotente, no pasa nada si ya lo sacó el
-        // Atrás de Android (que llama a este mismo método, ver el
-        // registro en irACarrito()).
-        if (this._nivelCarrito) {
-            cerrarNivel(this._nivelCarrito);
-            this._nivelCarrito = null;
-        }
+        cerrarNivel();
         this.state.pantalla = "catalogo";
     }
 
@@ -1223,12 +1223,11 @@ export class OrderScreen extends Component {
             this.notification.add("El carrito está vacío.", {type: "warning"});
             return;
         }
+        // Nivel aparte, encima del catálogo -- el Atrás de Android
+        // desde el carrito vuelve al catálogo (un solo nivel), no
+        // cierra todo de un salto.
+        abrirNivel({tipo: "carrito"});
         this.state.pantalla = "carrito";
-        // Nivel aparte, encima del de esta pantalla (this._nivelBack) --
-        // el Atrás de Android desde el carrito vuelve al catálogo (un
-        // solo nivel), no cierra todo el catálogo de un salto.
-        this._nivelCarrito = () => this.irACatalogo();
-        abrirNivel(this._nivelCarrito);
     }
 
     // -- Escaneo de código de barras (BarcodeDetector nativo) --
@@ -1452,6 +1451,12 @@ export class OrderScreen extends Component {
             // montado por encima cuando el formulario de Ventas se
             // abre.
             this.cerrarDeVerdad();
+            // marcarRetorno() va DESPUÉS de cerrarDeVerdad() a propósito
+            // -- tiene que capturar la profundidad YA con el catálogo/
+            // carrito cerrados (solo ruta+visita), que es adonde debe
+            // caer el Atrás al volver de Ventas -- ver el bloque "CASO
+            // APARTE" del comentario grande de back_stack.js.
+            marcarRetorno();
             this.action.doAction(accion);
         } catch (error) {
             console.error("shalom: error al guardar borrador de pedido", error);
@@ -1543,35 +1548,25 @@ export class OrderScreen extends Component {
         }
         this._cerrado = true;
         this.detenerEscaneo();
+        // Si el carrito estaba abierto (Confirmar pedido/Revisar
+        // cotización se tocan siempre desde ahí), ese es un sub-nivel
+        // APARTE (ver irACarrito()) que nadie más va a cerrar -- hay
+        // que sacarlo acá antes de delegar el nivel del catálogo en sí
+        // a quien lo abrió (VisitSheet.cerrarPedido(), vía onCerrar
+        // más abajo). Si no se sacara, quedaría una entrada de más en
+        // la pila guardada (un Atrás de más, más adelante, sin efecto
+        // visible -- inofensivo pero evitable).
+        if (this.state.pantalla === "carrito") {
+            cerrarNivel();
+        }
         // Único punto de cierre intencional (carrito vacío, "Salir sin
         // guardar", pedido confirmado, cotización guardada) -- se
         // limpia acá el borrador de recuperación para que no quede
-        // colgado. El cierre por Atrás de Android NO pasa por acá (ver
-        // cerrarPorAndroid() más abajo, es justamente el cierre
-        // "accidental" que ese borrador está pensado para cubrir), así
-        // que ahí el borrador queda intacto.
-        cerrarNivel(this._nivelBack);
+        // colgado. El nivel de navegación de esta pantalla (el
+        // catálogo en sí) NO se cierra acá -- lo maneja quien la abrió
+        // (VisitSheet.cerrarPedido(), llamado abajo vía onCerrar) --
+        // ver el comentario grande al principio del archivo.
         this._borrarBorradorCarrito();
-        this.props.onCerrar();
-    }
-
-    /**
-     * Cierre por Atrás de Android (ver this._nivelBack en setup()) --
-     * misma vía de salida (props.onCerrar) y mismo guard de
-     * idempotencia que cerrarDeVerdad(), pero SIN limpiar el borrador
-     * de recuperación de 30 min: a propósito no pasa por
-     * intentarSalir() (sin aviso de "salir sin guardar", pedido
-     * explícito) ni por cerrarDeVerdad() (que si lo limpiaría) -- este
-     * es justamente el cierre accidental que ese borrador está pensado
-     * para cubrir, ver el comentario grande al principio del archivo.
-     */
-    cerrarPorAndroid() {
-        if (this._cerrado) {
-            return;
-        }
-        this._cerrado = true;
-        this.detenerEscaneo();
-        cerrarNivel(this._nivelBack);
         this.props.onCerrar();
     }
 }

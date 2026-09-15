@@ -7,6 +7,7 @@
                 <RutaDetalle
                     t-if="state.screen === 'ruta-detalle'"
                     schedule="state.scheduleActivo"
+                    pilaRestante="state.pilaRestante"
                     onVolver.bind="volverARutas"
                 />
                 <Cotizaciones t-if="state.screen === 'cotizaciones'"/>

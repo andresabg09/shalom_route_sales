@@ -10,6 +10,7 @@ import {
     recortarPolilineaDesde,
 } from "./navegacion_utils";
 import {ESTADO_ETIQUETA, estadoDesdeStageName} from "./stage_utils";
+import {abrirNivel, cerrarNivel} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
 import {VisitSheet} from "./visit_sheet";
 
@@ -242,6 +243,13 @@ export class RutaDetalle extends Component {
     static props = {
         schedule: Object,
         onVolver: Function,
+        // Lo que sigue en la pila de navegación guardada después de
+        // esta ruta -- ver el comentario grande de back_stack.js y de
+        // ShalomRutaApp.setup() en app.js. Vacío en la navegación
+        // normal (tocar una ruta del hub); trae algo cuando se está
+        // reconstruyendo tras un Atrás/recargado con una visita (y
+        // opcionalmente más adentro) abierta.
+        pilaRestante: {type: Array, optional: true},
     };
 
     setup() {
@@ -271,6 +279,14 @@ export class RutaDetalle extends Component {
         this._navFlujoIntervalId = null; // setInterval de la animación de la línea
         this._navFlujoPaso = 0;
         this._navSeguimientoPausado = false; // true tras un gesto real (drag/pinch) del vendedor; se queda así hasta "Centrar en mí"
+        // Nivel de visita a auto-abrir una sola vez (si props.pilaRestante
+        // trae uno) -- ver _abrirVisitaInicialSiCorresponde(), llamado
+        // al final de cargar(). Se consume (null) apenas se intenta,
+        // encontrada o no, para que recargarVisitas() nunca lo vuelva
+        // a abrir solo.
+        this._pilaInicialPendiente = this.props.pilaRestante && this.props.pilaRestante.length
+            ? this.props.pilaRestante[0]
+            : null;
         this.state = useState({
             cargando: true,
             visitas: [],
@@ -284,6 +300,13 @@ export class RutaDetalle extends Component {
             paletaY: 0,
             paletaAngulo: 0,
             edicionLocationId: null,
+            // Lo que sigue DESPUÉS de la visita en props.pilaRestante --
+            // se le pasa a VisitSheet para que ella siga la cascada
+            // (catálogo/carrito). Vacío si no hay visita para auto-abrir.
+            pilaRestanteVisita:
+                this._pilaInicialPendiente && this._pilaInicialPendiente.tipo === "visita"
+                    ? this.props.pilaRestante.slice(1)
+                    : [],
             navegando: false,
             navNombreObjetivo: "",
             navDistanciaTexto: "",
@@ -380,6 +403,36 @@ export class RutaDetalle extends Component {
         } finally {
             this.state.cargando = false;
         }
+        this._abrirVisitaInicialSiCorresponde();
+    }
+
+    /**
+     * Auto-abre la visita indicada por props.pilaRestante[0] (ver el
+     * comentario grande de back_stack.js y ShalomRutaApp.setup() en
+     * app.js) una sola vez, apenas cargar() resuelve por primera vez
+     * -- this._pilaInicialPendiente ya se consume (null) acá mismo,
+     * encontrada o no, así un recargarVisitas() posterior (ej.
+     * onCambio de VisitSheet) nunca la vuelve a abrir sola. Si la
+     * visita ya no está en state.visitas (cerrada/filtrada/reasignada
+     * mientras el vendedor miraba Ventas), se queda en el detalle de
+     * ruta sin abrir nada -- sin error, ya es una mejora sobre
+     * aterrizar en el hub.
+     *
+     * A propósito NO llama a abrirVisita() -- ese nivel YA está
+     * representado en la pila guardada (por eso se está reconstruyendo
+     * acá); volver a empujarlo duplicaría la entrada del historial. Se
+     * asigna el estado directo, sin tocar back_stack.js para nada.
+     */
+    _abrirVisitaInicialSiCorresponde() {
+        const nivel = this._pilaInicialPendiente;
+        this._pilaInicialPendiente = null;
+        if (!nivel || nivel.tipo !== "visita") {
+            return;
+        }
+        const visita = this.state.visitas.find((v) => v.id === nivel.orderId);
+        if (visita) {
+            this.state.visitaAbiertaId = visita.id;
+        }
     }
 
     get resumen() {
@@ -442,11 +495,18 @@ export class RutaDetalle extends Component {
         this.state.tab = tab;
     }
 
+    /** Único punto de apertura GENUINA de una visita (tap en la Lista)
+     * -- empuja el nivel de navegación acá, no en VisitSheet, porque
+     * la reconstrucción tras un Atrás/recargado (ver
+     * _abrirVisitaInicialSiCorresponde()) necesita poder mostrar la
+     * misma visita SIN volver a empujar un nivel que ya está guardado. */
     abrirVisita(visita) {
+        abrirNivel({tipo: "visita", orderId: visita.id});
         this.state.visitaAbiertaId = visita.id;
     }
 
     cerrarVisita() {
+        cerrarNivel();
         this.state.visitaAbiertaId = null;
     }
 
