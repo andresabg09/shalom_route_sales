@@ -8,3 +8,5 @@ __pycache__/
 *.log
 *.zip
 OneDrive/
+.env
+tools/gps_matching/.env
