@@ -150,9 +150,13 @@ def _imprimir_reporte(ruta, resultados, solo_reportar):
     total = sum(len(v) for v in resultados.values())
     print(f"\n=== Ruta {ruta['name']!r} -- {total} cliente(s) sin coordenadas ===\n")
 
-    escritos = [e for e in resultados[scoring.ALTA_CONFIANZA] if e["escrito"]]
-    verbo = "encontrados (--solo-reportar, nada escrito)" if solo_reportar else "escritos"
-    print(f"✔ Alta confianza -- {verbo} ({len(escritos)}):")
+    alta_confianza = resultados[scoring.ALTA_CONFIANZA]
+    if solo_reportar:
+        cantidad, verbo = len(alta_confianza), "encontrados (--solo-reportar, nada escrito)"
+    else:
+        cantidad = len([e for e in alta_confianza if e["escrito"]])
+        verbo = "escritos"
+    print(f"✔ Alta confianza -- {verbo} ({cantidad}):")
     for e in resultados[scoring.ALTA_CONFIANZA]:
         c = e["resultado"].mejor["candidato"]
         marca = "" if e["escrito"] or solo_reportar else "  [NO escrito -- ver motivo arriba]"

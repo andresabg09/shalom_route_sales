@@ -52,11 +52,14 @@ MARGEN_AMBIGUEDAD = 0.12
 
 # Pesos de cada señal en la confianza combinada -- se renormalizan solo
 # entre las señales que sí están disponibles para ese candidato (ver
-# _confianza_combinada). El nombre pesa un poco más porque suele ser el
-# dato más específico, pero ninguna señal decide sola.
-PESO_NOMBRE = 0.4
-PESO_DIRECCION = 0.3
-PESO_DISTANCIA = 0.3
+# _confianza_combinada). Pedido explícito del usuario, que es quien años
+# haciendo esto a mano: la distancia es la señal en la que más confía
+# (viendo qué tan consistente es un candidato con el resto de la ruta),
+# el nombre pesa pero varía bastante entre Odoo y Google, y la dirección
+# es la que MÁS varía -- pesa menos que las otras dos.
+PESO_NOMBRE = 0.35
+PESO_DIRECCION = 0.20
+PESO_DISTANCIA = 0.45
 
 # distancia mínima tolerada aunque la ruta sea muy compacta, y cuántas
 # "desviaciones medias" de la ruta se toleran por encima de eso -- ver
@@ -88,6 +91,17 @@ _PALABRA_A_CATEGORIA = {
     for palabra in palabras
 }
 _STOPWORDS = {"de", "la", "el", "los", "las", "y", "del", "a"}
+
+# Términos de ubicación tan genéricos (provincia, país, ciudad) que por
+# sí solos no dicen nada específico -- cuando la dirección que trae
+# Google, sacando estos términos, queda vacía, es que Google no tiene
+# el detalle de calle de ese comercio (pasa seguido con negocios
+# chicos). En ese caso no hay nada real para comparar contra la
+# dirección guardada en Odoo -- ver _es_direccion_informativa().
+_GENERICOS_DIRECCION = {
+    "panama", "panamá", "provincia", "republica", "república", "ciudad",
+    "province", "distrito", "corregimiento",
+}
 
 
 @dataclass
@@ -174,6 +188,14 @@ def score_nombre(nombre_odoo, nombre_google):
     return round(min(1.0, max(0.0, score)), 3), detalle
 
 
+def _es_direccion_informativa(tokens_google):
+    """False si, sacando términos genéricos de ubicación (provincia,
+    país, ciudad...), no queda NADA específico -- Google no trajo
+    detalle de calle para este candidato, algo común con comercios
+    chicos. Sin nada específico no hay con qué comparar de verdad."""
+    return bool(tokens_google - _GENERICOS_DIRECCION - _STOPWORDS)
+
+
 def score_direccion(direccion_odoo, direccion_google):
     """Compara la dirección guardada en Odoo (street + street2) contra
     la que trae Google para el candidato. Pensada para el caso típico
@@ -182,18 +204,22 @@ def score_direccion(direccion_odoo, direccion_google):
     señal (todo lo que el usuario cargó aparece en la de Google), no
     como texto distinto.
 
-    Devuelve un score 0-1, o None si el cliente no tiene NADA de
-    dirección guardada en Odoo -- ahí no hay con qué comparar, y no debe
-    pesar ni a favor ni en contra (a diferencia de un score 0, que sí
-    pesaría en contra)."""
+    Devuelve un score 0-1, o None cuando no hay nada real para
+    comparar -- el cliente no tiene dirección guardada en Odoo, O
+    Google no trajo ningún detalle específico (solo provincia/país/
+    ciudad) para este candidato. En ambos casos la señal no debe pesar
+    ni a favor ni en contra (a diferencia de un score 0, que sí
+    pesaría en contra) -- pedido explícito del usuario: la dirección es
+    la señal que más varía, no debe tapar un buen match de nombre +
+    distancia solo porque Google no tenía el detalle de calle."""
     if not direccion_odoo or not direccion_odoo.strip():
         return None
     tokens_odoo = set(_normalizar(direccion_odoo).split()) - _STOPWORDS
     if not tokens_odoo:
         return None
     tokens_google = set(_normalizar(direccion_google).split()) - _STOPWORDS
-    if not tokens_google:
-        return 0.0
+    if not _es_direccion_informativa(tokens_google):
+        return None
     # cuánto de lo que el usuario cargó a mano aparece en la dirección
     # (normalmente más completa) de Google -- a propósito no es un
     # Jaccard simétrico, porque penalizaría direcciones parciales que
