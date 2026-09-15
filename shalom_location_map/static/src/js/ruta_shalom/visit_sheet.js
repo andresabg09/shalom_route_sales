@@ -5,6 +5,7 @@ import {useService} from "@web/core/utils/hooks";
 import {ESTADO_ETIQUETA, estadoDesdeStageName, obtenerIdsEtapas} from "./stage_utils";
 import {normalizarAccionActWindow} from "./action_utils";
 import {cerrarConAnimacion} from "./animacion_utils";
+import {abrirNivel, cerrarNivel} from "./back_stack";
 import {capturarMejorPosicionGps} from "./gps_utils";
 import {ClienteForm} from "./cliente_form";
 import {OrderScreen} from "./order_screen";
@@ -39,11 +40,14 @@ const SHALOM_INTERVALO_HEARTBEAT_MS = 2000;
  * abre directo esa sale.order en vez del catálogo (ver sale_id).
  *
  * El cierre (backdrop, arrastrar la barrita) es 100% estado interno,
- * sin tocar el historial del navegador -- se probó con
- * history.pushState/popstate (nav_historial) para que el botón Atrás
- * de Android cerrara un nivel a la vez, pero eso chocaba con el
- * router propio de Odoo 18 (ver el comentario grande en
- * order_screen.js) y se sacó por completo.
+ * más allá de registrarse en la pila de navegación de back_stack.js
+ * (ver setup()/cerrar() más abajo) para que el Atrás de Android cierre
+ * esta hoja en vez de salir del módulo -- reusando este mismo cerrar(),
+ * no una lógica aparte. Antes se había intentado con
+ * history.pushState/popstate propios y se sacó por completo por chocar
+ * con el router de Odoo 18 (ver el comentario grande en
+ * order_screen.js y el de back_stack.js para el porqué el mecanismo
+ * actual no repite ese problema).
  *
  * Carga sus propios datos a partir de orderId (no depende de que el
  * padre le pase el objeto completo) para poder abrirse también, más
@@ -90,11 +94,23 @@ export class VisitSheet extends Component {
         this._heartbeatTimer = setInterval(
             () => this._chequearCarritoActivo(), SHALOM_INTERVALO_HEARTBEAT_MS
         );
+
+        // Se registra como un nivel de la pila de navegación apenas se
+        // monta (= se abre) -- el Atrás de Android va a llamar a este
+        // mismo cerrar(), igual que el backdrop/arrastrar. cerrarNivel()
+        // en el onWillUnmount de abajo es el respaldo por si esta hoja
+        // se desmonta por otra vía (no debería haber ninguna hoy, pero
+        // no cuesta nada); cerrarNivel() ya es idempotente, así que no
+        // pasa nada si el Atrás ya sacó este nivel él mismo.
+        this._nivelBack = () => this.cerrar();
+        abrirNivel(this._nivelBack);
+
         onWillUnmount(() => {
             this.detenerArrastre();
             if (this._heartbeatTimer) {
                 clearInterval(this._heartbeatTimer);
             }
+            cerrarNivel(this._nivelBack);
         });
     }
 
@@ -590,6 +606,7 @@ export class VisitSheet extends Component {
         // antes para el mismo propósito (evitar el doble cierre del
         // click fantasma después de un arrastre, ver soltarArrastre).
         this.state.arrastreY = window.innerHeight + 200;
+        cerrarNivel(this._nivelBack);
         cerrarConAnimacion(this.state, () => this.props.onCerrar());
     }
 }

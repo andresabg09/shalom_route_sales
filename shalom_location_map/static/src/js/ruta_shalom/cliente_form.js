@@ -1,8 +1,9 @@
 /** @odoo-module **/
 
-import {Component, onWillStart, useState} from "@odoo/owl";
+import {Component, onWillStart, onWillUnmount, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {cerrarConAnimacion} from "./animacion_utils";
+import {abrirNivel, cerrarNivel} from "./back_stack";
 import {capturarMejorPosicionGps} from "./gps_utils";
 
 /**
@@ -31,6 +32,14 @@ import {capturarMejorPosicionGps} from "./gps_utils";
  *   lo guarda en el cliente -- en modo editar, se escribe al toque
  *   (shalom_actualizar_gps); en modo crear, se manda junto con el
  *   resto al confirmar (todavía no existe el registro).
+ *
+ * Un solo componente reusado desde cuatro lugares (hoja de visita,
+ * pestaña Clientes, popup del pin en el mapa de RutaDetalle, banner de
+ * OrderScreen) -- por eso se registra SOLO acá en la pila de
+ * navegación (ver setup()/intentarCancelar() más abajo, y back_stack.js
+ * para el mecanismo completo): el Atrás de Android cierra el
+ * formulario en cualquiera de los cuatro casos sin que cada pantalla
+ * que lo abre tenga que saber nada de esto.
  */
 
 const RUTA_SIN_ASIGNAR = "sin_asignar";
@@ -90,6 +99,28 @@ export class ClienteForm extends Component {
                 await this.cargarCliente();
             }
         });
+
+        // Mismo patrón que visit_sheet.js/order_screen.js: el Atrás de
+        // Android llama a intentarCancelar(), la MISMA función del
+        // botón "←" propio -- así también respeta el aviso de "salir
+        // sin guardar" si se tocó algo. A diferencia de VisitSheet/
+        // OrderScreen, intentarCancelar() puede NO cerrar de verdad
+        // (si hay cambios sin guardar, muestra el aviso en su lugar en
+        // vez de cerrar) -- en ese caso este nivel se vuelve a
+        // registrar, para que el PRÓXIMO Atrás siga actuando sobre ESE
+        // aviso (o sobre el formulario) en vez de saltarse todo y
+        // cerrar lo que hubiera más atrás en la pila. cerrarNivel() en
+        // onWillUnmount es el respaldo por si el formulario se cierra
+        // por otra vía (idempotente, no pasa nada si el Atrás ya lo
+        // sacó él mismo).
+        this._nivelBack = () => {
+            this.intentarCancelar();
+            if (this.state.confirmandoSalida) {
+                abrirNivel(this._nivelBack);
+            }
+        };
+        abrirNivel(this._nivelBack);
+        onWillUnmount(() => cerrarNivel(this._nivelBack));
     }
 
     /** Cualquier cambio en un campo pasa por acá -- controla si hace
@@ -415,6 +446,7 @@ export class ClienteForm extends Component {
                 }
                 this.notification.add("Datos del cliente actualizados.", {type: "success"});
             }
+            cerrarNivel(this._nivelBack);
             cerrarConAnimacion(this.state, () => this.props.onGuardado());
         } catch (error) {
             console.error("shalom: error al guardar cliente", error);
@@ -454,6 +486,7 @@ export class ClienteForm extends Component {
     }
 
     cancelar() {
+        cerrarNivel(this._nivelBack);
         cerrarConAnimacion(this.state, () => this.props.onCancelar());
     }
 }

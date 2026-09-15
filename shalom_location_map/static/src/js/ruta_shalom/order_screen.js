@@ -5,6 +5,7 @@ import {useService} from "@web/core/utils/hooks";
 import {DateTimeInput} from "@web/core/datetime/datetime_input";
 import {normalizarAccionActWindow} from "./action_utils";
 import {cerrarConAnimacion} from "./animacion_utils";
+import {abrirNivel, cerrarNivel} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
 
 const {DateTime} = luxon;
@@ -38,15 +39,20 @@ const {DateTime} = luxon;
  * la navegación de Odoo (el síntoma más claro: "Revisar cotización"
  * guardaba el borrador bien, pero nunca redirigía al formulario de la
  * cotización, porque el history.back() de antes de eso se comía la
- * navegación). Por eso ahora el cierre es 100% estado interno (sin
- * tocar el historial del navegador en absoluto) -- el botón "←" del
- * header y el resto de los controles propios de la app son
- * confiables; el botón/gesto Atrás de Android queda con el
- * comportamiento por defecto del web client (no se intenta
- * interceptar, es justamente lo que rompía todo lo demás). Si el
- * carrito tiene productos sin guardar, cualquier intento de salir
- * por el botón "←" del header muestra un aviso propio antes de
- * perderlo -- ver intentarSalir().
+ * navegación). Por eso el cierre sigue siendo 100% estado interno, sin
+ * tocar el historial del navegador directamente -- pero ahora SÍ se
+ * registra en la pila de navegación propia (back_stack.js, que nunca
+ * llama a history.back(), solo a pushState hacia adelante -- ver el
+ * comentario grande ahí para el porqué esta vez no repite el choque):
+ * el catálogo pasa a ser un nivel (Atrás de Android lo cierra en vez
+ * de salir del módulo) y el carrito es un segundo nivel adentro del
+ * catálogo (Atrás desde el carrito vuelve al catálogo, no cierra todo
+ * de un salto) -- ver setup()/irACarrito()/irACatalogo()/cerrarDeVerdad()
+ * más abajo. A propósito el cierre por Atrás de Android NO pasa por
+ * intentarSalir() (pedido explícito): si el carrito tiene productos
+ * sin guardar, Atrás cierra directo -- el aviso propio queda
+ * reservado para el botón "←" del header -- se sigue confiando en el
+ * snapshot de localStorage de 30 min para recuperarlo (ver más abajo).
  */
 
 // Debajo de esta cantidad se muestra el aviso de stock bajo; en cero o
@@ -83,10 +89,10 @@ const PRODUCTOS_POR_PAGINA = 80;
 // explícito): la pantalla se puede perder por cualquier vía que no sea
 // un cierre intencional (confirmar pedido, revisar cotización, o
 // "Salir sin guardar" del aviso propio) -- típicamente el botón/gesto
-// "atrás" de Android, que a propósito NO se intercepta (ver el
-// comentario grande al principio del archivo: ya se probó y rompía la
-// navegación de Odoo). Sin nada más, eso perdía el carrito entero sin
-// ningún aviso. Se guarda un snapshot en localStorage en cada cambio
+// "atrás" de Android, que a propósito cierra directo sin el aviso (ver
+// el comentario grande al principio del archivo). Sin nada más, eso
+// perdía el carrito entero sin ningún aviso. Se guarda un snapshot en
+// localStorage en cada cambio
 // del carrito, y se restaura solo (sin preguntar) si se reabre esta
 // misma visita dentro de los 30 minutos. Cualquier actividad
 // (agregar/sacar un producto, o simplemente reabrir el catálogo con un
@@ -252,7 +258,11 @@ export class OrderScreen extends Component {
             // shalom_confirmar_pedido en fsm_order.py) -- no toca
             // ningún cálculo de impuestos acá, es para que Dianke (el
             // proveedor que entrega, no Shalom) sepa si cobrar ITBMS.
-            incluyeItbms: true,
+            // Default apagado (el 99% de los clientes no lo quiere,
+            // mismo criterio que shalom_ultima_forma_pago_e_itbms en
+            // fsm_order.py) -- _abrirPopupFormaPago() lo pisa con el
+            // valor real apenas responde el backend.
+            incluyeItbms: false,
             // "Principal" (ver el docstring grande de
             // CLAVE_SESION_CATALOGO más arriba): true hasta el primer
             // heartbeat -- así, si esta pestaña está sola (caso normal,
@@ -272,12 +282,32 @@ export class OrderScreen extends Component {
             await Promise.all([this.cargarProductos(), this._cargarDatosFaltantes()]);
             await this._reconciliarCarritoServidorInicial();
         });
+
+        // Nivel de la pila de navegación para esta pantalla (ver el
+        // comentario grande al principio del archivo) -- a propósito NO
+        // usa atras()/intentarSalir() (esos muestran el aviso de
+        // "salir sin guardar") ni cerrarDeVerdad() (ese limpia el
+        // borrador de recuperación): el Atrás de Android cierra directo
+        // vía cerrarPorAndroid(), sin aviso y sin perder el borrador de
+        // 30 min. El sub-nivel de irACarrito() es un nivel APARTE,
+        // encima de este.
+        this._nivelBack = () => cerrarConAnimacion(this.state, () => this.cerrarPorAndroid());
+        abrirNivel(this._nivelBack);
+        // Nivel del carrito (ver irACarrito()/irACatalogo()) -- null
+        // mientras se está en el catálogo, no hay nada que registrar
+        // todavía.
+        this._nivelCarrito = null;
+
         onWillUnmount(() => {
             this.detenerEscaneo();
             if (this._syncTimer) {
                 clearInterval(this._syncTimer);
             }
             this._cerrarSesionCatalogo();
+            cerrarNivel(this._nivelBack);
+            if (this._nivelCarrito) {
+                cerrarNivel(this._nivelCarrito);
+            }
         });
         this._syncTimer = setInterval(() => this._tickSincronizacionCarrito(), SHALOM_SYNC_INTERVALO_MS);
 
@@ -714,7 +744,7 @@ export class OrderScreen extends Component {
                 this.state.incluyeItbms = ultima.includes_itbms;
             } else {
                 this.state.formaPagoSeleccionada = false;
-                this.state.incluyeItbms = true;
+                this.state.incluyeItbms = false;
             }
             if (!this.state.formaPagoSeleccionada && this.state.formasPagoDisponibles.length) {
                 this.state.formaPagoSeleccionada = this.state.formasPagoDisponibles[0].value;
@@ -1177,6 +1207,14 @@ export class OrderScreen extends Component {
     }
 
     irACatalogo() {
+        // Saca el nivel del carrito de la pila si estaba (ver
+        // irACarrito()) -- idempotente, no pasa nada si ya lo sacó el
+        // Atrás de Android (que llama a este mismo método, ver el
+        // registro en irACarrito()).
+        if (this._nivelCarrito) {
+            cerrarNivel(this._nivelCarrito);
+            this._nivelCarrito = null;
+        }
         this.state.pantalla = "catalogo";
     }
 
@@ -1186,6 +1224,11 @@ export class OrderScreen extends Component {
             return;
         }
         this.state.pantalla = "carrito";
+        // Nivel aparte, encima del de esta pantalla (this._nivelBack) --
+        // el Atrás de Android desde el carrito vuelve al catálogo (un
+        // solo nivel), no cierra todo el catálogo de un salto.
+        this._nivelCarrito = () => this.irACatalogo();
+        abrirNivel(this._nivelCarrito);
     }
 
     // -- Escaneo de código de barras (BarcodeDetector nativo) --
@@ -1503,9 +1546,32 @@ export class OrderScreen extends Component {
         // Único punto de cierre intencional (carrito vacío, "Salir sin
         // guardar", pedido confirmado, cotización guardada) -- se
         // limpia acá el borrador de recuperación para que no quede
-        // colgado. Un cierre accidental (botón/gesto atrás de Android)
-        // no pasa por acá, así que ahí el borrador queda intacto.
+        // colgado. El cierre por Atrás de Android NO pasa por acá (ver
+        // cerrarPorAndroid() más abajo, es justamente el cierre
+        // "accidental" que ese borrador está pensado para cubrir), así
+        // que ahí el borrador queda intacto.
+        cerrarNivel(this._nivelBack);
         this._borrarBorradorCarrito();
+        this.props.onCerrar();
+    }
+
+    /**
+     * Cierre por Atrás de Android (ver this._nivelBack en setup()) --
+     * misma vía de salida (props.onCerrar) y mismo guard de
+     * idempotencia que cerrarDeVerdad(), pero SIN limpiar el borrador
+     * de recuperación de 30 min: a propósito no pasa por
+     * intentarSalir() (sin aviso de "salir sin guardar", pedido
+     * explícito) ni por cerrarDeVerdad() (que si lo limpiaría) -- este
+     * es justamente el cierre accidental que ese borrador está pensado
+     * para cubrir, ver el comentario grande al principio del archivo.
+     */
+    cerrarPorAndroid() {
+        if (this._cerrado) {
+            return;
+        }
+        this._cerrado = true;
+        this.detenerEscaneo();
+        cerrarNivel(this._nivelBack);
         this.props.onCerrar();
     }
 }
