@@ -614,9 +614,13 @@
     // orientación (shalom-marker-vendedor-flecha) sin que quede
     // apretada -- el círculo/pulso de abajo sigue exactamente igual,
     // no se tocó ninguna de sus propiedades.
+    // Subido de nuevo, 22px -> 30px: reportado que se veía chico para
+    // el tamaño real de la calle (comparar con Waze) -- mismo método
+    // seguro de antes, solo width/height/border, nunca transform (ver
+    // motivo grande arriba de shalom-pulso-vendedor).
     .shalom-marker-vendedor {
-        width: 22px;
-        height: 22px;
+        width: 30px;
+        height: 30px;
         position: relative;
     }
     .shalom-marker-vendedor-punto {
@@ -624,7 +628,7 @@
         inset: 0;
         border-radius: 50%;
         background: var(--shalom-accent);
-        border: 2px solid var(--shalom-surface);
+        border: 2.5px solid var(--shalom-surface);
         animation: shalom-pulso-vendedor 1.8s ease-out infinite;
     }
     // Flecha fija (no rota) que muestra hacia dónde apunta el rumbo de
@@ -646,7 +650,7 @@
             box-shadow: 0 2px 6px rgba(20, 10, 15, 0.4), 0 0 0 0 rgba(177, 36, 90, 0.5);
         }
         100% {
-            box-shadow: 0 2px 6px rgba(20, 10, 15, 0.4), 0 0 0 16px rgba(177, 36, 90, 0);
+            box-shadow: 0 2px 6px rgba(20, 10, 15, 0.4), 0 0 0 22px rgba(177, 36, 90, 0);
         }
     }
 
@@ -723,12 +727,18 @@
 
     // barra de navegación en vivo ("Trazar ruta aquí") -- arranca
     // COLAPSADA (solo el ícono 🧭, pedido explícito para no taparle la
-    // vista del mapa) y se expande al tocarla, mostrando nombre del
-    // cliente + distancia/tiempo restante (los llena Mapbox Directions
-    // en cada recálculo) + botón para cortar la navegación. Toda la
-    // animación es CSS puro (max-width + opacity con transition) --
-    // nada de mostrar/ocultar con t-if, que cortaría en seco la
-    // transición.
+    // vista del mapa). Al iniciar una navegación "cae" desde arriba
+    // como una gotita (.nav-barra-entrando -> se saca, aterriza acá
+    // colapsada), después de un rato se auto-expande mostrando nombre
+    // del cliente + distancia/tiempo restante (los llena Mapbox
+    // Directions en cada recálculo) + botón para cortar la navegación,
+    // y a los NAV_EXPANDIDO_AUTO_MS se vuelve a colapsar sola con esta
+    // misma transición, en reversa -- ver _programarAperturaNavBarra()
+    // en ruta_detalle.js para toda la secuencia y sus tiempos. Un
+    // toque manual (toggleNavExpandido) también usa esta transición
+    // para abrir/cerrar. Toda la animación es CSS puro (max-width/
+    // transform/opacity/box-shadow con transition) -- nada de mostrar/
+    // ocultar con t-if, que cortaría en seco la transición.
     .nav-barra {
         position: absolute;
         top: 12px;
@@ -742,10 +752,34 @@
         border-radius: 999px;
         box-shadow: var(--shalom-shadow);
         max-width: 42px; // colapsada: solo el ancho del handle
-        transition: max-width 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+        transform: translateY(0) scale(1);
+        transform-origin: left center; // crece hacia la derecha desde el ícono, no desde el centro
+        // El "pop"/rebote (scale, y la caída con translateY) es lo que
+        // pedido explícito llamó "más visible/grandecito" y "como una
+        // gotita" -- max-width solo ensanchaba, no se notaba tanto.
+        transition:
+            max-width 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+            transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1),
+            opacity 0.22s ease,
+            box-shadow 0.32s ease;
+    }
+    // Estado ANTES de aterrizar -- arriba, chica, transparente. Se le
+    // saca esta clase (ver _programarAperturaNavBarra) para que la
+    // transición de arriba la anime "cayendo" a su lugar. Tiene que
+    // pintarse un frame real con esta clase puesta antes de sacarla --
+    // si no, el navegador nunca ve el estado "antes" y no anima nada
+    // (bug reportado: la barra aparecía ya abierta, sin animación).
+    .nav-barra-entrando {
+        opacity: 0;
+        transform: translateY(-18px) scale(0.5);
     }
     .nav-barra-expandida {
-        max-width: 230px;
+        // Ancho "mediano", proporcional al ancho de pantalla en vez de
+        // un número fijo -- piso igual al de antes (nunca más chica),
+        // techo para que no quede enorme en una tablet.
+        max-width: clamp(230px, 62vw, 320px);
+        transform: translateY(0) scale(1.04);
+        box-shadow: 0 10px 28px rgba(20, 10, 15, 0.28);
     }
     .nav-barra-handle {
         flex: 0 0 auto;
@@ -777,14 +811,16 @@
     }
     .nav-barra-nombre {
         font-weight: 800;
-        font-size: 0.74rem;
+        // Proporcional a la pantalla (mismo criterio que el ancho de
+        // .nav-barra-expandida) -- piso igual al tamaño de antes.
+        font-size: clamp(0.74rem, 3.4vw, 0.95rem);
         color: var(--shalom-ink);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
     .nav-barra-datos {
-        font-size: 0.68rem;
+        font-size: clamp(0.68rem, 3vw, 0.85rem);
         font-weight: 700;
         color: var(--shalom-accent);
         white-space: nowrap;

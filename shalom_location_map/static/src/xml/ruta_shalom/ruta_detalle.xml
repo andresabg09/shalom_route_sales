@@ -94,7 +94,7 @@
                     <div
                         class="nav-barra"
                         t-if="state.navegando"
-                        t-att-class="state.navExpandido ? 'nav-barra-expandida' : ''"
+                        t-att-class="(state.navEntrando ? 'nav-barra-entrando' : '') + (state.navExpandido ? ' nav-barra-expandida' : '')"
                     >
                         <button
                             class="nav-barra-handle"

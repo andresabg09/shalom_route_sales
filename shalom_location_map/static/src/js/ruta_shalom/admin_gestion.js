@@ -85,6 +85,24 @@ function estadoSeguimientoDesdeStageName(stageName) {
     return estadoDesdeStageName(stageName);
 }
 
+/** El backend (shalom_admin_seguimiento_visitas) manda `fecha` con
+ * fields.Datetime.to_string(), que es la hora en UTC CRUDA -- Odoo no
+ * la convierte sola cuando se lee/manda así por RPC (a diferencia de un
+ * campo Datetime mostrado con el widget nativo, que sí convierte según
+ * el usuario). Reportado: una visita de las 4:37pm hora de Panamá se
+ * veía como "21:3x" -- justo el desfasaje de Panamá a UTC (UTC-5, sin
+ * horario de verano). Se fija a America/Panama en vez de usar la zona
+ * del perfil del usuario admin -- el negocio opera solo en Panamá, así
+ * que no debería depender de que cada admin tenga bien configurada su
+ * zona horaria personal en Odoo. */
+function formatearFechaPanama(fechaUtcTexto) {
+    if (!fechaUtcTexto) {
+        return "";
+    }
+    const fecha = DateTime.fromSQL(fechaUtcTexto, {zone: "utc"}).setZone("America/Panama");
+    return fecha.isValid ? fecha.toFormat("dd/MM/yyyy HH:mm") : fechaUtcTexto;
+}
+
 /** Color del pin en el mapa de "Rutas de mis vendedores", uno por
  * estado -- mismos colores que ya usan las tarjetas de "Seguimiento de
  * Visitas" (.stop-badge en ruta_shalom.scss), para que el significado
@@ -306,6 +324,7 @@ export class AdminGestion extends Component {
             this.state.visitas = visitas.map((v) => ({
                 ...v,
                 estado: estadoSeguimientoDesdeStageName(v.estado_nombre),
+                fecha: formatearFechaPanama(v.fecha),
             }));
         } catch (error) {
             console.error("shalom: error al cargar seguimiento de visitas", error);

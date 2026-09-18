@@ -156,6 +156,22 @@ const NAV_PITCH = 55;
 //     tiempo), así que un zoom manual del vendedor no se pierde.
 const NAV_ZOOM = 17.5;
 
+// Cuánto tiempo (ms) se muestra expandida la barra de navegación SOLA,
+// al arrancar a navegar, antes de volver a colapsarse sola -- pedido
+// explícito, para que se note bien hacia qué cliente se está yendo sin
+// tener que quedar tapando el mapa todo el viaje (que es justo lo que
+// se evitó al hacerla arrancar colapsada, ver comentario en
+// .nav-barra de ruta_shalom.scss). Un toque manual del vendedor sobre
+// el handle (toggleNavExpandido) cancela este timer -- su gesto manda.
+const NAV_EXPANDIDO_AUTO_MS = 7000;
+
+// Cuánto tiempo (ms) se ve la barra ya "aterrizada" (colapsada, como
+// una gotita que cayó) antes de abrirse mostrando el destino -- pedido
+// explícito: que se note la caída como un paso separado, no que abra
+// de una junto con el zoom de la cámara (competían visualmente y el
+// zoom se sentía "instantáneo" en comparación).
+const NAV_ATERRIZAJE_MS = 350;
+
 // Qué tan rápido la cámara "alcanza" la posición/rumbo real en cada
 // cuadro del loop de animación (0-1): más alto = más pegado al GPS
 // pero más brusco, más bajo = más suave pero con más retraso. 0.12 a
@@ -201,7 +217,7 @@ function crearElementoMarcadorVendedor() {
     el.innerHTML =
         '<span class="shalom-marker-vendedor-punto"></span>' +
         '<span class="shalom-marker-vendedor-flecha">' +
-        '<svg width="10" height="10" viewBox="0 0 10 10">' +
+        '<svg width="14" height="14" viewBox="0 0 10 10">' +
         '<path d="M5 0 L8.5 8 L5 6 L1.5 8 Z" fill="#fff"/>' +
         "</svg>" +
         "</span>";
@@ -268,9 +284,20 @@ export class RutaDetalle extends Component {
         this._navRumboObjetivo = 0; // último rumbo calculado (heading GPS o por delta)
         this._navCamara = {lat: null, lng: null, rumbo: 0}; // estado suavizado que dibuja el loop de cámara
         this._navAnimacionCamaraId = null; // id de requestAnimationFrame del loop de cámara
+        this._navFlyToEnCurso = false; // true mientras dura el flyTo() inicial -- ver _iniciarLoopCamaraNav
         this._navFlujoIntervalId = null; // setInterval de la animación de la línea
         this._navFlujoPaso = 0;
         this._navSeguimientoPausado = false; // true tras un gesto real (drag/pinch) del vendedor; se queda así hasta "Centrar en mí"
+        this._navExpandidoAutoTimeoutId = null; // setTimeout que colapsa sola la barra tras NAV_EXPANDIDO_AUTO_MS
+        this._navWakeLock = null; // WakeLockSentinel mientras hay navegación activa (pantalla encendida, ver _pedirWakeLockNav)
+        // El navegador suelta el wake lock solo al ocultarse la pestaña
+        // (cambiar de app, apagar pantalla) -- si seguimos navegando al
+        // volver, hay que pedirlo de nuevo (ver _reanudarWakeLockSiHaceFalta).
+        this._reanudarWakeLockSiHaceFalta = this._reanudarWakeLockSiHaceFalta.bind(this);
+        document.addEventListener("visibilitychange", this._reanudarWakeLockSiHaceFalta);
+        onWillUnmount(() => {
+            document.removeEventListener("visibilitychange", this._reanudarWakeLockSiHaceFalta);
+        });
         this.state = useState({
             cargando: true,
             visitas: [],
@@ -289,6 +316,7 @@ export class RutaDetalle extends Component {
             navDistanciaTexto: "",
             navDuracionTexto: "",
             navExpandido: false,
+            navEntrando: false, // true un instante al arrancar a navegar -- ver _programarAperturaNavBarra
         });
 
         onWillStart(() => this.cargar());
@@ -982,7 +1010,17 @@ export class RutaDetalle extends Component {
         this.state.navNombreObjetivo = visita.nombre;
         this.state.navDistanciaTexto = "";
         this.state.navDuracionTexto = "";
+        // Nace colapsada y "cayendo" (nav-barra-entrando en scss) --
+        // ver _programarAperturaNavBarra() para la secuencia completa
+        // (cae, aterriza colapsada, se abre, y se vuelve a colapsar
+        // sola). Arrancar ya expandida de una hacía que Owl la montara
+        // directo en su estado final -- una transición CSS nunca anima
+        // el primer montaje de un elemento, así que nunca se veía
+        // ninguna animación (reportado en producción).
         this.state.navExpandido = false;
+        this.state.navEntrando = true;
+        this._programarAperturaNavBarra();
+        this._pedirWakeLockNav();
         this._navRumboObjetivo = this._navCamara.rumbo || 0;
         // Cada navegación nueva arranca siguiendo al vendedor -- no
         // hereda una pausa de una navegación anterior.
@@ -1091,6 +1129,15 @@ export class RutaDetalle extends Component {
         }
         this._navVelocidadEstimMs = velocidadEstimMs;
         this._navUltimaLecturaTs = ahoraFix;
+        // Punto crudo del GPS por default -- se reemplaza más abajo por
+        // el punto YA PROYECTADO sobre la línea trazada (snap-to-road)
+        // cuando hay una línea contra la cual proyectar y no hace falta
+        // recalcular. Reportado: sin esto, la flecha "flota" sobre
+        // techos de casas en vez de quedarse sobre la calle -- es el
+        // error normal de precisión del GPS (10-40m en zonas con
+        // edificios cerca), mostrado tal cual. Waze/Google Maps hacen
+        // lo mismo (snap-to-road) para que el ícono nunca se vea fuera
+        // de la calle.
         this.posicionVendedor = punto;
         // El marcador y la cámara YA NO se mueven acá directo -- los
         // actualiza el loop de _iniciarLoopCamaraNav en cada cuadro,
@@ -1129,6 +1176,13 @@ export class RutaDetalle extends Component {
             }
             this._navRouteCoords = coordenadas;
             this._actualizarLineaNav(coordenadas);
+            // Snap-to-road: coordenadas[0] es el punto proyectado sobre
+            // la línea (recortarPolilineaDesde ya lo calculó para
+            // recortar la línea, acá se reusa el mismo punto en vez de
+            // descartarlo) -- así la flecha queda pegada a la calle en
+            // vez de mostrar el GPS crudo. Formato [lng, lat], hay que
+            // invertirlo a {lat, lng}.
+            this.posicionVendedor = {lat: coordenadas[0][1], lng: coordenadas[0][0]};
             return;
         }
 
@@ -1246,6 +1300,19 @@ export class RutaDetalle extends Component {
                         rumbo: this._navRumboObjetivo,
                     };
                     this._moverMarcadorVendedor(this._navCamara);
+                    // OJO -- reportado en producción: el "clavado" de
+                    // zoom del cuadro a cuadro de más abajo (jumpTo,
+                    // rama else) corría en el cuadro SIGUIENTE a este
+                    // (~16ms después) y, en Mapbox, cualquier
+                    // instrucción de cámara nueva corta de raíz la que
+                    // esté en curso -- el flyTo() de acá nunca llegaba
+                    // a animarse, se veía instantáneo. _navFlyToEnCurso
+                    // frena esa rama hasta que este flyTo termine solo
+                    // (evento "moveend").
+                    this._navFlyToEnCurso = true;
+                    this.mapboxMap.once("moveend", () => {
+                        this._navFlyToEnCurso = false;
+                    });
                     this.mapboxMap.flyTo({
                         center: [this._navCamara.lng, this._navCamara.lat],
                         bearing: this._navCamara.rumbo,
@@ -1253,6 +1320,12 @@ export class RutaDetalle extends Component {
                         zoom: NAV_ZOOM,
                         essential: true,
                     });
+                } else if (this._navFlyToEnCurso) {
+                    // El flyTo de arriba todavía está animando -- no
+                    // tocar la cámara (jumpTo/easeTo la cortarían de
+                    // raíz). Seguimos moviendo el marcador nomás, para
+                    // que no se quede pegado mientras dura la entrada.
+                    this._moverMarcadorVendedor(posicionEstimada);
                 } else {
                     this._navCamara.lat +=
                         (posicionEstimada.lat - this._navCamara.lat) *
@@ -1344,6 +1417,7 @@ export class RutaDetalle extends Component {
             this._navAnimacionCamaraId = null;
         }
         this._navCamara = {lat: null, lng: null, rumbo: 0};
+        this._navFlyToEnCurso = false;
     }
 
     /**
@@ -1478,6 +1552,11 @@ export class RutaDetalle extends Component {
         this._detenerAnimacionFlujo();
         this._detenerLoopCamaraNav();
         this._limpiarResumenAutomatico();
+        if (this._navExpandidoAutoTimeoutId) {
+            clearTimeout(this._navExpandidoAutoTimeoutId);
+            this._navExpandidoAutoTimeoutId = null;
+        }
+        this._soltarWakeLockNav();
         this._navObjetivo = null;
         this._navRouteCoords = null;
         this._navUltimaLecturaTs = null;
@@ -1487,6 +1566,7 @@ export class RutaDetalle extends Component {
         this.state.navDistanciaTexto = "";
         this.state.navDuracionTexto = "";
         this.state.navExpandido = false;
+        this.state.navEntrando = false;
         if (this.mapboxMap) {
             // Volver a la vista plana norte-arriba de "solo mirando el
             // mapa" -- duration 500 para que no se sienta un golpe seco
@@ -1512,7 +1592,95 @@ export class RutaDetalle extends Component {
      * ruta_shalom.scss.
      */
     toggleNavExpandido() {
+        // Un toque manual manda por sobre el auto-colapso de los
+        // NAV_EXPANDIDO_AUTO_MS iniciales -- si el vendedor ya la tocó,
+        // no tiene sentido que el timer la cierre/abra sola después.
+        if (this._navExpandidoAutoTimeoutId) {
+            clearTimeout(this._navExpandidoAutoTimeoutId);
+            this._navExpandidoAutoTimeoutId = null;
+        }
+        this.state.navEntrando = false; // por si tocó justo durante la caída
         this.state.navExpandido = !this.state.navExpandido;
+    }
+
+    /**
+     * Secuencia completa de la barra al arrancar a navegar: cae
+     * (nav-barra-entrando -> se saca, aterriza colapsada), espera
+     * NAV_ATERRIZAJE_MS ya aterrizada, se abre (navExpandido = true) y
+     * a los NAV_EXPANDIDO_AUTO_MS se vuelve a colapsar sola. Doble
+     * requestAnimationFrame antes de sacar "entrando": así el
+     * navegador ya pintó ese estado (arriba, chica, transparente)
+     * antes de que se le cambie -- sacarla en el mismo tick en que se
+     * puso no dispara ninguna transición (el navegador colapsa los dos
+     * cambios de estilo en un solo repintado).
+     *
+     * Cada paso chequea this.state.navegando antes de actuar: si se
+     * cortó la navegación mientras esperaba (usuario tocó "Salir" casi
+     * al toque), no debe reaparecer/reabrir nada.
+     */
+    _programarAperturaNavBarra() {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (!this.state.navegando) {
+                    return;
+                }
+                this.state.navEntrando = false; // "aterriza" colapsada
+                this._navExpandidoAutoTimeoutId = setTimeout(() => {
+                    if (!this.state.navegando) {
+                        return;
+                    }
+                    this.state.navExpandido = true;
+                    this._navExpandidoAutoTimeoutId = setTimeout(() => {
+                        this.state.navExpandido = false;
+                        this._navExpandidoAutoTimeoutId = null;
+                    }, NAV_EXPANDIDO_AUTO_MS);
+                }, NAV_ATERRIZAJE_MS);
+            });
+        });
+    }
+
+    /**
+     * Screen Wake Lock API -- mantiene la pantalla encendida mientras
+     * hay navegación activa (mismo comportamiento que Waze/Google
+     * Maps), para que no se apague sola mientras el vendedor va
+     * manejando/caminando sin tocar el teléfono. Nunca lanza si el
+     * navegador no la soporta (Safari viejo, etc.) -- la navegación
+     * sigue funcionando igual, solo sin este beneficio extra.
+     */
+    async _pedirWakeLockNav() {
+        if (!("wakeLock" in navigator)) {
+            return;
+        }
+        try {
+            this._navWakeLock = await navigator.wakeLock.request("screen");
+            this._navWakeLock.addEventListener("release", () => {
+                this._navWakeLock = null;
+            });
+        } catch (error) {
+            this._navWakeLock = null; // sin permiso, batería baja, etc. -- no es crítico
+        }
+    }
+
+    async _soltarWakeLockNav() {
+        if (!this._navWakeLock) {
+            return;
+        }
+        try {
+            await this._navWakeLock.release();
+        } catch (error) {
+            // nada que hacer -- se libera solo igual al cambiar de
+            // pestaña/pantalla si esto fallara.
+        }
+        this._navWakeLock = null;
+    }
+
+    /** El navegador SUELTA el wake lock solo al ocultarse la pestaña
+     * (cambiar de app, apagar pantalla un instante) -- si se sigue
+     * navegando al volver a mostrarse, hay que volver a pedirlo. */
+    _reanudarWakeLockSiHaceFalta() {
+        if (document.visibilityState === "visible" && this.state.navegando && !this._navWakeLock) {
+            this._pedirWakeLockNav();
+        }
     }
 
     volver() {
