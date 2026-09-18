@@ -5,6 +5,7 @@ import {useService} from "@web/core/utils/hooks";
 import {ESTADO_ETIQUETA, estadoDesdeStageName, obtenerIdsEtapas} from "./stage_utils";
 import {normalizarAccionActWindow} from "./action_utils";
 import {cerrarConAnimacion} from "./animacion_utils";
+import {abrirNivel, cerrarNivel, marcarRetorno} from "./back_stack";
 import {capturarMejorPosicionGps} from "./gps_utils";
 import {ClienteForm} from "./cliente_form";
 import {OrderScreen} from "./order_screen";
@@ -38,12 +39,15 @@ const SHALOM_INTERVALO_HEARTBEAT_MS = 2000;
  * carrito o confirmada), el botón cambia a "Examinar cotización" y
  * abre directo esa sale.order en vez del catálogo (ver sale_id).
  *
- * El cierre (backdrop, arrastrar la barrita) es 100% estado interno,
- * sin tocar el historial del navegador -- se probó con
- * history.pushState/popstate (nav_historial) para que el botón Atrás
- * de Android cerrara un nivel a la vez, pero eso chocaba con el
- * router propio de Odoo 18 (ver el comentario grande en
- * order_screen.js) y se sacó por completo.
+ * Su propio nivel en la pila de navegación (back_stack.js) lo maneja
+ * RutaDetalle (quien la abre/cierra, ver abrirVisita()/cerrarVisita()
+ * ahí) -- acá adentro, tomarPedido()/cerrarPedido() y abrirEdicion()/
+ * cerrarEdicion() manejan los niveles de SUS propios hijos (catálogo,
+ * ficha de cliente). Ver el comentario grande de back_stack.js para
+ * el mecanismo completo (segundo rediseño de esta sesión: ya no se
+ * intercepta el Atrás, se reconstruye la pantalla en cada recargado a
+ * partir de lo que el historial del navegador y sessionStorage digan
+ * que corresponde).
  *
  * Carga sus propios datos a partir de orderId (no depende de que el
  * padre le pase el objeto completo) para poder abrirse también, más
@@ -55,6 +59,13 @@ export class VisitSheet extends Component {
     static components = {OrderScreen, ClienteForm};
     static props = {
         orderId: Number,
+        // Lo que sigue en la pila de navegación guardada después de
+        // esta visita (ver el comentario grande de back_stack.js) --
+        // vacío en la apertura normal (tocar una fila de la Lista);
+        // trae algo cuando se está reconstruyendo tras un Atrás/
+        // recargado con el catálogo (y opcionalmente el carrito)
+        // abierto.
+        pilaRestante: {type: Array, optional: true},
         onCerrar: Function,
         onCambio: {type: Function, optional: true},
     };
@@ -64,12 +75,24 @@ export class VisitSheet extends Component {
         this.notification = useService("notification");
         this.action = useService("action");
         this.sheetRef = useRef("sheet");
+        const nivelInicial =
+            this.props.pilaRestante && this.props.pilaRestante.length
+                ? this.props.pilaRestante[0]
+                : null;
         this.state = useState({
             cargando: true,
             visita: null,
             panelEstadoAbierto: false,
             editando: false,
-            tomandoPedido: false,
+            // Auto-abre el catálogo si props.pilaRestante lo indica
+            // (ver el comentario grande de back_stack.js) -- OrderScreen
+            // recibe a su vez lo que siga después (carrito), ver el
+            // template.
+            tomandoPedido: !!(nivelInicial && nivelInicial.tipo === "catalogo"),
+            pilaRestanteCatalogo:
+                nivelInicial && nivelInicial.tipo === "catalogo"
+                    ? this.props.pilaRestante.slice(1)
+                    : [],
             arrastreY: 0,
             arrastrando: false,
             cerrando: false,
@@ -85,11 +108,21 @@ export class VisitSheet extends Component {
         this._onSoltarArrastre = (ev) => this.soltarArrastre(ev);
         this._heartbeatTimer = null;
 
+        // El nivel de navegación de ESTA hoja (la visita en sí) lo
+        // empuja/cierra quien la abre -- RutaDetalle.abrirVisita()/
+        // cerrarVisita() -- no acá (ver el comentario grande de
+        // back_stack.js: si esta hoja se auto-abre al reconstruir tras
+        // un Atrás/recargado, ese nivel ya está representado en lo
+        // guardado, empujarlo de nuevo acá duplicaría la entrada). El
+        // catálogo y la ficha de cliente, en cambio, son niveles que
+        // SÍ maneja esta misma hoja directo -- ver tomarPedido()/
+        // cerrarPedido()/abrirEdicion()/cerrarEdicion() más abajo.
         onWillStart(() => this.cargar());
         onWillStart(() => this._chequearCarritoActivo());
         this._heartbeatTimer = setInterval(
             () => this._chequearCarritoActivo(), SHALOM_INTERVALO_HEARTBEAT_MS
         );
+
         onWillUnmount(() => {
             this.detenerArrastre();
             if (this._heartbeatTimer) {
@@ -411,6 +444,10 @@ export class VisitSheet extends Component {
                 "action_ver_historial_cotizaciones",
                 [[this.props.orderId]]
             );
+            // Ver el bloque "CASO APARTE" del comentario grande de
+            // back_stack.js -- sin esto, el Atrás real al volver de
+            // Ventas cae en el hub en vez de en esta misma visita.
+            marcarRetorno();
             this.action.doAction(normalizarAccionActWindow(resultado));
         } catch (error) {
             console.error("shalom: error al abrir historial de cotizaciones", error);
@@ -419,10 +456,12 @@ export class VisitSheet extends Component {
     }
 
     tomarPedido() {
+        abrirNivel({tipo: "catalogo"});
         this.state.tomandoPedido = true;
     }
 
     cerrarPedido() {
+        cerrarNivel();
         this.state.tomandoPedido = false;
     }
 
@@ -437,6 +476,10 @@ export class VisitSheet extends Component {
             const resultado = await this.orm.call("fsm.order", "action_crear_cotizacion", [
                 [this.props.orderId],
             ]);
+            // Ver el bloque "CASO APARTE" del comentario grande de
+            // back_stack.js -- sin esto, el Atrás real al volver de
+            // Ventas cae en el hub en vez de en esta misma visita.
+            marcarRetorno();
             this.action.doAction(normalizarAccionActWindow(resultado));
         } catch (error) {
             console.error("shalom: error al abrir la cotización", error);

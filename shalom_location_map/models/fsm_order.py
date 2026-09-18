@@ -78,7 +78,9 @@ Extiende fsm.order (la tarea/orden de visita a un cliente) con:
     de verdad, pero el método seguía corriendo igual y cerraba la
     visita como Completada. Ahora shalom_confirmar_pedido() recibe
     payment_method (obligatorio), special_delivery_date (opcional) e
-    includes_itbms (obligatorio, default True), los escribe en la
+    includes_itbms (obligatorio, default False -- el 99% de los
+    clientes NO lo quiere, ver shalom_ultima_forma_pago_e_itbms() más
+    abajo), los escribe en la
     sale.order ANTES de confirmar, y confirma con
     with_context(skip_payment_method_check=True) -- la misma clave
     exacta que stock_picking_sale_buttons espera para no volver a
@@ -644,7 +646,7 @@ class FSMOrder(models.Model):
         sale_order._update_programs_and_rewards()
 
     def shalom_confirmar_pedido(
-        self, lineas, payment_method, special_delivery_date=False, includes_itbms=True
+        self, lineas, payment_method, special_delivery_date=False, includes_itbms=False
     ):
         """Llamado desde la app del vendedor al tocar "Confirmar
         pedido": crea o reutiliza la cotización vinculada a esta visita
@@ -768,12 +770,14 @@ class FSMOrder(models.Model):
         igual, no es obligatorio dejar lo precargado.
 
         Devuelve {"payment_method": valor|False, "includes_itbms":
-        bool} -- includes_itbms default True (sin historial previo, se
-        asume que sí incluye, mismo criterio que el default del campo
-        en stock_picking_sale_buttons)."""
+        bool} -- includes_itbms default False (sin historial previo, se
+        asume que NO incluye: en stock_picking_sale_buttons el default
+        de ese campo se cambió a apagado, el 99% de los clientes no lo
+        quiere -- solo se precarga en True si ESE cliente puntual ya lo
+        tuvo encendido en un pedido anterior)."""
         location = self.env["fsm.location"].browse(location_id)
         if not location.exists() or not location.partner_id:
-            return {"payment_method": False, "includes_itbms": True}
+            return {"payment_method": False, "includes_itbms": False}
         ultima = self.env["sale.order"].search(
             [
                 ("partner_id", "=", location.partner_id.id),
@@ -783,7 +787,7 @@ class FSMOrder(models.Model):
             limit=1,
         )
         if not ultima:
-            return {"payment_method": False, "includes_itbms": True}
+            return {"payment_method": False, "includes_itbms": False}
         return {
             "payment_method": ultima.custom_payment_method or False,
             "includes_itbms": ultima.custom_itbms_required,

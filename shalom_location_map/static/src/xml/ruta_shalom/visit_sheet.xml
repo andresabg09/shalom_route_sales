@@ -106,6 +106,7 @@
         <OrderScreen
             t-if="state.tomandoPedido"
             orderId="props.orderId"
+            pilaRestante="state.pilaRestanteCatalogo"
             clienteNombre="state.visita.nombre"
             onCerrar.bind="cerrarPedido"
             onConfirmado.bind="pedidoConfirmado"

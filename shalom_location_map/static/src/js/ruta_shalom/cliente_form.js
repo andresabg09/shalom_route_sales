@@ -1,8 +1,9 @@
 /** @odoo-module **/
 
-import {Component, onWillStart, useState} from "@odoo/owl";
+import {Component, onWillStart, onWillUnmount, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {cerrarConAnimacion} from "./animacion_utils";
+import {abrirNivel, cerrarNivel} from "./back_stack";
 import {capturarMejorPosicionGps} from "./gps_utils";
 
 /**
@@ -31,6 +32,20 @@ import {capturarMejorPosicionGps} from "./gps_utils";
  *   lo guarda en el cliente -- en modo editar, se escribe al toque
  *   (shalom_actualizar_gps); en modo crear, se manda junto con el
  *   resto al confirmar (todavía no existe el registro).
+ *
+ * Un solo componente reusado desde cuatro lugares (hoja de visita,
+ * pestaña Clientes, popup del pin en el mapa de RutaDetalle, banner de
+ * OrderScreen) -- por eso se registra SOLO acá en la pila de
+ * navegación (ver setup()/cancelar()/guardar() más abajo, y
+ * back_stack.js para el mecanismo completo): el Atrás de Android
+ * cierra el formulario en cualquiera de los cuatro casos sin que cada
+ * pantalla que lo abre tenga que saber nada de esto. A diferencia de
+ * otros niveles (visita, catálogo), este SÍ puede auto-registrarse en
+ * su propio setup()/cierre sin riesgo de duplicar una entrada -- nunca
+ * hace falta "reabrirlo solo" tras un recargado: si Odoo recarga la
+ * app mientras este formulario está abierto, es porque el Atrás que
+ * disparó ese recargado es justamente el que lo está cerrando (no
+ * tiene hijos propios, siempre es el nivel más profundo).
  */
 
 const RUTA_SIN_ASIGNAR = "sin_asignar";
@@ -90,6 +105,31 @@ export class ClienteForm extends Component {
                 await this.cargarCliente();
             }
         });
+
+        // Se registra como un nivel de la pila de navegación apenas se
+        // monta -- ver cancelar()/guardar() más abajo, los dos únicos
+        // caminos de cierre intencional, y el comentario grande de
+        // back_stack.js. OJO -- ya NO es posible interceptar el Atrás
+        // real para mostrar el aviso de "salir sin guardar" (no hay
+        // forma de "cancelar" una navegación real del navegador, ver
+        // ese mismo comentario grande): si hay cambios sin guardar y
+        // se sale por Atrás en vez del botón "←"/Cancelar propio, se
+        // pierden sin aviso -- mismo criterio ya aceptado para el
+        // carrito de OrderScreen.
+        abrirNivel({tipo: "cliente_form"});
+        this._nivelCerrado = false;
+        onWillUnmount(() => this._cerrarMiNivel());
+    }
+
+    /** Saca este nivel de la pila de navegación -- una sola vez, sin
+     * importar cuántos caminos de cierre disparen esto (cancelar(),
+     * guardar(), el respaldo de onWillUnmount). */
+    _cerrarMiNivel() {
+        if (this._nivelCerrado) {
+            return;
+        }
+        this._nivelCerrado = true;
+        cerrarNivel();
     }
 
     /** Cualquier cambio en un campo pasa por acá -- controla si hace
@@ -415,6 +455,7 @@ export class ClienteForm extends Component {
                 }
                 this.notification.add("Datos del cliente actualizados.", {type: "success"});
             }
+            this._cerrarMiNivel();
             cerrarConAnimacion(this.state, () => this.props.onGuardado());
         } catch (error) {
             console.error("shalom: error al guardar cliente", error);
@@ -454,6 +495,7 @@ export class ClienteForm extends Component {
     }
 
     cancelar() {
+        this._cerrarMiNivel();
         cerrarConAnimacion(this.state, () => this.props.onCancelar());
     }
 }

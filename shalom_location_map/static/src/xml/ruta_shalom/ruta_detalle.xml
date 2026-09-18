@@ -139,6 +139,7 @@
             <VisitSheet
                 t-if="state.visitaAbiertaId"
                 orderId="state.visitaAbiertaId"
+                pilaRestante="state.pilaRestanteVisita"
                 onCerrar.bind="cerrarVisita"
                 onCambio.bind="recargarVisitas"
             />
