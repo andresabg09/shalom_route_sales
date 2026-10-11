@@ -96,6 +96,66 @@
                         class="product-card"
                         t-att-class="cantidadEnCarrito(producto.id) ? 'product-card-en-carrito' : ''"
                     >
+                        <div class="name" t-esc="producto.name"/>
+                        <div class="product-thumb-wrap">
+                            <img class="product-thumb" t-att-src="imagenUrl(producto)" alt="" t-on-error="onImagenError"/>
+                        </div>
+                        <div class="product-side">
+                            <div class="price-label">Precio unitario</div>
+                            <div class="price" t-esc="'$' + producto.list_price.toFixed(2)"/>
+                            <t t-set="existencia" t-value="infoExistencia(producto)"/>
+                            <span class="stock-badge" t-att-class="'tono-' + existencia.tono" t-esc="existencia.texto"/>
+                            <div class="reservados" t-if="reservados(producto)" t-esc="reservados(producto) + ' reservados'"/>
+                        </div>
+                        <t t-if="cantidadEnCarrito(producto.id) and etiquetaPromo(producto.id)">
+                            <div
+                                class="promo-badge"
+                                t-att-class="promoCompleta(producto.id) ? 'promo-completa' : 'promo-pendiente'"
+                                t-esc="etiquetaPromo(producto.id)"
+                            />
+                        </t>
+                        <button
+                            t-if="!cantidadEnCarrito(producto.id)"
+                            class="qty-add-btn"
+                            t-on-click="() => this.agregarProducto(producto)"
+                        >+ Agregar</button>
+                        <div t-else="" class="qty-row">
+                            <div class="qty-stepper">
+                                <button t-on-click="() => this.cambiarCantidad(producto.id, -1)">−</button>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    class="qty-input"
+                                    t-att-value="cantidadEnCarrito(producto.id)"
+                                    t-on-change="(ev) => this.cambiarCantidadManual(producto.id, ev)"
+                                    t-on-focus="seleccionarTextoCantidad"
+                                />
+                                <button t-on-click="() => this.cambiarCantidad(producto.id, 1)">+</button>
+                            </div>
+                            <button
+                                class="qty-trash-btn"
+                                title="Quitar del carrito"
+                                t-on-click="() => this.quitarDelCarrito(producto.id)"
+                            ><i class="fa fa-trash-o" aria-hidden="true"/></button>
+                        </div>
+                    </div>
+
+                    <div class="paginador" t-if="totalPaginas > 1">
+                        <button class="btn btn-ghost" t-on-click="paginaAnterior" t-att-disabled="state.paginaActual === 1">‹ Anterior</button>
+                        <span class="paginador-info" t-esc="'Página ' + state.paginaActual + ' de ' + totalPaginas"/>
+                        <button class="btn btn-ghost" t-on-click="paginaSiguiente" t-att-disabled="state.paginaActual === totalPaginas">Siguiente ›</button>
+                    </div>
+
+                    <div t-if="!productosFiltrados.length" class="shalom-vacio">
+                        No se encontraron productos.
+                    </div>
+                    <div
+                        t-foreach="productosPaginados"
+                        t-as="producto"
+                        t-key="producto.id"
+                        class="product-card"
+                        t-att-class="cantidadEnCarrito(producto.id) ? 'product-card-en-carrito' : ''"
+                    >
                         <div class="product-thumb-wrap">
                             <img class="product-thumb" t-att-src="imagenUrl(producto)" alt="" t-on-error="onImagenError"/>
                         </div>

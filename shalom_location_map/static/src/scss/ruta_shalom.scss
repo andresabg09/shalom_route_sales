@@ -39,6 +39,16 @@
     // un badge de estado, no para un texto de advertencia que tiene
     // que saltar a la vista).
     --shalom-alerta: #c62828;
+    // Existencia y promo del catálogo: colores EXACTOS de Ventas (modo
+    // claro); en modo oscuro se reemplazan por tonos que se leen sobre
+    // fondo oscuro, con la misma lógica danger/warning/success.
+    --shalom-stock-danger-bg: #fde4e4;
+    --shalom-stock-danger-ink: #9b1c1c;
+    --shalom-stock-warning-bg: #fff1d6;
+    --shalom-stock-warning-ink: #7a4b00;
+    --shalom-stock-success-bg: #e3f5ea;
+    --shalom-stock-success-ink: #14633a;
+    --shalom-precio: #2d2650;
     --shalom-shadow: 0 10px 30px -12px rgba(60, 20, 35, 0.28);
     --shalom-radius-lg: 22px;
     --shalom-radius-md: 14px;
@@ -69,6 +79,13 @@
         // Más claro que el rojo de modo día -- un rojo oscuro se hunde
         // contra un fondo ya oscuro y deja de leerse como alerta.
         --shalom-alerta: #ff6b5e;
+        --shalom-stock-danger-bg: #3d1d1f;
+        --shalom-stock-danger-ink: #ff9b94;
+        --shalom-stock-warning-bg: #3a2c17;
+        --shalom-stock-warning-ink: #f2b765;
+        --shalom-stock-success-bg: #153826;
+        --shalom-stock-success-ink: #7fd8a8;
+        --shalom-precio: #f5e9ee;
         --shalom-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
     }
 
@@ -1738,19 +1755,26 @@
         align-items: center;
         gap: 8px;
     }
+    // Etiqueta de existencia (solo catálogo): informativa, no bloquea la venta
     .stock-badge {
-        font-size: 0.68rem;
-        font-weight: 800;
-        padding: 2px 8px;
-        border-radius: 999px;
+        display: inline-block;
+        padding: 0.15rem 0.55rem;
+        border-radius: 6px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        white-space: nowrap;
     }
-    .stock-badge.stock-low {
-        background: var(--shalom-pendiente-soft);
-        color: var(--shalom-pendiente);
+    .stock-badge.tono-danger {
+        background: var(--shalom-stock-danger-bg);
+        color: var(--shalom-stock-danger-ink);
     }
-    .stock-badge.stock-out {
-        background: var(--shalom-cancelado-soft);
-        color: var(--shalom-cancelado);
+    .stock-badge.tono-warning {
+        background: var(--shalom-stock-warning-bg);
+        color: var(--shalom-stock-warning-ink);
+    }
+    .stock-badge.tono-success {
+        background: var(--shalom-stock-success-bg);
+        color: var(--shalom-stock-success-ink);
     }
 
     // estado de promoción "comprar X llevar Y" (mismo criterio que ya
@@ -1861,6 +1885,134 @@
         cursor: pointer;
         font-family: inherit;
         white-space: nowrap;
+    }
+
+    // Tarjeta del catálogo: nombre arriba (ancho completo), foto 200x200 a
+    // la izquierda, precio y existencia a la derecha, promo y botones de
+    // lado a lado. Mismo orden que el catálogo de Ventas. Todo bajo
+    // .catalog-list para no tocar la pantalla del carrito, que comparte
+    // algunas clases (.product-thumb-wrap, .qty-*, .promo-badge).
+    .catalog-list .product-card {
+        display: grid;
+        grid-template-columns: 200px minmax(0, 1fr);
+        column-gap: 12px;
+        row-gap: 6px;
+        align-items: start;
+
+        .name {
+            grid-column: 1 / -1;
+            font-weight: 700;
+            font-size: 1.1rem;
+            line-height: 1.3;
+            overflow-wrap: anywhere;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        .product-thumb-wrap {
+            grid-column: 1;
+            grid-row: 2;
+            width: 200px;
+            height: 200px;
+            margin: 0 auto;
+        }
+        .product-thumb {
+            object-fit: contain;
+        }
+        .product-side {
+            grid-column: 2;
+            grid-row: 2;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+        }
+        .price-label {
+            font-size: 0.8rem;
+            color: var(--shalom-ink-muted);
+        }
+        .price {
+            font-size: 1.45rem;
+            font-weight: 800;
+            line-height: 1.15;
+            color: var(--shalom-precio);
+            margin-bottom: 8px;
+        }
+        .reservados {
+            font-size: 0.8rem;
+            color: var(--shalom-ink-muted);
+            margin-top: 2px;
+        }
+        .promo-badge {
+            grid-column: 1 / -1;
+            align-self: stretch;
+            margin: 0;
+            padding: 0.35rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            line-height: 1.35;
+            white-space: normal;
+        }
+        .promo-badge.promo-completa {
+            background: var(--shalom-stock-success-bg);
+            color: var(--shalom-stock-success-ink);
+        }
+        .promo-badge.promo-pendiente {
+            background: var(--shalom-stock-warning-bg);
+            color: var(--shalom-stock-warning-ink);
+        }
+        .qty-add-btn {
+            grid-column: 1 / -1;
+            align-self: stretch;
+            width: 100%;
+            height: 46px;
+            padding: 0 14px;
+            font-size: 0.95rem;
+        }
+        .qty-row {
+            grid-column: 1 / -1;
+            align-self: stretch;
+            width: 100%;
+        }
+        .qty-stepper {
+            flex: 1;
+            align-self: stretch;
+            justify-content: space-between;
+            gap: 4px;
+            padding: 4px;
+        }
+        .qty-stepper button {
+            width: auto;
+            min-width: 54px;
+            height: 46px;
+            border-radius: 999px;
+            font-size: 1.3rem;
+        }
+        .qty-input {
+            flex: 1;
+            min-width: 0;
+            width: auto;
+            font-size: 1.1rem;
+        }
+        .qty-trash-btn {
+            width: 46px;
+            height: 46px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+    }
+    // Pantallas muy angostas: la foto sigue en 200px; el texto de la
+    // derecha puede envolver en vez de desbordar.
+    @media (max-width: 360px) {
+        .catalog-list .product-card .stock-badge {
+            white-space: normal;
+        }
     }
 
     .cart-footer {

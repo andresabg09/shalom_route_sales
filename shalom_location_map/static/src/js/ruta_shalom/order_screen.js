@@ -799,22 +799,32 @@ export class OrderScreen extends Component {
         await this._confirmarPedidoDeVerdad();
     }
 
-    async cargarProductos() {
-        this.state.cargando = true;
+    /** `silencioso`: refresco en segundo plano (sin spinner) -- conserva
+     * la búsqueda, filtros, página y scroll, porque solo reemplaza los
+     * datos de state.productos. Se usa al volver del carrito para que
+     * "libres" y "reservados" reflejen lo que se acaba de prometer. */
+    async cargarProductos(silencioso = false) {
+        if (!silencioso) {
+            this.state.cargando = true;
+        }
         try {
             const productos = await this.orm.searchRead(
                 "product.product",
                 [["sale_ok", "=", true]],
-                ["name", "list_price", "barcode", "default_code", "qty_available", "categ_id"],
+                ["name", "list_price", "barcode", "default_code", "qty_available", "free_qty", "categ_id"],
                 {order: "name asc"}
             );
             this.state.productos = productos;
         } catch (error) {
-            this.notification.add("No se pudo cargar el catálogo de productos.", {
-                type: "danger",
-            });
+            if (!silencioso) {
+                this.notification.add("No se pudo cargar el catálogo de productos.", {
+                    type: "danger",
+                });
+            }
         } finally {
-            this.state.cargando = false;
+            if (!silencioso) {
+                this.state.cargando = false;
+            }
         }
     }
 
@@ -832,7 +842,7 @@ export class OrderScreen extends Component {
     get productosParaCategorias() {
         const texto = this.state.busqueda.trim().toLowerCase();
         return this.state.productos.filter((producto) => {
-            if (this.state.soloConStock && producto.qty_available <= 0) {
+            if (this.state.soloConStock && this.stockLibre(producto) <= 0) {
                 return false;
             }
             if (!texto) {
@@ -924,7 +934,7 @@ export class OrderScreen extends Component {
             ) {
                 return false;
             }
-            if (this.state.soloConStock && producto.qty_available <= 0) {
+            if (this.state.soloConStock && this.stockLibre(producto) <= 0) {
                 return false;
             }
             if (!texto) {
@@ -1039,14 +1049,33 @@ export class OrderScreen extends Component {
         return item ? item.cantidad : 0;
     }
 
-    etiquetaStock(producto) {
-        if (producto.qty_available <= 0) {
-            return "Sin stock";
+    /** Existencia LIBRE (lo que hay menos lo ya prometido a otros
+     * pedidos). Si el servidor no manda free_qty, cae a qty_available. */
+    stockLibre(producto) {
+        const libre = producto.free_qty === undefined ? producto.qty_available : producto.free_qty;
+        return Math.floor(libre || 0);
+    }
+
+    /** Etiqueta única de existencia. Solo informativa: NUNCA bloquea ni
+     * oculta la venta (esa política la decide el dueño). */
+    infoExistencia(producto) {
+        const libre = this.stockLibre(producto);
+        if (libre <= 0) {
+            return {texto: "Sin existencia", tono: "danger"};
         }
-        if (producto.qty_available <= STOCK_BAJO_UMBRAL) {
-            return `Stock bajo: ${producto.qty_available}`;
+        if (libre <= STOCK_BAJO_UMBRAL) {
+            return {texto: `Quedan ${libre}`, tono: "warning"};
         }
-        return "";
+        return {texto: `Disponible: ${libre}`, tono: "success"};
+    }
+
+    /** Unidades físicas ya prometidas a otros pedidos; 0 = no mostrar. */
+    reservados(producto) {
+        if (!(producto.qty_available > 0)) {
+            return 0;
+        }
+        const n = Math.round(producto.qty_available - this.stockLibre(producto));
+        return n > 0 ? n : 0;
     }
 
     etiquetaPromo(productoId) {
@@ -1216,6 +1245,7 @@ export class OrderScreen extends Component {
     irACatalogo() {
         cerrarNivel();
         this.state.pantalla = "catalogo";
+        this.cargarProductos(true);
     }
 
     irACarrito() {
