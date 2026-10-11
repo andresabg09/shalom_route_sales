@@ -3,8 +3,13 @@
     <t t-name="shalom_location_map.Clientes">
         <div class="shalom-screen clientes-screen">
             <div class="topbar">
-                <div class="route-name">Clientes</div>
-                <div class="route-sub"><span>Tu directorio</span></div>
+                <div class="topbar-row">
+                    <div class="topbar-title">
+                        <div class="route-name">Clientes</div>
+                        <div class="route-sub"><span>Tu directorio</span></div>
+                    </div>
+                    <TemaSelector/>
+                </div>
             </div>
 
             <div class="search-row">

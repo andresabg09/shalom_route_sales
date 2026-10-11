@@ -5,9 +5,47 @@
 // Paleta y lenguaje visual tomados del artifact de referencia ("Ruta
 // Shalom", ver docs/plan_fase_1_a_4.md) -- variables con prefijo
 // --shalom- para no chocar con las custom properties propias de Odoo.
-// Se deja el bloque de modo oscuro (prefers-color-scheme) aunque el
-// backend de Odoo Community no tiene un toggle propio, para que se
-// vea bien en un Android con "tema oscuro del sistema" activado.
+// Tema claro por defecto; el vendedor elige Claro / Dispositivo /
+// Oscuro con el selector de cada encabezado (se guarda por dispositivo
+// en localStorage). "Dispositivo" sigue prefers-color-scheme.
+
+// Paleta oscura reutilizable: la usan tanto el modo "Oscuro" (siempre)
+// como el modo "Dispositivo" (solo si el sistema está en oscuro). Los
+// valores son los mismos de antes -- cambia CUÁNDO se activan, no cuáles son.
+@mixin shalom-paleta-oscura {
+    --shalom-bg: #180f14;
+    --shalom-surface: #241820;
+    --shalom-surface-2: #2e1e28;
+    --shalom-ink: #f5e9ee;
+    --shalom-ink-muted: #b79aa5;
+    --shalom-line: #3d2a34;
+    --shalom-accent: #ec5c92;
+    --shalom-accent-ink: #1a0a10;
+    --shalom-accent-soft: #3a1d2a;
+    --shalom-pendiente: #e3a04a;
+    --shalom-pendiente-soft: #3a2c17;
+    --shalom-completado: #5bc491;
+    --shalom-completado-soft: #153826;
+    --shalom-no_quiso: #c98ca0;
+    --shalom-no_quiso-soft: #33212a;
+    --shalom-cancelado: #9aa2ae;
+    --shalom-cancelado-soft: #2b2e34;
+    --shalom-no_atendido: #9db4c9;
+    --shalom-no_atendido-soft: #232b33;
+    --shalom-info: #7aaaf5;
+    --shalom-info-soft: #1c2c47;
+    // Más claro que el rojo de modo día -- un rojo oscuro se hunde
+    // contra un fondo ya oscuro y deja de leerse como alerta.
+    --shalom-alerta: #ff6b5e;
+    --shalom-stock-danger-bg: #3d1d1f;
+    --shalom-stock-danger-ink: #ff9b94;
+    --shalom-stock-warning-bg: #3a2c17;
+    --shalom-stock-warning-ink: #f2b765;
+    --shalom-stock-success-bg: #153826;
+    --shalom-stock-success-ink: #7fd8a8;
+    --shalom-precio: #f5e9ee;
+    --shalom-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+}
 
 .o_shalom_ruta_app {
     --shalom-bg: #faf6f4;
@@ -54,39 +92,16 @@
     --shalom-radius-md: 14px;
     --shalom-radius-sm: 10px;
 
+    // Tema (selector arriba a la derecha de cada pantalla, ver
+    // tema_selector.js): el atributo data-shalom-tema lo pone el JS en la
+    // raíz. Sin atributo (o "claro") se queda la paleta clara de arriba.
+    &[data-shalom-tema="oscuro"] {
+        @include shalom-paleta-oscura;
+    }
     @media (prefers-color-scheme: dark) {
-        --shalom-bg: #180f14;
-        --shalom-surface: #241820;
-        --shalom-surface-2: #2e1e28;
-        --shalom-ink: #f5e9ee;
-        --shalom-ink-muted: #b79aa5;
-        --shalom-line: #3d2a34;
-        --shalom-accent: #ec5c92;
-        --shalom-accent-ink: #1a0a10;
-        --shalom-accent-soft: #3a1d2a;
-        --shalom-pendiente: #e3a04a;
-        --shalom-pendiente-soft: #3a2c17;
-        --shalom-completado: #5bc491;
-        --shalom-completado-soft: #153826;
-        --shalom-no_quiso: #c98ca0;
-        --shalom-no_quiso-soft: #33212a;
-        --shalom-cancelado: #9aa2ae;
-        --shalom-cancelado-soft: #2b2e34;
-        --shalom-no_atendido: #9db4c9;
-        --shalom-no_atendido-soft: #232b33;
-        --shalom-info: #7aaaf5;
-        --shalom-info-soft: #1c2c47;
-        // Más claro que el rojo de modo día -- un rojo oscuro se hunde
-        // contra un fondo ya oscuro y deja de leerse como alerta.
-        --shalom-alerta: #ff6b5e;
-        --shalom-stock-danger-bg: #3d1d1f;
-        --shalom-stock-danger-ink: #ff9b94;
-        --shalom-stock-warning-bg: #3a2c17;
-        --shalom-stock-warning-ink: #f2b765;
-        --shalom-stock-success-bg: #153826;
-        --shalom-stock-success-ink: #7fd8a8;
-        --shalom-precio: #f5e9ee;
-        --shalom-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+        &[data-shalom-tema="dispositivo"] {
+            @include shalom-paleta-oscura;
+        }
     }
 
     * {
@@ -139,6 +154,52 @@
     .visited-toggle-btn {
         flex: 0 0 auto;
         white-space: nowrap;
+    }
+
+    // Selector de tema (Claro / Dispositivo / Oscuro), arriba a la
+    // derecha de cada encabezado -- ver tema_selector.js.
+    .tema-selector {
+        position: relative;
+        flex: 0 0 auto;
+    }
+    .tema-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        z-index: 50;
+        min-width: 176px;
+        padding: 6px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        background: var(--shalom-surface);
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        box-shadow: var(--shalom-shadow);
+    }
+    .tema-opcion {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        height: 40px;
+        padding: 0 12px;
+        border: none;
+        border-radius: var(--shalom-radius-sm);
+        background: transparent;
+        color: var(--shalom-ink);
+        font-family: inherit;
+        font-size: 0.9rem;
+        text-align: left;
+        cursor: pointer;
+    }
+    .tema-opcion.active {
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+        font-weight: 700;
+    }
+    .tema-opcion-lbl {
+        flex: 1;
     }
     .route-name {
         font-size: 1.15rem;
@@ -3179,6 +3240,20 @@
         }
         .adm-header-title {
             min-width: 0;
+        }
+        // Selector de tema: celular -> a la derecha del título (las
+        // pestañas bajan a su fila, ver media query de abajo); desktop ->
+        // al final de la fila, después de las pestañas.
+        @media (min-width: 900px) {
+            .adm-header {
+                column-gap: 12px;
+            }
+            .adm-tabs {
+                margin-left: auto;
+            }
+            .tema-selector {
+                order: 2;
+            }
         }
         .adm-h1 {
             font-size: 1.3rem;

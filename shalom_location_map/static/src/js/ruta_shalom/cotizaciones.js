@@ -2,6 +2,7 @@
 
 import {Component, onWillStart, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
+import {TemaSelector} from "./tema_selector";
 
 /**
  * Pestaña "Cotizaciones" (Fase 4): todas las sale.order de los
@@ -15,6 +16,7 @@ import {useService} from "@web/core/utils/hooks";
  */
 export class Cotizaciones extends Component {
     static template = "shalom_location_map.Cotizaciones";
+    static components = {TemaSelector};
     static props = {};
 
     setup() {

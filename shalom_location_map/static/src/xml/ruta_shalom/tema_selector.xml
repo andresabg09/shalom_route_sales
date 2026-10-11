@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.TemaSelector">
+        <div class="tema-selector" t-ref="raiz">
+            <button
+                type="button"
+                class="icon-btn tema-btn"
+                t-on-click="toggleMenu"
+                title="Tema de la app"
+                aria-haspopup="true"
+                t-att-aria-expanded="state.abierto ? 'true' : 'false'"
+            ><i t-attf-class="fa {{temaActual.icono}}" aria-hidden="true"/></button>
+            <div class="tema-menu" t-if="state.abierto" role="menu">
+                <button
+                    type="button"
+                    role="menuitemradio"
+                    t-foreach="temas"
+                    t-as="tema"
+                    t-key="tema.valor"
+                    t-att-aria-checked="state.tema === tema.valor ? 'true' : 'false'"
+                    t-attf-class="tema-opcion {{state.tema === tema.valor ? 'active' : ''}}"
+                    t-on-click="() => this.elegir(tema.valor)"
+                >
+                    <i t-attf-class="fa {{tema.icono}}" aria-hidden="true"/>
+                    <span class="tema-opcion-lbl" t-esc="tema.etiqueta"/>
+                    <i t-if="state.tema === tema.valor" class="fa fa-check tema-opcion-check" aria-hidden="true"/>
+                </button>
+            </div>
+        </div>
+    </t>
+</templates>

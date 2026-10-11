@@ -13,6 +13,7 @@ import {ESTADO_ETIQUETA, estadoDesdeStageName} from "./stage_utils";
 import {abrirNivel, cerrarNivel} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
 import {VisitSheet} from "./visit_sheet";
+import {TemaSelector} from "./tema_selector";
 
 /**
  * Detalle de una ruta (una fsm.route.schedule): tabs Lista/Mapa.
@@ -255,7 +256,7 @@ function posicionEnBorde(anguloDeg, ancho, alto, margen) {
 
 export class RutaDetalle extends Component {
     static template = "shalom_location_map.RutaDetalle";
-    static components = {VisitSheet, ClienteForm};
+    static components = {VisitSheet, ClienteForm, TemaSelector};
     static props = {
         schedule: Object,
         onVolver: Function,

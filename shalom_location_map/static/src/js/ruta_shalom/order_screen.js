@@ -7,6 +7,7 @@ import {normalizarAccionActWindow} from "./action_utils";
 import {cerrarConAnimacion} from "./animacion_utils";
 import {abrirNivel, cerrarNivel, marcarRetorno} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
+import {TemaSelector} from "./tema_selector";
 
 const {DateTime} = luxon;
 
@@ -170,7 +171,7 @@ function shalomFechaServidorAMs(fechaServidor) {
 
 export class OrderScreen extends Component {
     static template = "shalom_location_map.OrderScreen";
-    static components = {ClienteForm, DateTimeInput};
+    static components = {ClienteForm, DateTimeInput, TemaSelector};
     static props = {
         orderId: Number,
         // Lo que sigue en la pila de navegación guardada después de

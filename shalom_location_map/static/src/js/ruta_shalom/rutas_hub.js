@@ -2,6 +2,7 @@
 
 import {Component, onWillStart, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
+import {TemaSelector} from "./tema_selector";
 
 /**
  * Pestaña "Rutas" de la app del vendedor: lista de fsm.route.schedule
@@ -58,6 +59,7 @@ function formatoHorasImpl(horas) {
 
 export class RutasHub extends Component {
     static template = "shalom_location_map.RutasHub";
+    static components = {TemaSelector};
     static props = {
         onAbrirRuta: Function,
     };

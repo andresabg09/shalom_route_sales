@@ -3,6 +3,7 @@
 import {Component, onWillStart, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {ClienteForm} from "./cliente_form";
+import {TemaSelector} from "./tema_selector";
 
 /**
  * Pestaña "Clientes" (Fase 4): directorio de fsm.location asignadas al
@@ -15,7 +16,7 @@ import {ClienteForm} from "./cliente_form";
  */
 export class Clientes extends Component {
     static template = "shalom_location_map.Clientes";
-    static components = {ClienteForm};
+    static components = {ClienteForm, TemaSelector};
     static props = {};
 
     setup() {

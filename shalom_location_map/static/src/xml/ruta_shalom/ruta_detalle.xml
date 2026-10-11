@@ -17,6 +17,7 @@
                         t-att-class="state.mostrarVisitados ? 'active' : ''"
                         t-on-click="toggleMostrarVisitados"
                     ><t t-esc="state.mostrarVisitados ? '☰ Pendientes' : '✔ Visitados (' + visitasVisitadas.length + ')'"/></button>
+                    <TemaSelector/>
                 </div>
             </div>
 

@@ -18,6 +18,11 @@
                     <div class="adm-h1"><i class="fa fa-wrench" aria-hidden="true"/> Administración</div>
                     <div class="adm-sub">Seguimiento de visitas y rutas de tus vendedores</div>
                 </div>
+                <!-- Selector de tema: en celular queda a la derecha del
+                     título (las pestañas bajan a su propia fila); en
+                     desktop el CSS lo manda al final, después de las
+                     pestañas. -->
+                <TemaSelector/>
                 <!-- Cada pestaña lleva dos textos: el largo (desktop)
                      y uno corto (celular, calcado de Movil.dc.html), y
                      el CSS muestra uno u otro según el ancho de

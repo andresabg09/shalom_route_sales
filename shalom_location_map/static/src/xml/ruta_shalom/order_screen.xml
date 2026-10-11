@@ -8,7 +8,7 @@
                     <div class="route-name" t-esc="state.pantalla === 'carrito' ? 'Carrito' : 'Tomar pedido'"/>
                     <div class="route-sub" t-esc="props.clienteNombre"/>
                 </div>
-                <span class="icon-btn-spacer"/>
+                <TemaSelector/>
             </div>
 
             <div
