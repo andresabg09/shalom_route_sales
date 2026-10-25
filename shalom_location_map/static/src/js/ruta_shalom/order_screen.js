@@ -230,6 +230,9 @@ export class OrderScreen extends Component {
             // "Precargar de pedidos anteriores" (Fase 1 del juego de
             // ventas): hoja con los últimos pedidos del cliente, para
             // copiar uno completo o productos sueltos al carrito.
+            // Estrellas y margen en vivo contra la vara del cliente
+            // (shalom_evaluar_pedido). Informativo: no bloquea nada.
+            evaluacion: null,
             precargaAbierta: false,
             cargandoPrecarga: false,
             pedidosAnteriores: [], // [{id, nombre, fecha, total, lineas: [{product_id, nombre, cantidad}]}]
@@ -318,6 +321,9 @@ export class OrderScreen extends Component {
             this.detenerEscaneo();
             if (this._syncTimer) {
                 clearInterval(this._syncTimer);
+            }
+            if (this._evalTimer) {
+                clearTimeout(this._evalTimer);
             }
             this._cerrarSesionCatalogo();
         });
@@ -1124,6 +1130,77 @@ export class OrderScreen extends Component {
         };
     }
 
+    // -- Estrellas y margen en vivo --
+
+    /** Pide (con 300 ms de espera, para no llamar por cada toque de
+     * "+") la evaluación del carrito actual. Si falla o no hay
+     * cliente, simplemente no se muestra el medidor. */
+    _pedirEvaluacion() {
+        if (this._evalTimer) {
+            clearTimeout(this._evalTimer);
+        }
+        this._evalTimer = setTimeout(() => this._evaluarCarrito(), 300);
+    }
+
+    async _evaluarCarrito() {
+        const items = this.itemsCarrito;
+        if (!items.length || !this.state.locationId) {
+            this.state.evaluacion = null;
+            return;
+        }
+        try {
+            this.state.evaluacion = await this.orm.call("fsm.order", "shalom_evaluar_pedido", [
+                this.state.locationId,
+                this.lineasParaBackend(items),
+            ]);
+        } catch (error) {
+            console.error("shalom: error al evaluar el pedido", error);
+        }
+    }
+
+    get medidor() {
+        const ev = this.state.evaluacion;
+        if (!ev || !this.cantidadItems) {
+            return null;
+        }
+        const refs = ev.refs || {};
+        const tiene = refs.n > 0;
+        const tope = tiene ? Math.max(refs.record * 1.1, this.total) : 0;
+        const pct = (valor) => (tope ? Math.min(100, (valor / tope) * 100) : 0);
+        let mensaje = "Cliente sin historial de compras: todavía no hay estrellas que medir.";
+        let tono = "neutral";
+        if (tiene) {
+            const sig = ev.siguiente;
+            if (!sig) {
+                mensaje = "¡Oro! Superaste su récord con buen margen.";
+                tono = "oro";
+            } else if (sig.margen_bajo) {
+                mensaje = "Superaste su récord, pero el margen es menor a 20%: el oro no cuenta.";
+                tono = "aviso";
+            } else {
+                const nombres = {1: "bronce (75%)", 2: "plata (100%)", 3: "oro (récord)"};
+                mensaje = `Te faltan $${sig.faltan.toFixed(0)} para ${nombres[sig.estrellas]}`;
+                tono = "falta";
+            }
+        }
+        return {
+            tiene,
+            estrellas: ev.estrellas,
+            margen: ev.margen_pct,
+            margenBajo: ev.margen_pct < 20,
+            mensaje,
+            tono,
+            relleno: pct(this.total),
+            marcas: tiene
+                ? [
+                      {clase: "bronce", pos: pct(refs.t75), texto: `$${Math.round(refs.t75).toLocaleString("en-US")}`},
+                      {clase: "plata", pos: pct(refs.t100), texto: `$${Math.round(refs.t100).toLocaleString("en-US")}`},
+                      {clase: "oro", pos: pct(refs.record), texto: `$${Math.round(refs.record).toLocaleString("en-US")}`},
+                  ]
+                : [],
+        };
+    }
+
     // -- Precargar de pedidos anteriores --
 
     async abrirPrecarga() {
@@ -1296,6 +1373,7 @@ export class OrderScreen extends Component {
      * manda itemsCarritoPagos (sin los regalos ya canjeados).
      */
     async actualizarPromos() {
+        this._pedirEvaluacion();
         const items = this.itemsCarritoPagos;
         if (!items.length) {
             this.state.promoPorProducto = {};

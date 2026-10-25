@@ -1852,6 +1852,111 @@
         flex-wrap: wrap;
         gap: 4px 6px;
     }
+    // Medidor de estrellas y margen del pedido (vara = el propio
+    // historial del cliente). Cada estrella lleva color Y porcentaje.
+    .medidor {
+        margin: 0 14px 8px;
+        padding: 10px 12px;
+        border: 1.5px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-surface);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .medidor-fila {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .medidor-total {
+        font-size: 1.5rem;
+        font-weight: 800;
+        line-height: 1;
+        color: var(--shalom-ink);
+    }
+    .medidor-estrellas {
+        font-size: 1.35rem;
+        letter-spacing: 2px;
+    }
+    .estrella-off {
+        color: var(--shalom-line);
+    }
+    .estrella-1 {
+        color: #c98b5a;
+    }
+    .estrella-2 {
+        color: #9aa5b1;
+    }
+    .estrella-3 {
+        color: #e0a800;
+    }
+    .medidor-margen {
+        font-size: 0.78rem;
+        font-weight: 800;
+        padding: 3px 8px;
+        border-radius: 999px;
+    }
+    .medidor-margen.margen-ok {
+        background: var(--shalom-stock-success-bg);
+        color: var(--shalom-stock-success-ink);
+    }
+    .medidor-margen.margen-bajo {
+        background: var(--shalom-stock-warning-bg);
+        color: var(--shalom-stock-warning-ink);
+    }
+    .medidor-barra {
+        position: relative;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--shalom-line);
+    }
+    .medidor-relleno {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        border-radius: 999px;
+        background: var(--shalom-accent);
+        transition: width 0.25s ease;
+    }
+    .medidor-marca {
+        position: absolute;
+        top: -3px;
+        bottom: -3px;
+        width: 3px;
+        border-radius: 2px;
+        background: #c98b5a;
+    }
+    .medidor-marca.marca-plata {
+        background: #9aa5b1;
+    }
+    .medidor-marca.marca-oro {
+        background: #e0a800;
+    }
+    .medidor-leyenda {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: var(--shalom-ink-muted);
+    }
+    .medidor-mensaje {
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--shalom-ink-muted);
+    }
+    .medidor-mensaje.tono-falta {
+        color: var(--shalom-accent);
+    }
+    .medidor-mensaje.tono-oro {
+        color: #b88700;
+    }
+    .medidor-mensaje.tono-aviso {
+        color: var(--shalom-stock-warning-ink);
+    }
+
     // "Precargar de pedidos anteriores"
     .precarga-btn {
         display: flex;

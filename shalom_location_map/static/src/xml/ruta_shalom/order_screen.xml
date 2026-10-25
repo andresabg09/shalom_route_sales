@@ -27,6 +27,31 @@
                 <button class="nag-banner-close" t-on-click="cerrarAvisoDatosFaltantes" title="Cerrar">✕</button>
             </div>
 
+            <t t-set="med" t-value="medidor"/>
+            <div class="medidor" t-if="med and !state.cargando">
+                <div class="medidor-fila">
+                    <b class="medidor-total" t-esc="'$' + total.toFixed(2)"/>
+                    <span class="medidor-estrellas" t-if="med.tiene" t-att-title="med.estrellas + ' de 3 estrellas'">
+                        <span t-foreach="[1, 2, 3]" t-as="n" t-key="n" t-att-class="med.estrellas >= n ? 'estrella-on estrella-' + n : 'estrella-off'">★</span>
+                    </span>
+                    <span class="medidor-margen" t-att-class="med.margenBajo ? 'margen-bajo' : 'margen-ok'" t-esc="'Margen ' + Math.round(med.margen) + '%'"/>
+                </div>
+                <div class="medidor-barra" t-if="med.tiene">
+                    <div class="medidor-relleno" t-att-style="'width:' + med.relleno + '%'"/>
+                    <span
+                        t-foreach="med.marcas" t-as="marca" t-key="marca.clase"
+                        class="medidor-marca" t-att-class="'marca-' + marca.clase"
+                        t-att-style="'left:' + marca.pos + '%'"
+                    />
+                </div>
+                <div class="medidor-leyenda" t-if="med.tiene">
+                    <span t-foreach="med.marcas" t-as="marca" t-key="marca.clase" t-att-class="'leyenda-' + marca.clase">
+                        <t t-esc="marca.clase === 'bronce' ? '★ ' : (marca.clase === 'plata' ? '★★ ' : '★★★ ')"/><t t-esc="marca.texto"/>
+                    </span>
+                </div>
+                <div class="medidor-mensaje" t-att-class="'tono-' + med.tono" t-esc="med.mensaje"/>
+            </div>
+
             <div t-if="state.cargando" class="shalom-vacio">Cargando catálogo…</div>
 
             <t t-elif="state.pantalla === 'catalogo'">

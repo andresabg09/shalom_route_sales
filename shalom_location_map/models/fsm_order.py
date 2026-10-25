@@ -123,6 +123,8 @@ from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 from odoo.osv import expression
 
+from . import juego_utils
+
 _logger = logging.getLogger(__name__)
 
 try:
@@ -889,6 +891,63 @@ class FSMOrder(models.Model):
                 }
             )
         return resultado
+
+    @api.model
+    def _shalom_referencias_cliente(self, location):
+        """Vara de estrellas de un cliente (fsm.location) a partir de
+        sus ventas confirmadas -- ver juego_utils.referencias_estrellas."""
+        if not location or not location.partner_id:
+            return juego_utils.referencias_estrellas([])
+        ordenes = self.env["sale.order"].search_read(
+            [
+                ("partner_id", "child_of", location.partner_id.commercial_partner_id.id),
+                ("state", "in", list(ESTADOS_VENTA_CONFIRMADA)),
+            ],
+            ["amount_total"],
+        )
+        return juego_utils.referencias_estrellas([o["amount_total"] for o in ordenes])
+
+    @api.model
+    def _shalom_economia_pedido(self, lineas):
+        """Total de venta, costo y margen de un carrito (mismo formato
+        de líneas que shalom_confirmar_pedido). Las líneas de
+        recompensa (regalo) venden a $0 pero SÍ cuestan. El costo es el
+        costo estándar del producto: se lee con sudo() y NUNCA se manda
+        al vendedor, solo el % de margen y la utilidad."""
+        ids = [linea["product_id"] for linea in lineas]
+        productos = {p.id: p for p in self.env["product.product"].sudo().browse(ids).exists()}
+        total = costo = 0.0
+        for linea in lineas:
+            producto = productos.get(linea["product_id"])
+            if not producto:
+                continue
+            cantidad = float(linea.get("qty") or 0)
+            if not linea.get("es_recompensa"):
+                total += producto.lst_price * cantidad
+            costo += producto.standard_price * cantidad
+        utilidad = total - costo
+        margen_pct = (utilidad / total * 100.0) if total else 0.0
+        return {"total": round(total, 2), "costo": round(costo, 2),
+                "utilidad": round(utilidad, 2), "margen_pct": round(margen_pct, 1)}
+
+    @api.model
+    def shalom_evaluar_pedido(self, location_id, lineas):
+        """Estrellas y margen EN VIVO del carrito contra la vara del
+        cliente (ticket típico, 75%, récord). Informativo: no bloquea
+        ni cambia nada. Devuelve {"total", "margen_pct", "utilidad",
+        "estrellas", "refs": {...}, "siguiente": {...}|None}; el costo
+        no sale del servidor."""
+        location = self.env["fsm.location"].browse(location_id).exists()
+        refs = self._shalom_referencias_cliente(location)
+        eco = self._shalom_economia_pedido(lineas or [])
+        return {
+            "total": eco["total"],
+            "margen_pct": eco["margen_pct"],
+            "utilidad": eco["utilidad"],
+            "estrellas": juego_utils.estrellas(eco["total"], refs, eco["margen_pct"]),
+            "refs": refs,
+            "siguiente": juego_utils.siguiente_objetivo(eco["total"], refs, eco["margen_pct"]),
+        }
 
     @api.model
     def shalom_estado_promociones_carrito(self, lineas):
