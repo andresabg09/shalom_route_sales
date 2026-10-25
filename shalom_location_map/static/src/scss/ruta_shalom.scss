@@ -1837,6 +1837,104 @@
         background: var(--shalom-stock-success-bg);
         color: var(--shalom-stock-success-ink);
     }
+    // Bodega Nevada (se pide, tarda ~4 días hábiles): amarillo, como en Ventas
+    .stock-badge.tono-nevada {
+        background: var(--shalom-stock-warning-bg);
+        color: var(--shalom-stock-warning-ink);
+    }
+    .stock-badge.tono-neutral {
+        background: var(--shalom-surface-2, var(--shalom-line));
+        color: var(--shalom-ink-muted);
+    }
+    // Dianke + Nevada a la vez
+    .stock-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px 6px;
+    }
+    // "Precargar de pedidos anteriores"
+    .precarga-btn {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        width: calc(100% - 28px);
+        margin: 0 14px 8px;
+        padding: 10px 14px;
+        text-align: left;
+        border: 1.5px solid var(--shalom-accent);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        border-radius: var(--shalom-radius-md);
+        font-family: inherit;
+        cursor: pointer;
+    }
+    .precarga-btn b {
+        display: block;
+        font-size: 0.9rem;
+        color: var(--shalom-accent);
+    }
+    .precarga-btn small {
+        font-size: 0.76rem;
+        color: var(--shalom-ink-muted);
+    }
+    .confirm-card.precarga-card {
+        max-width: 440px;
+    }
+    .precarga-lista {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 14px;
+        max-height: 52vh;
+        overflow-y: auto;
+    }
+    .precarga-pedido {
+        border: 1.5px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-surface);
+    }
+    .precarga-pedido-cab {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        cursor: pointer;
+    }
+    .precarga-pedido-info {
+        flex: 1;
+        min-width: 0;
+    }
+    .precarga-todo-btn {
+        flex: none;
+        padding: 6px 10px;
+        font-size: 0.8rem;
+    }
+    .precarga-lineas {
+        border-top: 1px solid var(--shalom-line);
+        padding: 4px 12px 8px;
+    }
+    .precarga-linea {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 0;
+    }
+    .precarga-linea-nombre {
+        flex: 1;
+        min-width: 0;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--shalom-ink);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .precarga-linea-btn {
+        flex: none;
+        padding: 6px 10px;
+        font-size: 0.8rem;
+    }
 
     // estado de promoción "comprar X llevar Y" (mismo criterio que ya
     // muestra el módulo de Ventas, custom_promo_status) -- reemplica

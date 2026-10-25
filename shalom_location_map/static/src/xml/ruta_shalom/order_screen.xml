@@ -43,6 +43,14 @@
                     <button class="icon-btn" t-on-click="iniciarEscaneo" title="Escanear código de barras"><i class="fa fa-camera" aria-hidden="true"/></button>
                 </div>
 
+                <button class="precarga-btn" t-on-click="abrirPrecarga">
+                    <span>
+                        <b>Precargar de pedidos anteriores</b>
+                        <small>Un pedido completo o productos sueltos</small>
+                    </span>
+                    <i class="fa fa-angle-right" aria-hidden="true"/>
+                </button>
+
                 <div class="categ-bar">
                     <div class="categ-selector-wrap">
                         <button class="categ-selector-btn" t-on-click="toggleCategMenu">
@@ -103,8 +111,17 @@
                         <div class="product-side">
                             <div class="price-label">Precio unitario</div>
                             <div class="price" t-esc="'$' + producto.list_price.toFixed(2)"/>
-                            <t t-set="existencia" t-value="infoExistencia(producto)"/>
-                            <span class="stock-badge" t-att-class="'tono-' + existencia.tono" t-esc="existencia.texto"/>
+                            <t t-set="bodegas" t-value="chipsBodegas(producto)"/>
+                            <t t-if="bodegas">
+                                <div class="stock-chips">
+                                    <span class="stock-badge" t-att-class="'tono-' + bodegas.dianke.tono" t-esc="bodegas.dianke.texto"/>
+                                    <span class="stock-badge" t-att-class="'tono-' + bodegas.nevada.tono" t-esc="bodegas.nevada.texto"/>
+                                </div>
+                            </t>
+                            <t t-else="">
+                                <t t-set="existencia" t-value="infoExistencia(producto)"/>
+                                <span class="stock-badge" t-att-class="'tono-' + existencia.tono" t-esc="existencia.texto"/>
+                            </t>
                             <div class="reservados" t-if="reservados(producto)" t-esc="reservados(producto) + ' reservados'"/>
                         </div>
                         <t t-if="cantidadEnCarrito(producto.id) and etiquetaPromo(producto.id)">
@@ -340,6 +357,47 @@
                             t-att-disabled="state.cargandoFormaPago"
                             t-on-click="confirmarFormaPago"
                         >Confirmar pedido</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="confirm-overlay" t-if="state.precargaAbierta">
+                <div class="confirm-card precarga-card">
+                    <h3>Precargar de pedidos anteriores</h3>
+                    <p>Se suma al carrito lo que elijas; nada se bloquea por existencia.</p>
+                    <div t-if="state.cargandoPrecarga" class="shalom-vacio">Cargando…</div>
+                    <div t-elif="!state.pedidosAnteriores.length" class="shalom-vacio">Este cliente no tiene pedidos anteriores.</div>
+                    <div t-else="" class="precarga-lista">
+                        <div t-foreach="state.pedidosAnteriores" t-as="pedido" t-key="pedido.id" class="precarga-pedido">
+                            <div class="precarga-pedido-cab" t-on-click="() => this.togglePedidoPrecarga(pedido.id)">
+                                <div class="precarga-pedido-info">
+                                    <div class="reward-option-nombre" t-esc="(pedido.fecha || '') + ' · ' + pedido.nombre"/>
+                                    <div class="reward-option-detalle" t-esc="pedido.lineas.length + ' producto(s) · $' + pedido.total.toFixed(2)"/>
+                                </div>
+                                <button class="btn btn-primary precarga-todo-btn" t-on-click.stop="() => this.precargarPedido(pedido)">Agregar todo</button>
+                            </div>
+                            <div t-if="state.pedidoPrecargaAbierto === pedido.id" class="precarga-lineas">
+                                <div t-foreach="pedido.lineas" t-as="linea" t-key="linea.product_id" class="precarga-linea">
+                                    <t t-set="prodLinea" t-value="productoDeLinea(linea)"/>
+                                    <div class="precarga-linea-nombre">
+                                        <span t-esc="linea.nombre"/>
+                                        <t t-if="prodLinea">
+                                            <t t-set="chipsLinea" t-value="chipsBodegas(prodLinea)"/>
+                                            <div class="stock-chips" t-if="chipsLinea">
+                                                <span class="stock-badge" t-att-class="'tono-' + chipsLinea.dianke.tono" t-esc="chipsLinea.dianke.texto"/>
+                                                <span class="stock-badge" t-att-class="'tono-' + chipsLinea.nevada.tono" t-esc="chipsLinea.nevada.texto"/>
+                                            </div>
+                                        </t>
+                                    </div>
+                                    <button class="btn btn-secondary precarga-linea-btn" t-on-click="() => this.precargarLinea(linea)">
+                                        <t t-esc="'+ ' + linea.cantidad"/>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="edit-actions">
+                        <button class="btn btn-ghost" t-on-click="cerrarPrecarga">Cerrar</button>
                     </div>
                 </div>
             </div>

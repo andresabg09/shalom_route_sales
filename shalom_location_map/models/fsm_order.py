@@ -794,6 +794,103 @@ class FSMOrder(models.Model):
         }
 
     @api.model
+    def _shalom_bodegas_catalogo(self):
+        """Las dos bodegas que muestra el catálogo: Dianke (la física,
+        mercadería que sale ya) y Nevada (se pide, tarda ~4 días
+        hábiles). Se leen de ir.config_parameter (`shalom.bodega_dianke_id`
+        / `shalom.bodega_nevada_id`) y, si no están, se buscan por el
+        código de almacén (`WH` / `ALBRK`). Devuelve (dianke, nevada),
+        cada uno un stock.warehouse (puede venir vacío si no existe)."""
+        icp = self.env["ir.config_parameter"].sudo()
+        Warehouse = self.env["stock.warehouse"].sudo()
+        bodegas = []
+        for clave, codigo in (("shalom.bodega_dianke_id", "WH"), ("shalom.bodega_nevada_id", "ALBRK")):
+            bodega = Warehouse.browse()
+            valor = icp.get_param(clave)
+            if valor and valor.isdigit():
+                bodega = Warehouse.browse(int(valor)).exists()
+            if not bodega:
+                bodega = Warehouse.search([("code", "=", codigo)], limit=1)
+            bodegas.append(bodega)
+        return bodegas[0], bodegas[1]
+
+    @api.model
+    def shalom_existencias_bodegas(self, product_ids):
+        """Existencia libre de cada producto en las dos bodegas del
+        catálogo, para mostrar Dianke y Nevada a la vez (solo
+        informativo: NUNCA bloquea ni oculta la venta). sudo() porque
+        Nevada es otra empresa (Greenpeak) y el vendedor puede no tener
+        acceso a su inventario.
+
+        Devuelve {product_id: {"dianke": int, "nevada": int}}."""
+        if not product_ids:
+            return {}
+        dianke, nevada = self._shalom_bodegas_catalogo()
+        productos = self.env["product.product"].sudo().browse(product_ids).exists()
+        resultado = {producto.id: {"dianke": 0, "nevada": 0} for producto in productos}
+        for clave, bodega in (("dianke", dianke), ("nevada", nevada)):
+            if not bodega:
+                continue
+            for producto in productos.with_context(warehouse_id=bodega.id):
+                resultado[producto.id][clave] = int(producto.free_qty or 0)
+        return resultado
+
+    @api.model
+    def shalom_pedidos_anteriores(self, location_id, limite=8):
+        """Últimos pedidos confirmados del cliente de esta Ubicación,
+        para "Precargar de pedidos anteriores" en el catálogo: el
+        vendedor elige un pedido completo o productos sueltos de ellos.
+
+        Solo trae líneas de producto con precio > 0 (sin las líneas
+        de recompensa/regalo ni notas: las promociones se recalculan
+        solas al cargar el carrito) y productos que aún se pueden
+        vender. Devuelve [{"id", "nombre", "fecha", "total",
+        "lineas": [{"product_id", "nombre", "cantidad"}]}] del más
+        nuevo al más viejo."""
+        location = self.env["fsm.location"].browse(location_id)
+        if not location.exists() or not location.partner_id:
+            return []
+        ordenes = self.env["sale.order"].search(
+            [
+                ("partner_id", "child_of", location.partner_id.commercial_partner_id.id),
+                ("state", "in", ("sale", "done")),
+            ],
+            order="date_order desc, id desc",
+            limit=limite,
+        )
+        resultado = []
+        for orden in ordenes:
+            lineas = []
+            for linea in orden.order_line:
+                if (
+                    linea.display_type
+                    or getattr(linea, "is_reward_line", False)
+                    or linea.price_unit <= 0
+                    or linea.product_uom_qty <= 0
+                    or not linea.product_id.sale_ok
+                ):
+                    continue
+                lineas.append(
+                    {
+                        "product_id": linea.product_id.id,
+                        "nombre": linea.product_id.display_name,
+                        "cantidad": linea.product_uom_qty,
+                    }
+                )
+            if not lineas:
+                continue
+            resultado.append(
+                {
+                    "id": orden.id,
+                    "nombre": orden.name,
+                    "fecha": fields.Date.to_string(orden.date_order.date()) if orden.date_order else False,
+                    "total": orden.amount_total,
+                    "lineas": lineas,
+                }
+            )
+        return resultado
+
+    @api.model
     def shalom_estado_promociones_carrito(self, lineas):
         """Calcula el estado de las promociones "comprar X llevar Y"
         (loyalty.program, program_type='buy_x_get_y') para el carrito

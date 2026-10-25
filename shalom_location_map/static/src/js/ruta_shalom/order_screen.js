@@ -227,6 +227,13 @@ export class OrderScreen extends Component {
             soloConStock: false,
             paginaActual: 1,
             carrito: {}, // {productId: {producto, cantidad}}
+            // "Precargar de pedidos anteriores" (Fase 1 del juego de
+            // ventas): hoja con los últimos pedidos del cliente, para
+            // copiar uno completo o productos sueltos al carrito.
+            precargaAbierta: false,
+            cargandoPrecarga: false,
+            pedidosAnteriores: [], // [{id, nombre, fecha, total, lineas: [{product_id, nombre, cantidad}]}]
+            pedidoPrecargaAbierto: null, // id del pedido con sus líneas desplegadas
             promoPorProducto: {}, // {productId: "✅ Tienes..." | "⏳ Faltan..."}
             recompensasDisponibles: [], // [{regla_id, programa_nombre, reward_product_id, reward_product_name, reward_qty, disponibles}]
             recompensaMenuAbierto: false,
@@ -815,6 +822,7 @@ export class OrderScreen extends Component {
                 ["name", "list_price", "barcode", "default_code", "qty_available", "free_qty", "categ_id"],
                 {order: "name asc"}
             );
+            await this._sumarExistenciasBodegas(productos);
             this.state.productos = productos;
         } catch (error) {
             if (!silencioso) {
@@ -826,6 +834,30 @@ export class OrderScreen extends Component {
             if (!silencioso) {
                 this.state.cargando = false;
             }
+        }
+    }
+
+    /** Agrega a cada producto stock_dianke / stock_nevada (existencia
+     * libre en cada bodega, ver shalom_existencias_bodegas). Si la
+     * llamada falla, los productos quedan sin esos campos y la tarjeta
+     * muestra la etiqueta única de siempre (infoExistencia): el
+     * catálogo nunca depende de este dato para funcionar. */
+    async _sumarExistenciasBodegas(productos) {
+        try {
+            const porProducto = await this.orm.call(
+                "fsm.order",
+                "shalom_existencias_bodegas",
+                [productos.map((producto) => producto.id)]
+            );
+            for (const producto of productos) {
+                const bodegas = porProducto[producto.id];
+                if (bodegas) {
+                    producto.stock_dianke = bodegas.dianke;
+                    producto.stock_nevada = bodegas.nevada;
+                }
+            }
+        } catch (error) {
+            console.error("shalom: error al leer existencias por bodega", error);
         }
     }
 
@@ -1068,6 +1100,108 @@ export class OrderScreen extends Component {
             return {texto: `Quedan ${libre}`, tono: "warning"};
         }
         return {texto: `Disponible: ${libre}`, tono: "success"};
+    }
+
+    /** Etiquetas de las dos bodegas, como en Ventas: Dianke (verde =
+     * hay, rojo = no hay) y Nevada (amarillo, se pide). Devuelve null
+     * si el servidor no mandó las existencias por bodega (se usa
+     * entonces infoExistencia). Solo informativo: no bloquea nada. */
+    chipsBodegas(producto) {
+        if (producto.stock_dianke === undefined) {
+            return null;
+        }
+        const dianke = producto.stock_dianke;
+        const nevada = producto.stock_nevada || 0;
+        let chipDianke = {texto: `Disponible: ${dianke}`, tono: "success"};
+        if (dianke <= 0) {
+            chipDianke = {texto: "Sin existencia", tono: "danger"};
+        } else if (dianke <= STOCK_BAJO_UMBRAL) {
+            chipDianke = {texto: `Quedan ${dianke}`, tono: "warning"};
+        }
+        return {
+            dianke: chipDianke,
+            nevada: {texto: `Nevada: ${nevada.toLocaleString("en-US")}`, tono: nevada > 0 ? "nevada" : "neutral"},
+        };
+    }
+
+    // -- Precargar de pedidos anteriores --
+
+    async abrirPrecarga() {
+        this.state.precargaAbierta = true;
+        this.state.pedidoPrecargaAbierto = null;
+        if (!this.state.locationId) {
+            return;
+        }
+        this.state.cargandoPrecarga = true;
+        try {
+            this.state.pedidosAnteriores = await this.orm.call(
+                "fsm.order",
+                "shalom_pedidos_anteriores",
+                [this.state.locationId]
+            );
+        } catch (error) {
+            console.error("shalom: error al leer pedidos anteriores", error);
+            this.state.pedidosAnteriores = [];
+            this.notification.add("No se pudieron cargar los pedidos anteriores.", {type: "danger"});
+        } finally {
+            this.state.cargandoPrecarga = false;
+        }
+    }
+
+    cerrarPrecarga() {
+        this.state.precargaAbierta = false;
+    }
+
+    togglePedidoPrecarga(pedidoId) {
+        this.state.pedidoPrecargaAbierto = this.state.pedidoPrecargaAbierto === pedidoId ? null : pedidoId;
+    }
+
+    /** Producto del catálogo cargado para una línea de pedido anterior
+     * (null si ya no está en el catálogo vendible). */
+    productoDeLinea(linea) {
+        return this.state.productos.find((producto) => producto.id === linea.product_id) || null;
+    }
+
+    /** Suma las cantidades al carrito (no reemplaza lo que ya hay) y
+     * guarda una sola vez: respaldo local, promos y sincronización con
+     * el servidor siguen el mismo camino que agregarProducto(). */
+    _precargarLineas(lineas) {
+        let agregados = 0;
+        for (const linea of lineas) {
+            const producto = this.productoDeLinea(linea);
+            if (!producto) {
+                continue;
+            }
+            const actual = this.state.carrito[producto.id];
+            this.state.carrito[producto.id] = {
+                producto,
+                cantidad: (actual ? actual.cantidad : 0) + linea.cantidad,
+            };
+            this._marcarCambioPendienteCarrito(producto.id);
+            agregados += 1;
+        }
+        if (agregados) {
+            this.actualizarPromos();
+            this._guardarBorradorCarrito();
+        }
+        return agregados;
+    }
+
+    precargarPedido(pedido) {
+        const agregados = this._precargarLineas(pedido.lineas);
+        this.notification.add(
+            agregados ? `Se agregaron ${agregados} producto(s) del pedido ${pedido.nombre}.` : "Esos productos ya no están en el catálogo.",
+            {type: agregados ? "success" : "warning"}
+        );
+        if (agregados) {
+            this.state.precargaAbierta = false;
+        }
+    }
+
+    precargarLinea(linea) {
+        if (!this._precargarLineas([linea])) {
+            this.notification.add("Ese producto ya no está en el catálogo.", {type: "warning"});
+        }
     }
 
     /** Unidades físicas ya prometidas a otros pedidos; 0 = no mostrar. */
