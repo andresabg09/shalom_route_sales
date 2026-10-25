@@ -42,6 +42,107 @@
                         t-attf-class="adm-tab {{state.tab === 'en_vivo' ? 'adm-tab-active' : ''}}"
                         t-on-click="() => this.cambiarTab('en_vivo')"
                     ><i class="fa fa-eye" aria-hidden="true"/> En vivo</button>
+                    <button
+                        t-attf-class="adm-tab {{state.tab === 'estrategias' ? 'adm-tab-active' : ''}}"
+                        t-on-click="() => this.cambiarTab('estrategias')"
+                    ><i class="fa fa-lightbulb-o" aria-hidden="true"/> Estrategias</button>
+                </div>
+            </div>
+
+            <div class="adm-body" t-if="state.tab === 'estrategias'">
+                <!-- ============ Estrategias (qué empujar / no ofrezcas) ============ -->
+                <div class="adm-section-label">Lo que ve el vendedor en el botón Estrategias</div>
+                <button class="adm-actbtn adm-actbtn-accent" t-on-click="nuevaEstrategia">
+                    <i class="fa fa-plus" aria-hidden="true"/> Nueva estrategia
+                </button>
+                <div t-if="state.cargandoEstrategias" class="adm-empty">Cargando…</div>
+                <div t-elif="!state.estrategias.length" class="adm-empty">Todavía no hay estrategias.</div>
+                <div t-else="" class="adm-card-list">
+                    <div
+                        t-foreach="state.estrategias"
+                        t-as="estrategia"
+                        t-key="estrategia.id"
+                        class="adm-row"
+                        t-on-click="() => this.editarEstrategia(estrategia)"
+                    >
+                        <div class="adm-row-info">
+                            <div class="adm-row-name" t-esc="estrategia.titulo"/>
+                            <div class="adm-row-meta">
+                                <t t-esc="estrategia.tipo === 'empujar' ? 'Qué empujar' : 'No ofrezcas'"/>
+                                <t t-if="estrategia.productos.length"> · <t t-esc="estrategia.productos.length"/> producto(s)</t>
+                                <t t-if="estrategia.date_to"> · hasta <t t-esc="estrategia.date_to"/></t>
+                                <t t-if="!estrategia.activa"> · INACTIVA</t>
+                            </div>
+                        </div>
+                        <button class="adm-actbtn adm-actbtn-danger" t-on-click.stop="() => this.borrarEstrategia(estrategia)">
+                            <i class="fa fa-trash-o" aria-hidden="true"/>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="adm-modal-overlay" t-if="state.estrategiaEditando">
+                <div class="adm-modal">
+                    <div class="adm-modal-head">
+                        <div class="adm-modal-title" t-esc="state.estrategiaEditando.id ? 'Editar estrategia' : 'Nueva estrategia'"/>
+                        <div class="adm-modal-sub">Son avisos para el vendedor: nunca bloquean una venta</div>
+                    </div>
+                    <div class="adm-modal-body adm-estrategia-form">
+                        <label>Título
+                            <input type="text" t-model="state.estrategiaEditando.titulo" placeholder="Ej.: Oxigenta con cada tinte"/>
+                        </label>
+                        <label>Tipo
+                            <select t-model="state.estrategiaEditando.tipo">
+                                <option value="empujar">Qué empujar</option>
+                                <option value="no_ofrecer">No ofrezcas</option>
+                            </select>
+                        </label>
+                        <label>Explicación corta
+                            <textarea rows="3" t-model="state.estrategiaEditando.texto" placeholder="Por qué se empuja o por qué no se ofrece"/>
+                        </label>
+                        <label>Vigente desde (opcional)
+                            <input type="date" t-model="state.estrategiaEditando.date_from"/>
+                        </label>
+                        <label>Vigente hasta (opcional)
+                            <input type="date" t-model="state.estrategiaEditando.date_to"/>
+                        </label>
+                        <label class="adm-estrategia-check">
+                            <input type="checkbox" t-model="state.estrategiaEditando.activa"/> Activa
+                        </label>
+                        <div class="adm-side-label">Productos (se marcan en el catálogo)</div>
+                        <div class="adm-chip-row">
+                            <button
+                                t-foreach="state.estrategiaEditando.productos"
+                                t-as="producto"
+                                t-key="producto.id"
+                                class="adm-chip adm-chip-active"
+                                t-on-click="() => this.quitarProductoEstrategia(producto.id)"
+                            ><t t-esc="producto.nombre"/> ✕</button>
+                        </div>
+                        <div class="adm-search">
+                            <i class="fa fa-search" aria-hidden="true"/>
+                            <input
+                                type="text"
+                                placeholder="Buscar producto para agregar…"
+                                t-att-value="state.estrategiaBusqueda"
+                                t-on-input="buscarProductoEstrategia"
+                            />
+                        </div>
+                        <div
+                            t-foreach="state.estrategiaResultados"
+                            t-as="resultado"
+                            t-key="resultado.id"
+                            class="adm-modal-row"
+                            t-on-click="() => this.agregarProductoEstrategia(resultado)"
+                        >
+                            <div class="adm-row-info"><div class="adm-row-name" t-esc="resultado.nombre"/></div>
+                            <i class="fa fa-plus" aria-hidden="true"/>
+                        </div>
+                    </div>
+                    <div class="adm-modal-foot">
+                        <button class="adm-btn-ghost" t-on-click="cerrarEditorEstrategia">Cancelar</button>
+                        <button class="adm-actbtn adm-actbtn-accent" t-on-click="guardarEstrategia">Guardar</button>
+                    </div>
                 </div>
             </div>
 

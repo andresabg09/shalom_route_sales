@@ -136,6 +136,13 @@ export class AdminGestion extends Component {
             // -- pestaña activa --
             tab: "seguimiento",
 
+            // -- Estrategias (qué empujar / no ofrezcas) --
+            cargandoEstrategias: false,
+            estrategias: [],
+            estrategiaEditando: null, // borrador {id, titulo, tipo, texto, activa, date_from, date_to, productos}
+            estrategiaBusqueda: "",
+            estrategiaResultados: [],
+
             // -- Seguimiento de Visitas --
             cargandoVisitas: true,
             visitas: [],
@@ -239,6 +246,131 @@ export class AdminGestion extends Component {
 
     cambiarTab(tab) {
         this.state.tab = tab;
+        if (tab === "estrategias") {
+            this.cargarEstrategias();
+        }
+    }
+
+    // ==================================================================
+    // Estrategias: qué empujar / no ofrezcas
+    // ==================================================================
+    //
+    // El dueño las edita acá; el vendedor las ve en el botón
+    // "Estrategias" de la pestaña Rutas y el catálogo marca los
+    // productos (EMPUJAR / NO OFRECER). Son avisos: nunca bloquean la
+    // venta. Ver models/shalom_estrategia.py.
+
+    async cargarEstrategias() {
+        this.state.cargandoEstrategias = true;
+        try {
+            this.state.estrategias = await this.orm.call("shalom.estrategia", "shalom_admin_estrategias", []);
+        } catch (error) {
+            this.notification.add("No se pudieron cargar las estrategias.", {type: "danger"});
+        } finally {
+            this.state.cargandoEstrategias = false;
+        }
+    }
+
+    nuevaEstrategia() {
+        this.state.estrategiaEditando = {
+            id: false,
+            titulo: "",
+            tipo: "empujar",
+            texto: "",
+            activa: true,
+            date_from: "",
+            date_to: "",
+            productos: [],
+        };
+        this.state.estrategiaBusqueda = "";
+        this.state.estrategiaResultados = [];
+    }
+
+    editarEstrategia(estrategia) {
+        this.state.estrategiaEditando = {
+            ...estrategia,
+            date_from: estrategia.date_from || "",
+            date_to: estrategia.date_to || "",
+            productos: estrategia.productos.map((p) => ({...p})),
+        };
+        this.state.estrategiaBusqueda = "";
+        this.state.estrategiaResultados = [];
+    }
+
+    cerrarEditorEstrategia() {
+        this.state.estrategiaEditando = null;
+    }
+
+    async buscarProductoEstrategia(ev) {
+        const texto = ev.target.value;
+        this.state.estrategiaBusqueda = texto;
+        if (!texto.trim()) {
+            this.state.estrategiaResultados = [];
+            return;
+        }
+        try {
+            const yaEstan = this.state.estrategiaEditando.productos.map((p) => p.id);
+            const productos = await this.orm.searchRead(
+                "product.product",
+                [["sale_ok", "=", true], ["id", "not in", yaEstan], "|", ["name", "ilike", texto.trim()], ["default_code", "ilike", texto.trim()]],
+                ["display_name"],
+                {limit: 8, order: "name asc"}
+            );
+            this.state.estrategiaResultados = productos.map((p) => ({id: p.id, nombre: p.display_name}));
+        } catch (error) {
+            this.notification.add("No se pudo buscar productos.", {type: "danger"});
+        }
+    }
+
+    agregarProductoEstrategia(producto) {
+        this.state.estrategiaEditando.productos.push(producto);
+        this.state.estrategiaResultados = this.state.estrategiaResultados.filter((p) => p.id !== producto.id);
+    }
+
+    quitarProductoEstrategia(productoId) {
+        this.state.estrategiaEditando.productos = this.state.estrategiaEditando.productos.filter(
+            (p) => p.id !== productoId
+        );
+    }
+
+    async guardarEstrategia() {
+        const e = this.state.estrategiaEditando;
+        if (!e.titulo.trim()) {
+            this.notification.add("Ponle un título a la estrategia.", {type: "warning"});
+            return;
+        }
+        try {
+            await this.orm.call("shalom.estrategia", "shalom_admin_guardar_estrategia", [
+                e.id || false,
+                {
+                    titulo: e.titulo,
+                    tipo: e.tipo,
+                    texto: e.texto,
+                    activa: e.activa,
+                    date_from: e.date_from || false,
+                    date_to: e.date_to || false,
+                    product_ids: e.productos.map((p) => p.id),
+                },
+            ]);
+            this.state.estrategiaEditando = null;
+            await this.cargarEstrategias();
+        } catch (error) {
+            const mensaje = error && error.data && error.data.message;
+            this.notification.add(mensaje || "No se pudo guardar la estrategia.", {type: "danger"});
+        }
+    }
+
+    async borrarEstrategia(estrategia) {
+        // eslint-disable-next-line no-alert
+        if (!window.confirm(`¿Borrar la estrategia "${estrategia.titulo}"?`)) {
+            return;
+        }
+        try {
+            await this.orm.call("shalom.estrategia", "shalom_admin_borrar_estrategia", [estrategia.id]);
+            await this.cargarEstrategias();
+        } catch (error) {
+            this.notification.add("No se pudo borrar la estrategia.", {type: "danger"});
+        }
     }
 
     // ==================================================================

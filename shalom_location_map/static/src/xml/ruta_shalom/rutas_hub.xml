@@ -8,7 +8,35 @@
                         <div class="route-name">Rutas</div>
                         <div class="route-sub"><span>Las que te asignaron</span></div>
                     </div>
+                    <button class="estrategias-btn" t-if="totalEstrategias" t-on-click="toggleEstrategias">
+                        <i class="fa fa-lightbulb-o" aria-hidden="true"/> Estrategias
+                    </button>
                     <TemaSelector/>
+                </div>
+            </div>
+
+            <div class="confirm-overlay" t-if="state.estrategiasAbiertas" t-on-click.self="toggleEstrategias">
+                <div class="confirm-card estrategias-card">
+                    <h3><i class="fa fa-lightbulb-o" aria-hidden="true"/> Estrategias de hoy</h3>
+                    <div class="estrategias-grupo" t-if="state.estrategias.empujar.length">
+                        <div class="estrategias-titulo estrategias-empujar">Qué empujar</div>
+                        <div t-foreach="state.estrategias.empujar" t-as="e" t-key="e.id" class="estrategia-item">
+                            <b t-esc="e.titulo"/>
+                            <div t-if="e.texto" class="estrategia-texto" t-esc="e.texto"/>
+                            <div t-if="e.productos.length" class="estrategia-productos" t-esc="e.productos.map((p) => p.nombre).join(' · ')"/>
+                        </div>
+                    </div>
+                    <div class="estrategias-grupo" t-if="state.estrategias.no_ofrecer.length">
+                        <div class="estrategias-titulo estrategias-no-ofrecer">No ofrezcas</div>
+                        <div t-foreach="state.estrategias.no_ofrecer" t-as="e" t-key="e.id" class="estrategia-item">
+                            <b t-esc="e.titulo"/>
+                            <div t-if="e.texto" class="estrategia-texto" t-esc="e.texto"/>
+                            <div t-if="e.productos.length" class="estrategia-productos" t-esc="e.productos.map((p) => p.nombre).join(' · ')"/>
+                        </div>
+                    </div>
+                    <div class="edit-actions">
+                        <button class="btn btn-primary" t-on-click="toggleEstrategias">Entendido</button>
+                    </div>
                 </div>
             </div>
 

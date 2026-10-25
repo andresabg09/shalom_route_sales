@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import {Component, onWillStart, useState} from "@odoo/owl";
+import {Component, onMounted, onWillStart, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {TemaSelector} from "./tema_selector";
 
@@ -73,8 +73,31 @@ export class RutasHub extends Component {
             busqueda: "",
             periodo: "todos",
             menuPeriodoAbierto: false,
+            // Botón flotante "Estrategias" (qué empujar / no ofrezcas),
+            // editables por el dueño desde Administración.
+            estrategias: {empujar: [], no_ofrecer: []},
+            estrategiasAbiertas: false,
         });
         onWillStart(() => this.cargar());
+        onMounted(() => this.cargarEstrategias());
+    }
+
+    async cargarEstrategias() {
+        try {
+            const resultado = await this.orm.call("shalom.estrategia", "shalom_estrategias_vigentes", []);
+            this.state.estrategias = {empujar: resultado.empujar, no_ofrecer: resultado.no_ofrecer};
+        } catch (error) {
+            // No es crítico: sin estrategias el botón simplemente no sale.
+            console.error("shalom: error al leer estrategias", error);
+        }
+    }
+
+    get totalEstrategias() {
+        return this.state.estrategias.empujar.length + this.state.estrategias.no_ofrecer.length;
+    }
+
+    toggleEstrategias() {
+        this.state.estrategiasAbiertas = !this.state.estrategiasAbiertas;
     }
 
     async cargar() {

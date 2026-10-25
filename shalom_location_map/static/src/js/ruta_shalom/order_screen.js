@@ -230,6 +230,9 @@ export class OrderScreen extends Component {
             // "Precargar de pedidos anteriores" (Fase 1 del juego de
             // ventas): hoja con los últimos pedidos del cliente, para
             // copiar uno completo o productos sueltos al carrito.
+            // {product_id: "empujar" | "no_ofrecer"} -- Estrategias
+            // vigentes (solo marcan en el catálogo, nunca bloquean).
+            estrategiaPorProducto: {},
             // Estrellas y margen en vivo contra la vara del cliente
             // (shalom_evaluar_pedido). Informativo: no bloquea nada.
             evaluacion: null,
@@ -829,6 +832,7 @@ export class OrderScreen extends Component {
                 {order: "name asc"}
             );
             await this._sumarExistenciasBodegas(productos);
+            await this._cargarEstrategias();
             this.state.productos = productos;
         } catch (error) {
             if (!silencioso) {
@@ -865,6 +869,21 @@ export class OrderScreen extends Component {
         } catch (error) {
             console.error("shalom: error al leer existencias por bodega", error);
         }
+    }
+
+    /** Estrategias vigentes del dueño para marcar productos en el
+     * catálogo (EMPUJAR / NO OFRECER). Si falla, no se marca nada. */
+    async _cargarEstrategias() {
+        try {
+            const resultado = await this.orm.call("shalom.estrategia", "shalom_estrategias_vigentes", []);
+            this.state.estrategiaPorProducto = resultado.productos || {};
+        } catch (error) {
+            console.error("shalom: error al leer estrategias", error);
+        }
+    }
+
+    estrategiaDe(producto) {
+        return this.state.estrategiaPorProducto[producto.id] || "";
     }
 
     // -- Categorías (menú desplegable con buscador) --

@@ -1957,6 +1957,80 @@
         color: var(--shalom-stock-warning-ink);
     }
 
+    // Estrategias (qué empujar / no ofrezcas)
+    .estrategias-btn {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        border: 1.5px solid var(--shalom-accent);
+        background: var(--shalom-surface);
+        color: var(--shalom-accent);
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-weight: 800;
+        font-size: 0.8rem;
+        font-family: inherit;
+        cursor: pointer;
+    }
+    .confirm-card.estrategias-card {
+        max-width: 420px;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+    .estrategias-grupo {
+        margin-top: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .estrategias-titulo {
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+    .estrategias-titulo.estrategias-empujar {
+        color: var(--shalom-stock-success-ink);
+    }
+    .estrategias-titulo.estrategias-no-ofrecer {
+        color: var(--shalom-stock-danger-ink);
+    }
+    .estrategia-item {
+        border: 1.5px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        padding: 8px 12px;
+        font-size: 0.88rem;
+        color: var(--shalom-ink);
+    }
+    .estrategia-texto {
+        font-size: 0.8rem;
+        color: var(--shalom-ink-muted);
+        margin-top: 2px;
+    }
+    .estrategia-productos {
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: var(--shalom-ink-muted);
+        margin-top: 4px;
+    }
+    .estrategia-marca {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 6px;
+        font-size: 0.62rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        vertical-align: middle;
+    }
+    .estrategia-marca.marca-no-ofrecer {
+        background: var(--shalom-stock-danger-bg);
+        color: var(--shalom-stock-danger-ink);
+    }
+    .estrategia-marca.marca-empujar {
+        background: var(--shalom-stock-success-bg);
+        color: var(--shalom-stock-success-ink);
+    }
+
     // "Precargar de pedidos anteriores"
     .precarga-btn {
         display: flex;
@@ -3633,6 +3707,37 @@
         }
         .adm-search input::placeholder {
             color: var(--shalom-ink-muted);
+        }
+        // Formulario de Estrategias (modal)
+        .adm-estrategia-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .adm-estrategia-form label {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--shalom-ink-muted);
+        }
+        .adm-estrategia-form input[type="text"],
+        .adm-estrategia-form input[type="date"],
+        .adm-estrategia-form select,
+        .adm-estrategia-form textarea {
+            border: 1px solid var(--shalom-line);
+            border-radius: var(--shalom-radius-sm);
+            background: var(--shalom-surface);
+            color: var(--shalom-ink);
+            padding: 8px 10px;
+            font-family: inherit;
+            font-size: 0.88rem;
+        }
+        .adm-estrategia-form label.adm-estrategia-check {
+            flex-direction: row;
+            align-items: center;
+            gap: 8px;
         }
         .adm-field {
             display: flex;

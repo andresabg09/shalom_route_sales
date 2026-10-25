@@ -7,3 +7,5 @@ access_shalom_buscar_gps_wizard_opcion,shalom.buscar.gps.wizard.opcion,model_sha
 access_shalom_buscar_gps_wizard_candidato,shalom.buscar.gps.wizard.candidato,model_shalom_buscar_gps_wizard_candidato,fieldservice.group_fsm_manager,1,1,1,1
 access_shalom_eliminar_ubicaciones_wizard,shalom.eliminar.ubicaciones.wizard,model_shalom_eliminar_ubicaciones_wizard,fieldservice.group_fsm_manager,1,1,1,1
 access_shalom_agregar_visita_wizard,shalom.agregar.visita.wizard,model_shalom_agregar_visita_wizard,fieldservice.group_fsm_manager,1,1,1,1
+access_shalom_estrategia_manager,shalom.estrategia.manager,model_shalom_estrategia,fieldservice.group_fsm_manager,1,1,1,1
+access_shalom_estrategia_user,shalom.estrategia.user,model_shalom_estrategia,fieldservice.group_fsm_user,1,0,0,0
