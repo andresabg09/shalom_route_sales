@@ -1957,6 +1957,144 @@
         color: var(--shalom-stock-warning-ink);
     }
 
+    // Nivel / XP del vendedor en la pestaña Rutas
+    .progreso-juego {
+        margin: 0 14px 8px;
+        padding: 8px 12px;
+        border: 1.5px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-surface);
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+    .progreso-juego-fila {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.85rem;
+        color: var(--shalom-ink);
+    }
+    .progreso-juego-mes {
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: var(--shalom-ink-muted);
+    }
+
+    // Escalera de estrellas en la hoja de visita
+    .ficha-juego {
+        margin: 10px 0;
+        padding: 10px 12px;
+        border: 1.5px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-surface);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .ficha-juego-titulo {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: var(--shalom-ink-muted);
+    }
+    .ficha-juego-clase {
+        color: var(--shalom-accent);
+    }
+    .ficha-juego-fila {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.92rem;
+        font-weight: 800;
+        color: var(--shalom-ink);
+    }
+
+    // Pantalla de resultado tras confirmar un pedido
+    .resultado-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 96;
+        background: var(--shalom-bg, var(--shalom-surface));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        overflow-y: auto;
+        animation: shalom-fondo-in 0.15s ease both;
+    }
+    .resultado-card {
+        width: 100%;
+        max-width: 380px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+        color: var(--shalom-ink);
+    }
+    .resultado-eyebrow {
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--shalom-accent);
+    }
+    .resultado-cliente {
+        font-size: 1.4rem;
+        font-weight: 800;
+    }
+    .resultado-estrellas {
+        font-size: 3.6rem;
+        line-height: 1;
+        letter-spacing: 6px;
+    }
+    .resultado-estrellas-nombre {
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--shalom-ink-muted);
+    }
+    .resultado-linea {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 12px;
+        border: 1px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-surface);
+        font-size: 0.92rem;
+    }
+    .resultado-aviso {
+        padding: 8px 12px;
+        border-radius: var(--shalom-radius-md);
+        font-size: 0.85rem;
+        font-weight: 800;
+    }
+    .resultado-aviso.resultado-record {
+        background: var(--shalom-stock-success-bg);
+        color: var(--shalom-stock-success-ink);
+    }
+    .resultado-aviso.resultado-margen {
+        background: var(--shalom-stock-warning-bg);
+        color: var(--shalom-stock-warning-ink);
+    }
+    .resultado-xp {
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: var(--shalom-accent);
+    }
+    .resultado-nivel {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .resultado-nivel-nombre {
+        font-weight: 800;
+    }
+    .resultado-nivel-detalle {
+        font-size: 0.78rem;
+        color: var(--shalom-ink-muted);
+        font-weight: 700;
+    }
+
     // Estrategias (qué empujar / no ofrezcas)
     .estrategias-btn {
         flex: 0 0 auto;

@@ -6,3 +6,4 @@ from . import fsm_route_schedule
 from . import ir_ui_menu
 from . import res_partner
 from . import shalom_estrategia
+from . import shalom_juego

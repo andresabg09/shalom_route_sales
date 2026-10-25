@@ -230,6 +230,9 @@ export class OrderScreen extends Component {
             // "Precargar de pedidos anteriores" (Fase 1 del juego de
             // ventas): hoja con los últimos pedidos del cliente, para
             // copiar uno completo o productos sueltos al carrito.
+            // Pantalla de resultado tras confirmar (estrellas, XP, nivel);
+            // null = no se muestra. Ver _confirmarPedidoDeVerdad.
+            resultadoJuego: null,
             // {product_id: "empujar" | "no_ofrecer"} -- Estrategias
             // vigentes (solo marcan en el catálogo, nunca bloquean).
             estrategiaPorProducto: {},
@@ -583,7 +586,7 @@ export class OrderScreen extends Component {
      * la respuesta (es la misma llamada liviana de siempre, no una
      * extra). */
     async _tickSincronizacionCarrito() {
-        if (this._sincronizando || this._cerrado) {
+        if (this._sincronizando || this._cerrado || this._confirmado) {
             return;
         }
         // Bug real reportado: en pedidos grandes, "Confirmar pedido"/
@@ -1663,6 +1666,19 @@ export class OrderScreen extends Component {
             if (this.props.onConfirmado) {
                 this.props.onConfirmado();
             }
+            if (resultado.juego) {
+                // Pantalla de resultado (estrellas, XP, nivel): el pedido
+                // YA está confirmado, así que se corta aquí todo lo que
+                // pudiera volver a escribir el carrito (tick de
+                // sincronización, borrador local) y se cierra recién
+                // cuando el vendedor toca "Siguiente cliente".
+                this._confirmado = true;
+                this._cambiosPendientes = {};
+                this._eliminadosPendientes.clear();
+                this._borrarBorradorCarrito();
+                this.state.resultadoJuego = resultado.juego;
+                return;
+            }
             this.cerrarDeVerdad();
         } catch (error) {
             console.error("shalom: error al confirmar pedido", error);
@@ -1674,6 +1690,33 @@ export class OrderScreen extends Component {
         } finally {
             this.state.confirmando = false;
         }
+    }
+
+    // -- Resultado del pedido (estrellas, XP, nivel) --
+
+    /** Datos ya listos para la pantalla de resultado. */
+    get resultadoVista() {
+        const r = this.state.resultadoJuego;
+        if (!r) {
+            return null;
+        }
+        const nombres = {0: "Sin estrella", 1: "Bronce · 75%", 2: "Plata · 100%", 3: "Oro · récord"};
+        const p = r.progreso;
+        const tramo = p.xp_siguiente ? p.xp_siguiente - p.xp_nivel : 0;
+        const avance = tramo ? Math.min(100, ((p.xp_total - p.xp_nivel) / tramo) * 100) : 100;
+        const tieneVara = r.refs && r.refs.n > 0;
+        return {
+            ...r,
+            etiquetaEstrellas: tieneVara ? nombres[r.estrellas] : "Cliente nuevo: sin estrellas aún",
+            tieneVara,
+            pctDelTipico: tieneVara && r.refs.tipico ? Math.round((r.total / r.refs.tipico) * 100) : null,
+            avance,
+            faltanXp: p.xp_siguiente ? p.xp_siguiente - p.xp_total : 0,
+        };
+    }
+
+    cerrarResultadoJuego() {
+        this.cerrarDeVerdad();
     }
 
     // -- Revisar cotización (guarda borrador y abre Ventas) --

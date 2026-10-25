@@ -198,6 +198,7 @@ export class VisitSheet extends Component {
                 saleId: orden.sale_id ? orden.sale_id[0] : false,
                 datosFaltantes: [],
                 errorObservacion: false,
+                juego: null,
             };
             // Se pide aparte (no bloquea el resto de la carga si falla)
             // para poder marcar de entrada, en el selector de estado,
@@ -208,10 +209,26 @@ export class VisitSheet extends Component {
                 "shalom_campos_cliente_faltantes",
                 [[this.props.orderId]]
             );
+            await this._cargarFichaJuego();
         } catch (error) {
             this.notification.add("No se pudo cargar la visita.", {type: "danger"});
         } finally {
             this.state.cargando = false;
+        }
+    }
+
+    /** Escalera de estrellas del cliente (ticket típico, 75%, récord)
+     * para la ficha. Se pide aparte: si falla, la ficha sale sin ella. */
+    async _cargarFichaJuego() {
+        if (!this.state.visita || !this.state.visita.locationId) {
+            return;
+        }
+        try {
+            this.state.visita.juego = await this.orm.call("fsm.order", "shalom_ficha_juego", [
+                this.state.visita.locationId,
+            ]);
+        } catch (error) {
+            console.error("shalom: error al leer la ficha del juego", error);
         }
     }
 

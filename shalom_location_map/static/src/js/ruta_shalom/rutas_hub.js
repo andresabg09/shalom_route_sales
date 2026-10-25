@@ -77,9 +77,31 @@ export class RutasHub extends Component {
             // editables por el dueño desde Administración.
             estrategias: {empujar: [], no_ofrecer: []},
             estrategiasAbiertas: false,
+            // XP / nivel del vendedor (juego) -- null si no hay datos.
+            progreso: null,
         });
         onWillStart(() => this.cargar());
-        onMounted(() => this.cargarEstrategias());
+        onMounted(() => {
+            this.cargarEstrategias();
+            this.cargarProgreso();
+        });
+    }
+
+    async cargarProgreso() {
+        try {
+            this.state.progreso = await this.orm.call("shalom.juego.evento", "shalom_mi_progreso", []);
+        } catch (error) {
+            console.error("shalom: error al leer el progreso", error);
+        }
+    }
+
+    get progresoVista() {
+        const p = this.state.progreso;
+        if (!p) {
+            return null;
+        }
+        const tramo = p.xp_siguiente ? p.xp_siguiente - p.xp_nivel : 0;
+        return {...p, avance: tramo ? Math.min(100, ((p.xp_total - p.xp_nivel) / tramo) * 100) : 100};
     }
 
     async cargarEstrategias() {

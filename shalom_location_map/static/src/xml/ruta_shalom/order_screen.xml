@@ -431,6 +431,54 @@
                 </div>
             </div>
 
+            <t t-set="res" t-value="resultadoVista"/>
+            <div class="resultado-overlay" t-if="res">
+                <div class="resultado-card">
+                    <div class="resultado-eyebrow">Pedido confirmado</div>
+                    <div class="resultado-cliente" t-esc="props.clienteNombre"/>
+                    <div class="resultado-estrellas">
+                        <span t-foreach="[1, 2, 3]" t-as="n" t-key="n" t-att-class="res.estrellas >= n ? 'estrella-on estrella-' + n : 'estrella-off'">★</span>
+                    </div>
+                    <div class="resultado-estrellas-nombre" t-esc="res.etiquetaEstrellas"/>
+                    <div class="resultado-linea">
+                        <span>Total</span><b t-esc="'$' + res.total.toFixed(2)"/>
+                    </div>
+                    <div class="resultado-linea" t-if="res.pctDelTipico !== null">
+                        <span>De su pedido típico</span><b t-esc="res.pctDelTipico + '%'"/>
+                    </div>
+                    <div class="resultado-linea">
+                        <span>Margen</span><b t-esc="Math.round(res.margen_pct) + '%'"/>
+                    </div>
+                    <div class="resultado-aviso resultado-record" t-if="res.record_roto and !res.margen_bajo">
+                        ¡Récord roto! Es lo más que ha comprado este cliente.
+                    </div>
+                    <div class="resultado-aviso resultado-margen" t-if="res.margen_bajo">
+                        Superaste su récord, pero el margen quedó bajo 20%: el oro no cuenta.
+                    </div>
+                    <div class="resultado-xp">
+                        <b t-esc="'+' + res.xp + ' XP'"/>
+                    </div>
+                    <div class="resultado-nivel">
+                        <div class="resultado-aviso resultado-record" t-if="res.subio_nivel">
+                            ¡Subiste de nivel!
+                        </div>
+                        <div class="resultado-nivel-nombre">
+                            Nivel <t t-esc="res.progreso.nivel"/> · <t t-esc="res.progreso.nivel_nombre"/>
+                        </div>
+                        <div class="medidor-barra">
+                            <div class="medidor-relleno" t-att-style="'width:' + res.avance + '%'"/>
+                        </div>
+                        <div class="resultado-nivel-detalle" t-if="res.progreso.xp_siguiente">
+                            <t t-esc="res.progreso.xp_total"/> XP · faltan <t t-esc="res.faltanXp"/> para el siguiente nivel
+                        </div>
+                        <div class="resultado-nivel-detalle" t-else="">
+                            <t t-esc="res.progreso.xp_total"/> XP · nivel máximo
+                        </div>
+                    </div>
+                    <button class="cta-order" t-on-click="cerrarResultadoJuego">Siguiente cliente</button>
+                </div>
+            </div>
+
             <div class="confirm-overlay" t-if="state.recompensaMenuAbierto">
                 <div class="confirm-card">
                     <h3>Elegí la recompensa</h3>

@@ -751,7 +751,73 @@ class FSMOrder(models.Model):
             "sale_order_id": sale_order.id,
             "sale_order_name": sale_order.name,
             "total": sale_order.amount_total,
+            "juego": self._shalom_registrar_resultado_juego(sale_order),
         }
+
+    def _shalom_registrar_resultado_juego(self, sale_order):
+        """Estrellas y XP del pedido recién confirmado, contra el
+        historial ANTERIOR del cliente (el pedido nuevo no cuenta). Se
+        guarda en shalom.juego.evento.
+
+        NUNCA debe romper la confirmación del pedido: va en un savepoint
+        y cualquier error se registra y devuelve None (la app entonces
+        cierra como siempre, sin pantalla de resultado)."""
+        self.ensure_one()
+        try:
+            with self.env.cr.savepoint():
+                perfil = self._shalom_perfiles_clientes(
+                    self.location_id, excluir_sale_ids=[sale_order.id]
+                )[self.location_id.id]
+                refs = perfil["refs"]
+                venta = sum(sale_order.order_line.mapped("price_subtotal"))
+                costo = sum(
+                    linea.product_id.sudo().standard_price * linea.product_uom_qty
+                    for linea in sale_order.order_line
+                    if not linea.display_type
+                )
+                utilidad = venta - costo
+                margen_pct = (utilidad / venta * 100.0) if venta else 0.0
+                total = sale_order.amount_total
+                n_estrellas = juego_utils.estrellas(total, refs, margen_pct)
+                record_roto = bool(refs["n"]) and total > refs["record"]
+                dia = fields.Date.context_today(self).day
+                xp = juego_utils.xp_pedido(utilidad, n_estrellas, dia)
+                persona = self.env["fsm.person"]._shalom_persona_actual()
+                Evento = self.env["shalom.juego.evento"]
+                antes = Evento._shalom_progreso_de(persona)
+                Evento.sudo().create(
+                    {
+                        "person_id": persona.id or False,
+                        "order_id": self.id,
+                        "sale_id": sale_order.id,
+                        "location_id": self.location_id.id,
+                        "total": total,
+                        "utilidad": round(utilidad, 2),
+                        "margen_pct": round(margen_pct, 1),
+                        "estrellas": n_estrellas,
+                        "record_roto": record_roto,
+                        "xp": xp,
+                    }
+                )
+                despues = Evento._shalom_progreso_de(persona)
+                return {
+                    "estrellas": n_estrellas,
+                    "xp": xp,
+                    "total": total,
+                    "utilidad": round(utilidad, 2),
+                    "margen_pct": round(margen_pct, 1),
+                    "record_roto": record_roto,
+                    "margen_bajo": bool(refs["n"]) and total > refs["record"] and margen_pct < juego_utils.MARGEN_MINIMO_ORO,
+                    "refs": refs,
+                    "clase": perfil["clase"],
+                    "progreso": despues,
+                    "subio_nivel": despues["nivel"] > antes["nivel"],
+                }
+        except Exception:  # noqa: BLE001 -- jamás romper la confirmación
+            _logger.exception(
+                "No se pudo calcular el resultado del juego para fsm.order id=%s", self.id
+            )
+            return None
 
     @api.model
     def shalom_formas_pago_disponibles(self):
@@ -893,19 +959,88 @@ class FSMOrder(models.Model):
         return resultado
 
     @api.model
-    def _shalom_referencias_cliente(self, location):
-        """Vara de estrellas de un cliente (fsm.location) a partir de
-        sus ventas confirmadas -- ver juego_utils.referencias_estrellas."""
+    def _shalom_perfiles_clientes(self, locations, excluir_sale_ids=()):
+        """Perfil de ventas de varios clientes (fsm.location) con UNA
+        sola consulta de pedidos: {location_id: {"refs", "n",
+        "ticket_promedio", "margen_pct", "dias", "clase", "esperado"}}.
+
+        refs = vara de estrellas (típico / 75% / récord) -- ver
+        juego_utils. clase/esperado: ver juego_utils.clasificar y
+        valor_esperado. margen_pct sale del campo `margin` de
+        sale_margin si está instalado (en producción lo está); sin él,
+        queda en 0 y todo cliente de ticket alto cae en A2.
+        `excluir_sale_ids`: pedidos que no deben contar (el que se acaba
+        de confirmar, para medirlo contra el historial ANTERIOR)."""
+        Order = self.env["sale.order"]
+        con_margen = "margin" in Order._fields
+        comercial_de = {
+            loc.id: loc.partner_id.commercial_partner_id.id
+            for loc in locations
+            if loc.partner_id
+        }
+        por_comercial = {}
+        if comercial_de:
+            campos = ["partner_id", "amount_total", "date_order"]
+            if con_margen:
+                campos += ["margin", "amount_untaxed"]
+            dominio = [
+                ("partner_id.commercial_partner_id", "in", list(set(comercial_de.values()))),
+                ("state", "in", list(ESTADOS_VENTA_CONFIRMADA)),
+            ]
+            if excluir_sale_ids:
+                dominio.append(("id", "not in", list(excluir_sale_ids)))
+            ordenes = Order.search_read(dominio, campos)
+            partners = self.env["res.partner"].browse(
+                list({o["partner_id"][0] for o in ordenes})
+            )
+            comercial_de_partner = {p.id: p.commercial_partner_id.id for p in partners}
+            for orden in ordenes:
+                comercial = comercial_de_partner.get(orden["partner_id"][0])
+                por_comercial.setdefault(comercial, []).append(orden)
+        hoy = fields.Date.context_today(self)
+        perfiles = {}
+        for loc in locations:
+            ordenes = por_comercial.get(comercial_de.get(loc.id), [])
+            totales = [o["amount_total"] for o in ordenes]
+            refs = juego_utils.referencias_estrellas(totales)
+            ticket_promedio = sum(totales) / len(totales) if totales else 0.0
+            margen_pct = 0.0
+            if con_margen and ordenes:
+                neto = sum(o["amount_untaxed"] for o in ordenes)
+                margen_pct = (sum(o["margin"] for o in ordenes) / neto * 100.0) if neto else 0.0
+            dias = 9999
+            if ordenes:
+                ultima = max(o["date_order"] for o in ordenes)
+                dias = (hoy - ultima.date()).days
+            clase = juego_utils.clasificar(len(ordenes), ticket_promedio, margen_pct, dias)
+            perfiles[loc.id] = {
+                "refs": refs,
+                "n": len(ordenes),
+                "ticket_promedio": round(ticket_promedio, 2),
+                "margen_pct": round(margen_pct, 1),
+                "dias": dias,
+                "clase": clase,
+                "esperado": juego_utils.valor_esperado(clase, refs["tipico"]),
+            }
+        return perfiles
+
+    @api.model
+    def _shalom_referencias_cliente(self, location, excluir_sale_ids=()):
+        """Vara de estrellas de un cliente (fsm.location) -- ver
+        _shalom_perfiles_clientes."""
         if not location or not location.partner_id:
             return juego_utils.referencias_estrellas([])
-        ordenes = self.env["sale.order"].search_read(
-            [
-                ("partner_id", "child_of", location.partner_id.commercial_partner_id.id),
-                ("state", "in", list(ESTADOS_VENTA_CONFIRMADA)),
-            ],
-            ["amount_total"],
-        )
-        return juego_utils.referencias_estrellas([o["amount_total"] for o in ordenes])
+        return self._shalom_perfiles_clientes(location, excluir_sale_ids)[location.id]["refs"]
+
+    @api.model
+    def shalom_ficha_juego(self, location_id):
+        """Escalera de estrellas de un cliente para la hoja de visita:
+        {"refs", "clase", "esperado", "n"}."""
+        location = self.env["fsm.location"].browse(location_id).exists()
+        if not location or not location.partner_id:
+            return {"refs": juego_utils.referencias_estrellas([]), "clase": "NUEVO", "esperado": 0.0, "n": 0}
+        perfil = self._shalom_perfiles_clientes(location)[location.id]
+        return {k: perfil[k] for k in ("refs", "clase", "esperado", "n")}
 
     @api.model
     def _shalom_economia_pedido(self, lineas):

@@ -65,6 +65,19 @@
                         Para dejar esta visita como Cancelado hace falta escribir acá por qué se cancela.
                     </div>
 
+                    <div class="ficha-juego" t-if="state.visita.juego">
+                        <t t-if="state.visita.juego.refs.n">
+                            <div class="ficha-juego-titulo">
+                                Estrellas que puedes ganar hoy
+                                <span class="ficha-juego-clase" t-esc="'Clase ' + state.visita.juego.clase"/>
+                            </div>
+                            <div class="ficha-juego-fila"><span class="estrella-1">★ Bronce · 75%</span><b t-esc="'$' + Math.round(state.visita.juego.refs.t75).toLocaleString('en-US')"/></div>
+                            <div class="ficha-juego-fila"><span class="estrella-2">★★ Plata · 100%</span><b t-esc="'$' + Math.round(state.visita.juego.refs.t100).toLocaleString('en-US')"/></div>
+                            <div class="ficha-juego-fila"><span class="estrella-3">★★★ Oro · récord</span><b t-esc="'> $' + Math.round(state.visita.juego.refs.record).toLocaleString('en-US')"/></div>
+                        </t>
+                        <div class="ficha-juego-titulo" t-else="">Cliente sin compras: todavía no hay estrellas que medir.</div>
+                    </div>
+
                     <div class="action-grid">
                         <button class="action-tile" t-on-click="llamar">
                             <span class="lbl"><i class="fa fa-phone" aria-hidden="true"/> Llamar</span>
