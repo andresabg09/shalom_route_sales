@@ -160,3 +160,86 @@ def nivel_de_xp(xp_total):
     idx = NIVELES.index(actual)
     siguiente = NIVELES[idx + 1][2] if idx + 1 < len(NIVELES) else None
     return actual[0], actual[1], actual[2], siguiente
+
+
+# -- Carteras: reparto de los clientes de una ruta entre vendedores --
+
+# Clases que entran a una cartera (compran lo suficiente). Dormidos (C) y
+# nunca-compraron (NUEVO) quedan fuera: se ven en "Toda la ruta".
+CLASES_CARTERA = ("A", "A2", "B", "B2")
+# Orden de visita dentro de una cartera: primero A, luego A2, luego B.
+PRIORIDAD_CLASE = {"A": 0, "A2": 1, "B": 2, "B2": 3}
+# Meta de valor esperado por cartera diaria (cada vendedor, cada día).
+MINIMO_CARTERA = 2000.0
+# Clientes de respaldo cercanos por cartera.
+RESERVA_POR_CARTERA = 3
+
+
+def repartir_carteras(candidatos, n_personas, minimo=MINIMO_CARTERA, reserva_n=RESERVA_POR_CARTERA):
+    """Reparte los clientes de una ruta en carteras diarias.
+
+    candidatos: [{"id", "orden", "clase", "esperado"}], donde `orden` es
+    la posición del cliente en la ruta (ya sigue el recorrido de la
+    calle, así que carteras de clientes seguidos = vecinos = menos
+    combustible). Solo entran clases de CLASES_CARTERA.
+
+    1. Cuántas carteras caben: floor(valor total / minimo) (al menos 1).
+       Si son menos que las personas, solo las primeras de la lista
+       trabajan esa ruta.
+    2. Se recorren los clientes en orden de ruta cortando tramos de
+       valor parecido (valor total / carteras), así todas las carteras
+       llegan al mínimo, no solo la primera.
+    3. En cada tramo, los `reserva_n` clientes de MENOR valor esperado
+       quedan de reserva (siempre que el resto siga llegando al mínimo):
+       están en el mismo tramo, o sea cerca; si un cliente de la
+       cartera no compra, se toma uno de la reserva.
+    4. Las carteras se turnan entre las personas (día 1: P1, P2; día 2:
+       P1, P2...), así que dos vendedores nunca comparten un cliente.
+
+    Devuelve [{"persona": idx, "dia": n, "items": [id...] (A primero,
+    luego A2, luego B), "reservas": [id...], "esperado" (sin reservas),
+    "completo"}]. `completo` es False si la cartera no llega al
+    mínimo (solo puede pasar en la última)."""
+    pool = sorted(
+        (c for c in candidatos if c["clase"] in CLASES_CARTERA and c["esperado"] > 0),
+        key=lambda c: c["orden"],
+    )
+    if not pool or n_personas < 1 or minimo <= 0:
+        return []
+    total = sum(c["esperado"] for c in pool)
+    n_carteras = max(1, int(total // minimo))
+    usables = min(n_personas, n_carteras)
+    objetivo = total / n_carteras
+    carteras = []
+    i = 0
+    while i < len(pool):
+        queda = n_carteras - len(carteras)
+        tramo, valor = [], 0.0
+        while i < len(pool) and (queda <= 1 or valor < objetivo):
+            tramo.append(pool[i])
+            valor += pool[i]["esperado"]
+            i += 1
+        # Reserva: los de menor valor, mientras el resto llegue al mínimo.
+        reservas = []
+        for c in sorted(tramo, key=lambda c: (c["esperado"], -c["orden"])):
+            if len(reservas) >= reserva_n or valor - c["esperado"] < minimo:
+                break
+            reservas.append(c)
+            valor -= c["esperado"]
+        ids_reserva = {c["id"] for c in reservas}
+        items = sorted(
+            (c for c in tramo if c["id"] not in ids_reserva),
+            key=lambda c: (PRIORIDAD_CLASE[c["clase"]], c["orden"]),
+        )
+        idx = len(carteras)
+        carteras.append(
+            {
+                "persona": idx % usables,
+                "dia": idx // usables,
+                "items": [c["id"] for c in items],
+                "reservas": [c["id"] for c in sorted(reservas, key=lambda c: c["orden"])],
+                "esperado": round(valor, 2),
+                "completo": valor >= minimo,
+            }
+        )
+    return carteras

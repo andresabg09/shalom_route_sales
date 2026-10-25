@@ -32,6 +32,22 @@
                 </div>
             </div>
 
+            <div class="segmented segmented-cartera" t-if="props.schedule.tiene_cartera">
+                <button
+                    t-att-class="state.modoCartera === 'mi' ? 'active' : ''"
+                    t-on-click="() => this.cambiarModoCartera('mi')"
+                >Mi cartera</button>
+                <button
+                    t-att-class="state.modoCartera === 'toda' ? 'active' : ''"
+                    t-on-click="() => this.cambiarModoCartera('toda')"
+                >Toda la ruta</button>
+            </div>
+            <div class="cartera-resumen" t-if="props.schedule.tiene_cartera and state.modoCartera === 'mi' and !state.cargando">
+                <t t-set="rc" t-value="resumenCartera"/>
+                <b t-esc="rc.pendientes + ' de ' + rc.clientes + ' clientes pendientes'"/>
+                <span t-esc="'Valor esperado de tu cartera: $' + rc.esperado.toLocaleString('en-US')"/>
+            </div>
+
             <div class="segmented">
                 <button
                     t-att-class="state.tab === 'lista' ? 'active' : ''"
@@ -69,6 +85,12 @@
                             <div class="name" t-esc="visita.nombre"/>
                             <div class="addr" t-esc="visita.direccion"/>
                             <div class="addr" t-if="visita.direccion2" t-esc="visita.direccion2"/>
+                            <div class="stop-chips" t-if="visita.clase or visita.reserva or visita.carteraPersonaId">
+                                <span class="chip-clase" t-if="visita.clase" t-esc="visita.clase + (visita.esperado ? ' · $' + Math.round(visita.esperado) : '')"/>
+                                <span class="chip-cartera chip-reserva" t-if="visita.reserva">Reserva</span>
+                                <span class="chip-cartera" t-if="visita.carteraFecha and state.modoCartera === 'mi'" t-esc="etiquetaFechaCartera(visita.carteraFecha)"/>
+                                <span class="chip-cartera chip-otro" t-if="visita.carteraPersonaId and visita.carteraPersonaId !== props.schedule.mi_persona_id" t-esc="'de ' + visita.carteraPersonaNombre"/>
+                            </div>
                         </div>
                         <div class="stop-right">
                             <div class="meta-venta" t-if="visita.metaVenta">

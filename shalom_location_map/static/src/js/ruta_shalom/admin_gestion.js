@@ -136,6 +136,14 @@ export class AdminGestion extends Component {
             // -- pestaña activa --
             tab: "seguimiento",
 
+            // -- Reparto de carteras del ciclo seleccionado --
+            carteraAbierta: false,
+            carteraPersonas: [], // ids de fsm.person elegidos
+            carteraMinimo: 2000,
+            carteraReserva: 3,
+            carteraRepartiendo: false,
+            carteraResultado: null,
+
             // -- Estrategias (qué empujar / no ofrezcas) --
             cargandoEstrategias: false,
             estrategias: [],
@@ -248,6 +256,75 @@ export class AdminGestion extends Component {
         this.state.tab = tab;
         if (tab === "estrategias") {
             this.cargarEstrategias();
+        }
+    }
+
+    // ==================================================================
+    // Carteras: repartir los clientes de un ciclo entre vendedores
+    // ==================================================================
+    //
+    // Dos vendedores pueden compartir una ruta: el sistema reparte sus
+    // clientes (cada uno queda con UN solo vendedor) en carteras diarias
+    // de al menos $2,000 de valor esperado, con reservas cercanas. No
+    // archiva ni cierra nada, solo escribe los campos de cartera de las
+    // visitas abiertas del ciclo. Ver fsm_route_schedule.py.
+
+    abrirCartera() {
+        this.state.carteraAbierta = true;
+        this.state.carteraResultado = null;
+        this.state.carteraPersonas = [];
+    }
+
+    cerrarCartera() {
+        this.state.carteraAbierta = false;
+    }
+
+    toggleCarteraPersona(personaId) {
+        const elegidas = this.state.carteraPersonas;
+        this.state.carteraPersonas = elegidas.includes(personaId)
+            ? elegidas.filter((id) => id !== personaId)
+            : [...elegidas, personaId];
+    }
+
+    async repartirCartera() {
+        if (!this.state.carteraPersonas.length) {
+            this.notification.add("Elige al menos un vendedor.", {type: "warning"});
+            return;
+        }
+        this.state.carteraRepartiendo = true;
+        try {
+            this.state.carteraResultado = await this.orm.call(
+                "fsm.route.schedule",
+                "shalom_admin_repartir_cartera",
+                [
+                    this.state.scheduleSeleccionadoId,
+                    this.state.carteraPersonas,
+                    Number(this.state.carteraMinimo) || 2000,
+                    Number(this.state.carteraReserva) || 0,
+                ]
+            );
+        } catch (error) {
+            const mensaje = error && error.data && error.data.message;
+            this.notification.add(mensaje || "No se pudo repartir la cartera.", {type: "danger"});
+        } finally {
+            this.state.carteraRepartiendo = false;
+        }
+    }
+
+    async quitarCartera() {
+        // eslint-disable-next-line no-alert
+        if (!window.confirm("¿Quitar el reparto? Todo el ciclo vuelve a ser de quien tenga la ruta.")) {
+            return;
+        }
+        try {
+            await this.orm.call("fsm.route.schedule", "shalom_admin_limpiar_cartera", [
+                this.state.scheduleSeleccionadoId,
+            ]);
+            this.state.carteraResultado = null;
+            this.state.carteraAbierta = false;
+            this.notification.add("Reparto quitado.", {type: "success"});
+        } catch (error) {
+            this.notification.add("No se pudo quitar el reparto.", {type: "danger"});
         }
     }
 

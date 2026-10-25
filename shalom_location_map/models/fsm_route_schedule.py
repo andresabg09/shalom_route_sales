@@ -45,7 +45,9 @@ import logging
 from datetime import timedelta
 
 from odoo import _, api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
+
+from . import juego_utils
 
 _logger = logging.getLogger(__name__)
 
@@ -524,6 +526,137 @@ class FSMRouteSchedule(models.Model):
             "Reposición automática de rutas: %s ciclo(s) generado(s).",
             generados,
         )
+
+    # ------------------------------------------------------------------
+    # Carteras: repartir los clientes de este ciclo entre dos o más
+    # vendedores (Fase 4 del juego de ventas)
+    # ------------------------------------------------------------------
+
+    @api.model
+    def _shalom_exigir_admin(self):
+        if not self.env.user.has_group("fieldservice.group_fsm_manager"):
+            raise AccessError(
+                _("Esta acción es solo para el rol Administrador de Servicio de Campo.")
+            )
+
+    @staticmethod
+    def _shalom_dias_habiles(desde, cantidad):
+        """Primeros `cantidad` días de lunes a viernes desde `desde`."""
+        dias, dia = [], desde
+        while len(dias) < cantidad:
+            if dia.weekday() < 5:
+                dias.append(dia)
+            dia += timedelta(days=1)
+        return dias
+
+    @api.model
+    def shalom_admin_repartir_cartera(
+        self, schedule_id, person_ids, minimo=juego_utils.MINIMO_CARTERA,
+        reserva=juego_utils.RESERVA_POR_CARTERA,
+    ):
+        """Reparte las visitas ABIERTAS de este ciclo entre los
+        vendedores indicados (ver juego_utils.repartir_carteras): cada
+        cliente queda asignado a UN solo vendedor (x_cartera_person_id),
+        con día, orden (A primero, luego A2, luego B) y reservas. No
+        archiva ni cierra nada: solo escribe los campos de cartera;
+        volver a repartir sobrescribe el reparto anterior de las visitas
+        abiertas. Las distribuidoras, los dormidos y los clientes que
+        nunca han comprado no entran a ninguna cartera (siguen visibles
+        en "Toda la ruta").
+
+        Devuelve el resumen para mostrar a Administración."""
+        self._shalom_exigir_admin()
+        schedule = self.browse(schedule_id).exists()
+        if not schedule or not person_ids:
+            raise UserError(_("Elegí un ciclo y al menos un vendedor."))
+        personas = self.env["fsm.person"].browse(person_ids).exists()
+        # el dueño de la ruta, si participa, va primero (tiene prioridad)
+        personas = personas.sorted(
+            key=lambda p: 0 if p == schedule.fsm_person_id else 1
+        )
+        abiertas = schedule.fsm_order_ids.filtered(lambda o: not o.stage_id.is_closed)
+        if not abiertas:
+            raise UserError(_("Este ciclo no tiene visitas abiertas que repartir."))
+        locations = abiertas.mapped("location_id")
+        perfiles = self.env["fsm.order"]._shalom_perfiles_clientes(locations)
+        candidatos = []
+        for visita in abiertas:
+            loc = visita.location_id
+            if not loc or loc.x_es_distribuidora:
+                continue
+            perfil = perfiles.get(loc.id)
+            if not perfil:
+                continue
+            candidatos.append(
+                {
+                    "id": visita.id,
+                    "orden": visita.x_cliente_orden_ruta or 0,
+                    "clase": perfil["clase"],
+                    "esperado": perfil["esperado"],
+                }
+            )
+        carteras = juego_utils.repartir_carteras(candidatos, len(personas), minimo, reserva)
+
+        # Se limpia el reparto anterior de las visitas abiertas y se
+        # escribe el nuevo.
+        abiertas.write({
+            "x_cartera_person_id": False,
+            "x_cartera_fecha": False,
+            "x_cartera_orden": 0,
+            "x_cartera_reserva": False,
+        })
+        dias_necesarios = max((c["dia"] for c in carteras), default=-1) + 1
+        fechas = self._shalom_dias_habiles(
+            max(schedule.date_start, fields.Date.context_today(self)), dias_necesarios
+        )
+        por_id = {v.id: v for v in abiertas}
+        esperado_por_persona = {}
+        for cartera in carteras:
+            persona = personas[cartera["persona"]]
+            fecha = fechas[cartera["dia"]]
+            orden = 0
+            for visita_id in cartera["items"] + cartera["reservas"]:
+                orden += 1
+                por_id[visita_id].write({
+                    "x_cartera_person_id": persona.id,
+                    "x_cartera_fecha": fecha,
+                    "x_cartera_orden": orden,
+                    "x_cartera_reserva": visita_id in cartera["reservas"],
+                })
+            resumen = esperado_por_persona.setdefault(
+                persona.id,
+                {"persona_id": persona.id, "persona_nombre": persona.name,
+                 "clientes": 0, "reservas": 0, "esperado": 0.0, "carteras": []},
+            )
+            resumen["clientes"] += len(cartera["items"])
+            resumen["reservas"] += len(cartera["reservas"])
+            resumen["esperado"] = round(resumen["esperado"] + cartera["esperado"], 2)
+            resumen["carteras"].append(
+                {"fecha": fields.Date.to_string(fecha), "clientes": len(cartera["items"]),
+                 "esperado": cartera["esperado"], "completo": cartera["completo"]}
+            )
+        asignadas = {v for c in carteras for v in c["items"] + c["reservas"]}
+        return {
+            "ciclo": schedule.display_name,
+            "personas": list(esperado_por_persona.values()),
+            "sin_cartera": len(abiertas) - len(asignadas),
+            "minimo": minimo,
+        }
+
+    @api.model
+    def shalom_admin_limpiar_cartera(self, schedule_id):
+        """Quita el reparto de carteras de las visitas ABIERTAS de este
+        ciclo (vuelve a ser todo de quien tenga la ruta)."""
+        self._shalom_exigir_admin()
+        schedule = self.browse(schedule_id).exists()
+        abiertas = schedule.fsm_order_ids.filtered(lambda o: not o.stage_id.is_closed)
+        abiertas.write({
+            "x_cartera_person_id": False,
+            "x_cartera_fecha": False,
+            "x_cartera_orden": 0,
+            "x_cartera_reserva": False,
+        })
+        return len(abiertas)
 
     def name_get(self):
         result = []

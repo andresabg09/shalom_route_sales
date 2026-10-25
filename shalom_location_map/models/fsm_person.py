@@ -63,9 +63,13 @@ class FSMPerson(models.Model):
         persona = self._shalom_persona_actual()
         if not persona:
             return []
+        # Rutas que tengo asignadas O donde el reparto de carteras me dio
+        # clientes (dos vendedores pueden compartir una ruta).
         schedules = self.env["fsm.route.schedule"].search(
             [
+                "|",
                 ("fsm_person_id", "=", persona.id),
+                ("fsm_order_ids.x_cartera_person_id", "=", persona.id),
                 "|",
                 "&", ("date_start", "<=", date_end), ("date_end", ">=", date_start),
                 ("estado", "!=", "completada"),
@@ -92,6 +96,13 @@ class FSMPerson(models.Model):
                 # rutas_hub.js/.xml. x_es_visita_express vive en
                 # fsm.route (ver fsm_route.py).
                 "es_visita_express": s.route_id.x_es_visita_express,
+                # Reparto de carteras: mi id y si este ciclo ya tiene
+                # clientes repartidos (RutaDetalle muestra entonces el
+                # filtro "Mi cartera / Toda la ruta").
+                "mi_persona_id": persona.id,
+                "tiene_cartera": bool(
+                    s.fsm_order_ids.filtered(lambda o: o.x_cartera_person_id)
+                ),
             }
             for s in schedules
         ]

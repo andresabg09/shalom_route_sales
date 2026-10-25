@@ -64,6 +64,12 @@ class FSMLocation(models.Model):
         "en fsm.route.schedule, pero por máximo en vez de por "
         "última venta).",
     )
+    x_es_distribuidora = fields.Boolean(
+        string="Es distribuidora",
+        default=False,
+        help="Distribuidora: nunca se visita en persona, solo se le "
+        "escribe. Queda fuera de las carteras del reparto.",
+    )
     x_currency_id = fields.Many2one(
         "res.currency",
         string="Moneda",

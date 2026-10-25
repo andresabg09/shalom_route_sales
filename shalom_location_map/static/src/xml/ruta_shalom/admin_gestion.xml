@@ -81,6 +81,63 @@
                 </div>
             </div>
 
+            <div class="adm-modal-overlay" t-if="state.carteraAbierta">
+                <div class="adm-modal">
+                    <div class="adm-modal-head">
+                        <div class="adm-modal-title">Repartir cartera de este ciclo</div>
+                        <div class="adm-modal-sub">Cada cliente queda con un solo vendedor. No archiva ni cierra nada.</div>
+                    </div>
+                    <div class="adm-modal-body adm-estrategia-form">
+                        <div class="adm-side-label">Vendedores que se reparten la ruta</div>
+                        <label
+                            t-foreach="state.vendedores" t-as="vendedor" t-key="vendedor.persona_id"
+                            class="adm-estrategia-check"
+                        >
+                            <input
+                                type="checkbox"
+                                t-att-checked="state.carteraPersonas.includes(vendedor.persona_id)"
+                                t-on-change="() => this.toggleCarteraPersona(vendedor.persona_id)"
+                            /> <t t-esc="vendedor.persona_nombre"/>
+                        </label>
+                        <label>Mínimo esperado por cartera diaria ($)
+                            <input type="text" inputmode="numeric" t-model="state.carteraMinimo"/>
+                        </label>
+                        <label>Clientes de reserva por cartera
+                            <input type="text" inputmode="numeric" t-model="state.carteraReserva"/>
+                        </label>
+                        <t t-if="state.carteraResultado">
+                            <div class="adm-side-label">Resultado: <t t-esc="state.carteraResultado.ciclo"/></div>
+                            <div
+                                t-foreach="state.carteraResultado.personas" t-as="p" t-key="p.persona_id"
+                                class="adm-modal-row"
+                            >
+                                <div class="adm-row-info">
+                                    <div class="adm-row-name" t-esc="p.persona_nombre"/>
+                                    <div class="adm-row-meta">
+                                        <t t-esc="p.clientes"/> clientes + <t t-esc="p.reservas"/> de reserva ·
+                                        $<t t-esc="Math.round(p.esperado)"/> esperados en <t t-esc="p.carteras.length"/> día(s)
+                                    </div>
+                                    <div class="adm-row-meta" t-if="p.carteras.length and !p.carteras[p.carteras.length - 1].completo">
+                                        El último día no llega al mínimo.
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="adm-row-meta">
+                                <t t-esc="state.carteraResultado.sin_cartera"/> visita(s) quedaron fuera de las carteras
+                                (dormidos, sin compras o distribuidoras): se ven en «Toda la ruta».
+                            </div>
+                        </t>
+                    </div>
+                    <div class="adm-modal-foot">
+                        <button class="adm-btn-ghost" t-on-click="cerrarCartera">Cerrar</button>
+                        <button class="adm-actbtn adm-actbtn-danger" t-on-click="quitarCartera">Quitar reparto</button>
+                        <button class="adm-actbtn adm-actbtn-accent" t-att-disabled="state.carteraRepartiendo" t-on-click="repartirCartera">
+                            <t t-esc="state.carteraRepartiendo ? 'Repartiendo…' : 'Repartir'"/>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="adm-modal-overlay" t-if="state.estrategiaEditando">
                 <div class="adm-modal">
                     <div class="adm-modal-head">
@@ -552,6 +609,9 @@
                                      de abrirAgregarVisita() en admin_gestion.js. -->
                                 <button class="adm-actbtn adm-agregar-visita-btn" t-on-click="abrirAgregarVisita">
                                     <i class="fa fa-plus" aria-hidden="true"/> Añadir cliente a esta ruta
+                                </button>
+                                <button class="adm-actbtn adm-agregar-visita-btn" t-on-click="abrirCartera">
+                                    <i class="fa fa-users" aria-hidden="true"/> Repartir cartera entre vendedores
                                 </button>
                             </div>
 

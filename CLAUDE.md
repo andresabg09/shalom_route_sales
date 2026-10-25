@@ -170,8 +170,8 @@ the parent of `shalom_location_map/` and the module installed
 
 ## Architecture
 
-`shalom_location_map` defines **no models of its own** — it only extends
-three native `fieldservice` models via `_inherit`, plus one HTTP
+`shalom_location_map` extends three native `fieldservice` models via
+`_inherit` (its only models of its own are the game ones listed below), plus one HTTP
 controller and a handful of Owl frontend widgets. See `README.md` for the
 full breakdown (fields added, business rules, request/response shapes);
 the short version:
@@ -191,6 +191,14 @@ the short version:
   already have an open order), archives closed visits, and calls Mapbox
   Directions API to compute/store the route's real street-following
   geometry.
+- Juego de ventas (plan en `docs/plan_implementacion_ruta_juego.md`):
+  `models/juego_utils.py` (reglas puras: estrellas, clases, XP, reparto de
+  carteras; se prueban con `python3 tools/test_juego_utils.py`),
+  `models/shalom_estrategia.py` (modelo `shalom.estrategia`: qué empujar /
+  no ofrezcas), `models/shalom_juego.py` (modelo `shalom.juego.evento`: libro
+  de XP), campos `x_cartera_*` en `fsm.order`, `x_es_distribuidora` en
+  `fsm.location`. El cron de reposición de ciclos está DESACTIVADO a pedido
+  del usuario (`data/reponer_rutas_cron.xml`, `active=False`).
 - `controllers/mapbox_token.py` — exposes the server's public Mapbox
   token to authenticated frontend sessions.
 - `static/src/` — Owl widgets: GPS-capture button, Mapbox background tile

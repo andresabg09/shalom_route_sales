@@ -1957,6 +1957,46 @@
         color: var(--shalom-stock-warning-ink);
     }
 
+    // Carteras: filtro Mi cartera / Toda la ruta y etiquetas por cliente
+    .cartera-resumen {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin: 0 14px 8px;
+        font-size: 0.8rem;
+        color: var(--shalom-ink-muted);
+    }
+    .cartera-resumen b {
+        color: var(--shalom-ink);
+    }
+    .stop-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-top: 4px;
+    }
+    .chip-clase,
+    .chip-cartera {
+        font-size: 0.68rem;
+        font-weight: 800;
+        padding: 1px 7px;
+        border-radius: 999px;
+        border: 1px solid var(--shalom-line);
+        color: var(--shalom-ink-muted);
+    }
+    .chip-clase {
+        border-color: var(--shalom-accent);
+        color: var(--shalom-accent);
+    }
+    .chip-cartera.chip-reserva {
+        background: var(--shalom-stock-warning-bg);
+        color: var(--shalom-stock-warning-ink);
+        border-color: transparent;
+    }
+    .chip-cartera.chip-otro {
+        opacity: 0.8;
+    }
+
     // Nivel / XP del vendedor en la pestaña Rutas
     .progreso-juego {
         margin: 0 14px 8px;

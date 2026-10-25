@@ -266,6 +266,32 @@ class FSMOrder(models.Model):
         "generadas directamente desde el botón nativo de la Ruta (sin "
         "pasar por una ocurrencia programada).",
     )
+    # -- Cartera (Fase 4 del juego): dos vendedores comparten una ruta y
+    # el sistema reparte los clientes entre ellos. Si x_cartera_person_id
+    # está vacío, la visita es de quien tenga la ruta (comportamiento de
+    # siempre). Ver fsm_route_schedule.shalom_admin_repartir_cartera.
+    x_cartera_person_id = fields.Many2one(
+        "fsm.person",
+        string="Cartera de",
+        index=True,
+        copy=False,
+        help="Vendedor al que el reparto de carteras le asignó este "
+        "cliente en este ciclo. Vacío = sin reparto (es de quien tenga "
+        "la ruta).",
+    )
+    x_cartera_fecha = fields.Date(
+        string="Día de la cartera", copy=False,
+        help="Día sugerido para visitar a este cliente dentro de la cartera.",
+    )
+    x_cartera_orden = fields.Integer(
+        string="Orden en la cartera", copy=False,
+        help="Posición dentro de la cartera del día: primero A, luego A2, luego B.",
+    )
+    x_cartera_reserva = fields.Boolean(
+        string="Reserva de la cartera", copy=False,
+        help="Cliente de respaldo cercano: se visita si otro de la "
+        "cartera no compra. No cuenta para el mínimo del día.",
+    )
     x_observaciones_visita = fields.Text(
         string="Observaciones de esta visita",
         help="Notas cargadas por el vendedor durante la visita (ej: "
@@ -958,6 +984,30 @@ class FSMOrder(models.Model):
             )
         return resultado
 
+    def _shalom_vendedor_nombre(self):
+        """Vendedor a mostrar en Administración: el de la cartera si el
+        cliente fue repartido, si no el de la ruta."""
+        self.ensure_one()
+        persona = self.x_cartera_person_id or self.fsm_route_id.fsm_person_id
+        return persona.name if persona else ""
+
+    @api.model
+    def shalom_perfiles_ruta(self, location_ids):
+        """Clase, valor esperado y típico de varios clientes de una vez
+        (para la lista de clientes de la ruta): {location_id: {"clase",
+        "esperado", "tipico", "record"}}. Una sola consulta de pedidos."""
+        locations = self.env["fsm.location"].browse(location_ids).exists()
+        perfiles = self._shalom_perfiles_clientes(locations)
+        return {
+            loc_id: {
+                "clase": p["clase"],
+                "esperado": p["esperado"],
+                "tipico": p["refs"]["tipico"],
+                "record": p["refs"]["record"],
+            }
+            for loc_id, p in perfiles.items()
+        }
+
     @api.model
     def _shalom_perfiles_clientes(self, locations, excluir_sale_ids=()):
         """Perfil de ventas de varios clientes (fsm.location) con UNA
@@ -1461,11 +1511,7 @@ class FSMOrder(models.Model):
                 "id": orden.id,
                 "cliente_nombre": orden.location_id.name if orden.location_id else "",
                 "ruta_nombre": orden.fsm_route_id.name if orden.fsm_route_id else "",
-                "vendedor_nombre": (
-                    orden.fsm_route_id.fsm_person_id.name
-                    if orden.fsm_route_id and orden.fsm_route_id.fsm_person_id
-                    else ""
-                ),
+                "vendedor_nombre": orden._shalom_vendedor_nombre(),
             }
             for orden in ordenes
         ]
@@ -1511,11 +1557,7 @@ class FSMOrder(models.Model):
                     "id": orden.id,
                     "cliente_nombre": orden.location_id.name if orden.location_id else "",
                     "ruta_nombre": orden.fsm_route_id.name if orden.fsm_route_id else "",
-                    "vendedor_nombre": (
-                        orden.fsm_route_id.fsm_person_id.name
-                        if orden.fsm_route_id and orden.fsm_route_id.fsm_person_id
-                        else ""
-                    ),
+                    "vendedor_nombre": orden._shalom_vendedor_nombre(),
                     "cantidad_items": cantidad_items,
                     "total": total,
                     "actualizado": (
@@ -1954,11 +1996,7 @@ class FSMOrder(models.Model):
                 "cliente_nombre": orden.location_id.name if orden.location_id else "",
                 "location_id": orden.location_id.id if orden.location_id else False,
                 "ruta_nombre": orden.fsm_route_id.name if orden.fsm_route_id else "",
-                "vendedor_nombre": (
-                    orden.fsm_route_id.fsm_person_id.name
-                    if orden.fsm_route_id and orden.fsm_route_id.fsm_person_id
-                    else ""
-                ),
+                "vendedor_nombre": orden._shalom_vendedor_nombre(),
                 "fecha": fields.Datetime.to_string(orden.write_date) if orden.write_date else "",
                 "observaciones": orden.x_observaciones_visita or "",
                 "estado_nombre": orden.stage_id.name or "",

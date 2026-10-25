@@ -341,6 +341,11 @@ export class RutaDetalle extends Component {
             navDuracionTexto: "",
             navExpandido: false,
             navEntrando: false, // true un instante al arrancar a navegar -- ver _programarAperturaNavBarra
+            // Reparto de carteras: "mi" = solo los clientes que el reparto
+            // me asignó; "toda" = toda la ruta. Solo aplica si el ciclo
+            // ya tiene clientes repartidos (schedule.tiene_cartera).
+            modoCartera: this.props.schedule.tiene_cartera ? "mi" : "toda",
+            visitasTodas: [], // sin filtrar por cartera
         });
 
         onWillStart(() => this.cargar());
@@ -386,7 +391,17 @@ export class RutaDetalle extends Component {
             const ordenes = await this.orm.searchRead(
                 "fsm.order",
                 [["x_route_schedule_id", "=", this.props.schedule.id]],
-                ["location_id", "x_cliente_orden_ruta", "stage_name", "x_cliente_lat", "x_cliente_lng"],
+                [
+                    "location_id",
+                    "x_cliente_orden_ruta",
+                    "stage_name",
+                    "x_cliente_lat",
+                    "x_cliente_lng",
+                    "x_cartera_person_id",
+                    "x_cartera_fecha",
+                    "x_cartera_orden",
+                    "x_cartera_reserva",
+                ],
                 {order: "x_cliente_orden_ruta asc"}
             );
 
@@ -404,9 +419,28 @@ export class RutaDetalle extends Component {
                 datosPorLocation = Object.fromEntries(locaciones.map((l) => [l.id, l]));
             }
 
-            this.state.visitas = ordenes.map((o) => {
+            // Clase (A/A2/B...) y valor esperado de cada cliente, de una
+            // sola consulta; si falla, la lista sale sin esas etiquetas.
+            let perfiles = {};
+            if (locationIds.length) {
+                try {
+                    perfiles = await this.orm.call("fsm.order", "shalom_perfiles_ruta", [locationIds]);
+                } catch (error) {
+                    console.error("shalom: error al leer perfiles de la ruta", error);
+                }
+            }
+
+            const todas = ordenes.map((o) => {
                 const loc = o.location_id ? datosPorLocation[o.location_id[0]] : null;
+                const perfil = o.location_id ? perfiles[o.location_id[0]] : null;
                 return {
+                    carteraPersonaId: o.x_cartera_person_id ? o.x_cartera_person_id[0] : null,
+                    carteraPersonaNombre: o.x_cartera_person_id ? o.x_cartera_person_id[1] : "",
+                    carteraFecha: o.x_cartera_fecha || "",
+                    carteraOrden: o.x_cartera_orden || 0,
+                    reserva: !!o.x_cartera_reserva,
+                    clase: perfil ? perfil.clase : "",
+                    esperado: perfil ? perfil.esperado : 0,
                     id: o.id,
                     locationId: o.location_id ? o.location_id[0] : null,
                     nombre: o.location_id ? o.location_id[1] : "Sin cliente",
@@ -420,6 +454,8 @@ export class RutaDetalle extends Component {
                     metaVenta: loc ? loc.x_venta_mas_alta : 0,
                 };
             });
+            this.state.visitasTodas = todas;
+            this.state.visitas = this._vistaDeVisitas(todas);
 
             const ruta = await this.orm.read("fsm.route", [this.props.schedule.route_id], [
                 "x_ruta_trazado",
@@ -433,6 +469,68 @@ export class RutaDetalle extends Component {
             this.state.cargando = false;
         }
         this._abrirVisitaInicialSiCorresponde();
+    }
+
+    /** Visitas a mostrar según el filtro de cartera. En "Mi cartera":
+     * solo las que el reparto me asignó, en el orden de la cartera
+     * (día, luego A primero / A2 / B) y numeradas con ese orden. En
+     * "Toda la ruta" (o si el ciclo no tiene reparto): todas, como
+     * siempre. */
+    _vistaDeVisitas(todas) {
+        if (!this.props.schedule.tiene_cartera || this.state.modoCartera !== "mi") {
+            return todas;
+        }
+        const yo = this.props.schedule.mi_persona_id;
+        return todas
+            .filter((v) => v.carteraPersonaId === yo)
+            .sort(
+                (a, b) =>
+                    (a.carteraFecha || "").localeCompare(b.carteraFecha || "") ||
+                    a.carteraOrden - b.carteraOrden
+            )
+            .map((v) => ({...v, orden: v.carteraOrden}));
+    }
+
+    async cambiarModoCartera(modo) {
+        if (this.state.modoCartera === modo) {
+            return;
+        }
+        this.state.modoCartera = modo;
+        this.state.visitas = this._vistaDeVisitas(this.state.visitasTodas);
+        // El mapa se vuelve a dibujar cuando cargando cambia (ver el
+        // useEffect de dibujarMapa): se baja y se sube cargando con un
+        // respiro en el medio para que Owl llegue a renderizar los dos.
+        if (this.state.tab === "mapa") {
+            this.state.cargando = true;
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            this.state.cargando = false;
+        }
+    }
+
+    /** Cuántos clientes y cuánto valor esperado me quedan pendientes en
+     * mi cartera (solo cuando el ciclo tiene reparto). */
+    get resumenCartera() {
+        const yo = this.props.schedule.mi_persona_id;
+        const mias = this.state.visitasTodas.filter(
+            (v) => v.carteraPersonaId === yo && !v.reserva
+        );
+        return {
+            clientes: mias.length,
+            pendientes: mias.filter((v) => v.estado === "pendiente").length,
+            esperado: Math.round(mias.reduce((total, v) => total + (v.esperado || 0), 0)),
+        };
+    }
+
+    etiquetaFechaCartera(fecha) {
+        if (!fecha) {
+            return "";
+        }
+        const hoy = new Date().toISOString().slice(0, 10);
+        if (fecha === hoy) {
+            return "Hoy";
+        }
+        const [, mes, dia] = fecha.split("-");
+        return `${dia}/${mes}`;
     }
 
     /**
