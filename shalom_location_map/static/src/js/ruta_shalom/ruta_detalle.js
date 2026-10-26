@@ -526,7 +526,12 @@ export class RutaDetalle extends Component {
         if (!fecha) {
             return "";
         }
-        const hoy = new Date().toISOString().slice(0, 10);
+        // Fecha LOCAL (toISOString es UTC: en Panamá, después de las 7 pm
+        // "hoy" ya caía en el día siguiente).
+        const ahora = new Date();
+        const mm = String(ahora.getMonth() + 1).padStart(2, "0");
+        const dd = String(ahora.getDate()).padStart(2, "0");
+        const hoy = `${ahora.getFullYear()}-${mm}-${dd}`;
         if (fecha === hoy) {
             return "Hoy";
         }
@@ -557,7 +562,17 @@ export class RutaDetalle extends Component {
         if (!nivel || nivel.tipo !== "visita") {
             return;
         }
-        const visita = this.state.visitas.find((v) => v.id === nivel.orderId);
+        let visita = this.state.visitas.find((v) => v.id === nivel.orderId);
+        if (!visita) {
+            // Estaba abierta desde "Toda la ruta" (cliente de otra cartera,
+            // reserva o sin cartera): se vuelve a ese modo en vez de perder
+            // la visita al reconstruir tras un Atrás.
+            visita = this.state.visitasTodas.find((v) => v.id === nivel.orderId);
+            if (visita) {
+                this.state.modoCartera = "toda";
+                this.state.visitas = this._vistaDeVisitas(this.state.visitasTodas);
+            }
+        }
         if (visita) {
             this.state.visitaAbiertaId = visita.id;
         }
