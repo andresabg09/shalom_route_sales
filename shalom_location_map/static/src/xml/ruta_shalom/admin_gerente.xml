@@ -1,0 +1,337 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.AdminGerente">
+        <!-- Pestaña "Gerente" de Administración (Fase 7). Mismo sistema
+             visual adm-* de admin_gestion.xml; lo propio de esta pantalla
+             lleva el prefijo adm-ger-* (ver admin_gerente.scss). Cada
+             sección carga por separado: si una llamada falla, solo esa
+             muestra "Reintentar". -->
+        <div class="adm-body adm-ger">
+
+            <!-- ============ Mes en curso ============ -->
+            <div class="adm-section-label">Mes en curso<t t-if="mesNombre"> · <t t-esc="mesNombre"/></t></div>
+            <div t-if="state.cargandoMes and !state.mes" class="adm-empty">Cargando…</div>
+            <div t-elif="state.errorMes" class="adm-ger-error adm-ger-error-mes">
+                <span t-esc="state.errorMes"/>
+                <button class="adm-actbtn" t-on-click="cargarMes">Reintentar</button>
+            </div>
+            <t t-elif="state.mes">
+                <div class="adm-ger-grid">
+                    <div class="adm-card adm-ger-kpi adm-ger-kpi-ventas">
+                        <div class="adm-ger-kpi-label">Ventas del mes (sin impuestos)</div>
+                        <div class="adm-ger-kpi-valor" t-esc="dinero(state.mes.ventas)"/>
+                        <div class="adm-ger-bar">
+                            <div class="adm-ger-bar-fill" t-attf-style="width: {{barraVentasPct}}%"/>
+                            <div class="adm-ger-bar-mark" t-attf-style="left: {{marcaPisoPct}}%" title="Piso"/>
+                        </div>
+                        <div class="adm-ger-kpi-meta">
+                            <t t-esc="pct(state.mes.pct_piso)"/> del piso (<t t-esc="dinero(state.mes.piso)"/>)
+                            · <t t-esc="pct(state.mes.pct_meta)"/> de la meta (<t t-esc="dinero(state.mes.meta)"/>)
+                        </div>
+                        <div class="adm-ger-kpi-meta">
+                            <t t-if="state.mes.falta_piso > 0">Faltan <t t-esc="dinero(state.mes.falta_piso)"/> para el piso.</t>
+                            <t t-else="">El piso está asegurado.</t>
+                            <t t-if="state.mes.falta_meta > 0"> Faltan <t t-esc="dinero(state.mes.falta_meta)"/> para la meta.</t>
+                        </div>
+                    </div>
+                    <div class="adm-card adm-ger-kpi adm-ger-kpi-margen">
+                        <div class="adm-ger-kpi-label">Margen del mes</div>
+                        <div class="adm-ger-kpi-valor" t-esc="pct(state.mes.margen_pct)"/>
+                        <t t-if="state.mes.utilidad !== null">
+                            <div class="adm-ger-kpi-meta">
+                                Utilidad <t t-esc="dinero(state.mes.utilidad)"/> · Costo <t t-esc="dinero(state.mes.costo)"/>
+                            </div>
+                            <div class="adm-ger-kpi-meta">Margen del año: <t t-esc="pct(state.mes.margen_anio_pct)"/></div>
+                        </t>
+                        <div t-else="" class="adm-ger-kpi-meta">Sin el módulo de márgenes no hay utilidad.</div>
+                    </div>
+                    <div class="adm-card adm-ger-kpi adm-ger-kpi-oxigenta">
+                        <div class="adm-ger-kpi-label">Oxigenta por 100 tintes</div>
+                        <div class="adm-ger-kpi-valor">
+                            <t t-if="state.mes.oxigenta.por_100 !== null" t-esc="state.mes.oxigenta.por_100"/>
+                            <t t-else="">—</t>
+                        </div>
+                        <div class="adm-ger-kpi-meta">
+                            <t t-esc="state.mes.oxigenta.oxigenta"/> oxigenta · <t t-esc="state.mes.oxigenta.tintes"/> tintes
+                        </div>
+                        <div t-if="state.mes.oxigenta.por_100_en_pedidos_con_oxigenta !== null" class="adm-ger-kpi-meta">
+                            <t t-esc="state.mes.oxigenta.por_100_en_pedidos_con_oxigenta"/> en los
+                            <t t-esc="state.mes.oxigenta.pedidos_con_oxigenta"/> pedido(s) que la llevan
+                        </div>
+                    </div>
+                    <div class="adm-card adm-ger-kpi adm-ger-kpi-pedidos">
+                        <div class="adm-ger-kpi-label">Pedidos confirmados</div>
+                        <div class="adm-ger-kpi-valor" t-esc="state.mes.pedidos"/>
+                        <div class="adm-ger-kpi-meta">
+                            Equipo: <t t-esc="state.mes.equipo.estrellas"/> estrellas
+                            (<t t-esc="state.mes.equipo.oro"/> de oro) · <t t-esc="state.mes.equipo.xp"/> XP
+                        </div>
+                    </div>
+                </div>
+                <div t-if="state.mes.vendedores.length" class="adm-card-list adm-ger-equipo">
+                    <div t-foreach="state.mes.vendedores" t-as="v" t-key="v.persona_id" class="adm-row adm-ger-vendedor">
+                        <div class="adm-row-info">
+                            <div class="adm-row-name" t-esc="v.persona_nombre"/>
+                            <div class="adm-row-meta">
+                                <t t-esc="v.pedidos"/> pedido(s) desde la app · <t t-esc="dinero(v.ventas)"/>
+                            </div>
+                        </div>
+                        <div class="adm-row-right">
+                            <div class="adm-row-estado"><t t-esc="v.estrellas"/> ★ · <t t-esc="v.oro"/> de oro</div>
+                            <div class="adm-row-fecha"><t t-esc="v.xp"/> XP</div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+
+            <!-- ============ Reparto de rutas ============ -->
+            <div class="adm-section-label adm-section-label-sep">Reparto de rutas (propuesta)</div>
+            <div t-if="state.cargandoReparto and !state.reparto" class="adm-empty">Cargando…</div>
+            <div t-elif="state.errorReparto" class="adm-ger-error adm-ger-error-reparto">
+                <span t-esc="state.errorReparto"/>
+                <button class="adm-actbtn" t-on-click="cargarReparto">Reintentar</button>
+            </div>
+            <t t-elif="state.reparto">
+                <div class="adm-ger-nota">
+                    Valor esperado por mes, visitando una vez a cada cliente que compra (clases A, A2, B y B2;
+                    sin distribuidoras). Los días salen de dividir ese valor entre
+                    <t t-esc="dinero(state.reparto.por_dia)"/> por día.
+                </div>
+                <div class="adm-ger-grid adm-ger-grid-reparto">
+                    <div
+                        t-foreach="state.reparto.vendedores" t-as="vendedor" t-key="vendedor.persona_id"
+                        class="adm-card adm-ger-persona"
+                    >
+                        <div class="adm-ger-persona-head">
+                            <b class="adm-ger-persona-nombre" t-esc="vendedor.persona_nombre"/>
+                            <b><t t-esc="dineroCorto(vendedor.valor_mes)"/> · <t t-esc="vendedor.dias"/> días</b>
+                        </div>
+                        <div t-foreach="vendedor.rutas" t-as="ruta" t-key="ruta.id" class="adm-ger-ruta">
+                            <div class="adm-row-info">
+                                <div class="adm-row-name" t-esc="ruta.name"/>
+                                <div class="adm-row-meta">
+                                    <t t-esc="ruta.clientes"/> cliente(s) · <t t-esc="dineroCorto(ruta.valor)"/> · <t t-esc="ruta.dias"/> días
+                                </div>
+                            </div>
+                            <button class="adm-actbtn adm-ger-pasar" t-on-click="() => this.abrirPasar(ruta)">
+                                <i class="fa fa-exchange" aria-hidden="true"/> Pasar a…
+                            </button>
+                        </div>
+                    </div>
+                    <div t-if="!state.reparto.vendedores.length" class="adm-empty">Ningún vendedor tiene rutas con ventas.</div>
+                </div>
+
+                <div t-if="state.reparto.sin_dueno_o_ventas.length" class="adm-card adm-ger-aviso">
+                    <div class="adm-ger-aviso-titulo">Rutas sin dueño o sin ventas</div>
+                    <div t-foreach="state.reparto.sin_dueno_o_ventas" t-as="ruta" t-key="ruta.id" class="adm-ger-ruta">
+                        <div class="adm-row-info">
+                            <div class="adm-row-name" t-esc="ruta.name"/>
+                            <div class="adm-row-meta">
+                                <t t-if="ruta.motivo === 'sin_dueno'">Sin dueño</t>
+                                <t t-else="">Sin ventas · de <t t-esc="ruta.persona_nombre"/></t>
+                                · <t t-esc="ruta.clientes"/> cliente(s) · <t t-esc="dineroCorto(ruta.valor)"/>
+                            </div>
+                        </div>
+                        <button class="adm-actbtn adm-ger-pasar" t-on-click="() => this.abrirPasar(ruta)">
+                            <i class="fa fa-exchange" aria-hidden="true"/> Pasar a…
+                        </button>
+                    </div>
+                </div>
+
+                <div t-if="state.reparto.sin_ruta.clientes" class="adm-card adm-ger-aviso adm-ger-sin-ruta">
+                    <div class="adm-ger-aviso-titulo">
+                        <t t-esc="state.reparto.sin_ruta.clientes"/> clientes buenos sin ruta:
+                        <t t-esc="dineroCorto(state.reparto.sin_ruta.valor)"/> esperados.
+                    </div>
+                    <div class="adm-row-meta">Hay que asignarles ruta. Los de mayor valor:</div>
+                    <div class="adm-row-meta">
+                        <t t-foreach="state.reparto.sin_ruta.top" t-as="c" t-key="c.id">
+                            <span class="adm-ger-etiqueta"><t t-esc="c.name"/> (<t t-esc="c.clase"/> · <t t-esc="dineroCorto(c.valor)"/>)</span>
+                        </t>
+                    </div>
+                </div>
+            </t>
+
+            <!-- ============ Salud de los datos ============ -->
+            <div class="adm-section-label adm-section-label-sep">Salud de los datos</div>
+            <div t-if="state.cargandoSalud and !state.salud" class="adm-empty">Cargando…</div>
+            <div t-elif="state.errorSalud" class="adm-ger-error adm-ger-error-salud">
+                <span t-esc="state.errorSalud"/>
+                <button class="adm-actbtn" t-on-click="cargarSalud">Reintentar</button>
+            </div>
+            <t t-elif="state.salud">
+                <div class="adm-ger-salud">
+                    <div t-attf-class="adm-ger-salud-fila {{state.salud.sin_gps ? 'adm-ger-warn' : ''}}">
+                        <span>Ubicaciones sin GPS</span>
+                        <b><t t-esc="state.salud.sin_gps"/> de <t t-esc="state.salud.total_ubicaciones"/></b>
+                    </div>
+                    <div t-attf-class="adm-ger-salud-fila {{state.salud.buenos.sin_gps ? 'adm-ger-warn' : ''}}">
+                        <span>Clientes buenos sin GPS</span>
+                        <b><t t-esc="state.salud.buenos.sin_gps"/> de <t t-esc="state.salud.buenos.total"/></b>
+                    </div>
+                    <div t-attf-class="adm-ger-salud-fila {{state.salud.buenos_sin_ruta.total ? 'adm-ger-warn' : ''}}">
+                        <span>Clientes buenos sin ruta</span>
+                        <b><t t-esc="state.salud.buenos_sin_ruta.total"/> · <t t-esc="dineroCorto(state.salud.buenos_sin_ruta.valor)"/></b>
+                    </div>
+                    <div t-attf-class="adm-ger-salud-fila {{state.salud.sin_tipo ? 'adm-ger-warn' : ''}}">
+                        <span>Clientes sin tipo (súper, farmacia…)</span>
+                        <b><t t-esc="state.salud.sin_tipo"/></b>
+                    </div>
+                    <div t-attf-class="adm-ger-salud-fila {{state.salud.sin_telefono ? 'adm-ger-warn' : ''}}">
+                        <span>Clientes sin teléfono</span>
+                        <b><t t-esc="state.salud.sin_telefono"/></b>
+                    </div>
+                    <div class="adm-ger-salud-fila">
+                        <span>Distribuidoras marcadas</span>
+                        <b>
+                            <t t-esc="state.salud.distribuidoras.cantidad"/> ·
+                            <t t-esc="pct(state.salud.distribuidoras.pct_ventas)"/> de las ventas
+                        </b>
+                    </div>
+                    <div class="adm-ger-salud-fila">
+                        <span>Ciclos abiertos sin cartera repartida</span>
+                        <b><t t-esc="state.salud.ciclos_sin_cartera.sin_cartera"/> de <t t-esc="state.salud.ciclos_sin_cartera.abiertos"/></b>
+                    </div>
+                </div>
+
+                <!-- ============ GPS prioritario ============ -->
+                <div class="adm-section-label adm-section-label-sep">GPS prioritario · solo los clientes que sí venden</div>
+                <div class="adm-card adm-ger-gps-resumen">
+                    <div class="adm-ger-gps-cifra">
+                        <span class="adm-ger-kpi-label">Clientes buenos con GPS</span>
+                        <span class="adm-ger-gps-num">
+                            <b t-esc="state.salud.buenos.con_gps"/> <small>de <t t-esc="state.salud.buenos.total"/></small>
+                        </span>
+                    </div>
+                    <div class="adm-ger-bar"><div class="adm-ger-bar-fill" t-attf-style="width: {{gpsAvancePct}}%"/></div>
+                    <div t-if="state.salud.buenos.sin_gps" class="adm-ger-kpi-meta">
+                        Faltan <t t-esc="state.salud.buenos.sin_gps"/>. Con los primeros
+                        <b t-esc="state.salud.gps_n"/> cubres el
+                        <b><t t-esc="pct(state.salud.gps_cobertura_pct)"/></b> del valor que falta
+                        (<t t-esc="dinero(state.salud.buenos.valor_sin_gps)"/>). No hace falta tocar a los demás clientes.
+                    </div>
+                    <div t-else="" class="adm-ger-kpi-meta">Todos los clientes buenos tienen GPS.</div>
+                </div>
+                <t t-if="state.salud.buenos.sin_gps">
+                    <div class="adm-chip-row adm-ger-gps-tabs">
+                        <button
+                            t-attf-class="adm-chip {{state.gpsVista === 'primeros' ? 'adm-chip-active' : ''}}"
+                            t-on-click="() => this.cambiarGpsVista('primeros')"
+                        >Primeros <t t-esc="state.salud.gps_n"/></button>
+                        <button
+                            t-attf-class="adm-chip {{state.gpsVista === 'todos' ? 'adm-chip-active' : ''}}"
+                            t-on-click="() => this.cambiarGpsVista('todos')"
+                        >Todos (<t t-esc="state.salud.buenos.sin_gps"/>)</button>
+                        <button
+                            t-attf-class="adm-chip {{state.gpsVista === 'sin_ruta' ? 'adm-chip-active' : ''}}"
+                            t-on-click="() => this.cambiarGpsVista('sin_ruta')"
+                        >Sin ruta (<t t-esc="gpsSinRuta"/>)</button>
+                    </div>
+                    <div t-if="!gpsFilas.length" class="adm-empty">Ninguno en esta lista.</div>
+                    <div t-else="" class="adm-card-list adm-ger-gps-lista">
+                        <div
+                            t-foreach="gpsFilas" t-as="fila" t-key="fila.id"
+                            class="adm-row adm-ger-gps-fila"
+                            t-att-data-location-id="fila.id"
+                        >
+                            <div class="adm-ger-gps-rank" t-esc="fila_index + 1"/>
+                            <div class="adm-row-info">
+                                <div class="adm-row-name" t-esc="fila.name"/>
+                                <div class="adm-row-meta">
+                                    <t t-esc="fila.clase"/> ·
+                                    <t t-if="fila.sin_ruta">sin ruta</t><t t-else="" t-esc="fila.ruta"/>
+                                    · sin coordenadas
+                                </div>
+                            </div>
+                            <div class="adm-row-right">
+                                <div class="adm-row-monto-total" t-esc="dinero(fila.valor)"/>
+                            </div>
+                            <div class="adm-row-actions">
+                                <button class="adm-actbtn adm-actbtn-accent adm-ger-ubicar" t-on-click="() => this.ubicar(fila)">
+                                    <i class="fa fa-crosshairs" aria-hidden="true"/> Ubicar
+                                </button>
+                                <button class="adm-actbtn adm-ger-ficha" t-on-click="() => this.abrirFicha(fila)">
+                                    <i class="fa fa-pencil" aria-hidden="true"/> Ficha
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="adm-ger-nota">
+                        El valor es lo que se espera que compre el cliente en una visita. «Ubicar» abre el asistente
+                        «Buscar GPS por nombre» con ese cliente; «Ficha» abre sus datos (ruta, teléfono y
+                        «Registrar coordenadas», que sirve si estás parado en el local). Al ubicar uno, sale de la
+                        lista y entra a las carteras.
+                    </div>
+                    <button class="adm-actbtn adm-ger-csv" t-on-click="descargarCsv">
+                        <i class="fa fa-download" aria-hidden="true"/> Descargar la lista completa (CSV)
+                    </button>
+                </t>
+            </t>
+
+            <!-- ============ Modal "Pasar a…" ============ -->
+            <div class="adm-modal-overlay adm-ger-pasar-overlay" t-if="state.pasar">
+                <div class="adm-modal">
+                    <div class="adm-modal-head">
+                        <div class="adm-modal-title">Pasar «<t t-esc="state.pasar.ruta.name"/>» a…</div>
+                        <div class="adm-modal-sub">
+                            Hoy es de
+                            <t t-if="state.pasar.ruta.persona_id"><b t-esc="state.pasar.ruta.persona_nombre"/></t>
+                            <t t-else="">nadie</t>.
+                            Las visitas cerradas y el historial no se tocan; no se archiva nada.
+                        </div>
+                    </div>
+                    <div class="adm-modal-body adm-estrategia-form">
+                        <label>Nuevo vendedor
+                            <select class="adm-ger-select-persona" t-on-change="elegirPersona">
+                                <option value="0" t-att-selected="!state.pasar.personaId">Elige un vendedor…</option>
+                                <option
+                                    t-foreach="personasPara(state.pasar.ruta)" t-as="persona" t-key="persona.id"
+                                    t-att-value="persona.id"
+                                    t-att-selected="state.pasar.personaId === persona.id"
+                                ><t t-esc="persona.name"/></option>
+                            </select>
+                        </label>
+                        <div t-if="state.pasar.simulando" class="adm-row-meta">Calculando qué cambia…</div>
+                        <div t-if="state.pasar.error" class="adm-ger-error adm-ger-error-pasar" t-esc="state.pasar.error"/>
+                        <div t-if="state.pasar.resumen" class="adm-ger-resumen">
+                            <div class="adm-side-label">Esto es lo que cambia</div>
+                            <div class="adm-row-meta">
+                                La ruta pasa de <b><t t-esc="state.pasar.resumen.anterior ? state.pasar.resumen.anterior.nombre : 'nadie'"/></b>
+                                a <b t-esc="state.pasar.resumen.nuevo.nombre"/>.
+                            </div>
+                            <div class="adm-row-meta">
+                                <b t-esc="state.pasar.resumen.visitas_pasadas"/> visita(s) abierta(s) pasan a su nombre
+                                <t t-if="state.pasar.resumen.visitas_de_otro">
+                                    (<t t-esc="state.pasar.resumen.visitas_de_otro"/> abierta(s) asignada(s) a otra persona no se tocan)
+                                </t>.
+                            </div>
+                            <div class="adm-row-meta">
+                                <b t-esc="state.pasar.resumen.visitas_cerradas_intactas"/> visita(s) cerrada(s) quedan como están.
+                            </div>
+                            <div t-if="state.pasar.resumen.cartera_limpiada" class="adm-row-meta adm-ger-resumen-aviso">
+                                Se limpia el reparto de cartera de <b t-esc="state.pasar.resumen.cartera_limpiada"/> visita(s)
+                                (<t t-esc="state.pasar.resumen.ciclos_con_cartera.join(', ')"/>): habrá que volver a repartir.
+                            </div>
+                        </div>
+                    </div>
+                    <div class="adm-modal-foot">
+                        <button class="adm-btn-ghost" t-on-click="cerrarPasar">Cancelar</button>
+                        <button
+                            class="adm-actbtn adm-actbtn-accent adm-ger-confirmar"
+                            t-att-disabled="!state.pasar.resumen or state.pasar.aplicando"
+                            t-on-click="confirmarPasar"
+                        ><t t-esc="state.pasar.aplicando ? 'Pasando…' : 'Confirmar'"/></button>
+                    </div>
+                </div>
+            </div>
+
+            <ClienteForm
+                t-if="state.locationIdEditando"
+                modo="'editar'"
+                locationId="state.locationIdEditando"
+                onGuardado.bind="fichaGuardada"
+                onCancelar.bind="cerrarFicha"
+            />
+        </div>
+    </t>
+</templates>

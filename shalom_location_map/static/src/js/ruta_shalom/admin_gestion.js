@@ -4,6 +4,7 @@ import {Component, onWillStart, onWillUnmount, useEffect, useRef, useState} from
 import {registry} from "@web/core/registry";
 import {useService} from "@web/core/utils/hooks";
 import {DateTimeInput} from "@web/core/datetime/datetime_input";
+import {AdminGerente} from "./admin_gerente";
 import {ClienteForm} from "./cliente_form";
 import {OrderScreen} from "./order_screen";
 import {ESTADO_ETIQUETA, estadoDesdeStageName} from "./stage_utils";
@@ -119,7 +120,7 @@ const COLOR_PIN_POR_ESTADO = {
 
 export class AdminGestion extends Component {
     static template = "shalom_location_map.AdminGestion";
-    static components = {ClienteForm, OrderScreen, DateTimeInput, TemaSelector};
+    static components = {AdminGerente, ClienteForm, OrderScreen, DateTimeInput, TemaSelector};
     static props = ["*"];
 
     setup() {

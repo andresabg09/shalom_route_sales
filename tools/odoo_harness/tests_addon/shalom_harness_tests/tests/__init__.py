@@ -8,3 +8,4 @@ from . import test_60_mis_rutas
 from . import test_70_regresion
 from . import test_85_campo
 from . import test_80_social
+from . import test_90_gerente
