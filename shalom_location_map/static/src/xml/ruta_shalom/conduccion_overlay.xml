@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.ConduccionOverlay">
+        <div class="cond-overlay" role="alert">
+            <div class="cond-pastilla">
+                <i class="fa fa-shield" aria-hidden="true"/> Modo conducción
+            </div>
+            <div class="cond-velocidad" t-esc="props.kmh"/>
+            <div class="cond-unidad">km/h</div>
+            <div class="cond-titulo">Vas en movimiento</div>
+            <div class="cond-texto">
+                La pantalla espera. Se abre sola cuando estés quieto unos segundos.
+            </div>
+            <div class="cond-pie">
+                <button class="cond-copiloto" t-on-click="props.onCopiloto">
+                    <span>Voy de copiloto</span>
+                    <span class="cond-interruptor"><span class="cond-interruptor-bola"/></span>
+                </button>
+                <div class="cond-nota">Si alguien más conduce, activa “Voy de copiloto” y sigue trabajando.</div>
+            </div>
+        </div>
+    </t>
+</templates>

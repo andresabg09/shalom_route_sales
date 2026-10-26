@@ -14,6 +14,8 @@ import {abrirNivel, cerrarNivel} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
 import {VisitSheet} from "./visit_sheet";
 import {TemaSelector} from "./tema_selector";
+import {ConduccionOverlay} from "./conduccion_overlay";
+import {useConduccion} from "./conduccion_utils";
 
 /**
  * Detalle de una ruta (una fsm.route.schedule): tabs Lista/Mapa.
@@ -256,7 +258,7 @@ function posicionEnBorde(anguloDeg, ancho, alto, margen) {
 
 export class RutaDetalle extends Component {
     static template = "shalom_location_map.RutaDetalle";
-    static components = {VisitSheet, ClienteForm, TemaSelector};
+    static components = {VisitSheet, ClienteForm, TemaSelector, ConduccionOverlay};
     static props = {
         schedule: Object,
         onVolver: Function,
@@ -347,6 +349,10 @@ export class RutaDetalle extends Component {
             modoCartera: this.props.schedule.tiene_cartera ? "mi" : "toda",
             visitasTodas: [], // sin filtrar por cartera
         });
+
+        // Modo conducción (Fase 6B): su propia vigilancia de GPS, solo mientras
+        // esta pantalla está montada. No toca nada de la navegación en vivo.
+        this.conduccion = useConduccion();
 
         onWillStart(() => this.cargar());
         onWillUnmount(() => {
@@ -576,6 +582,25 @@ export class RutaDetalle extends Component {
         if (visita) {
             this.state.visitaAbiertaId = visita.id;
         }
+    }
+
+    /** Modo conducción: ¿tapar la lista / las hojas de pedido ahora?
+     * NUNCA durante la navegación en vivo ("Trazar ruta aquí": el conductor
+     * la necesita) ni sobre el mapa solo; sí sobre la lista de clientes y
+     * sobre las hojas (visita / catálogo / ficha) que estén abiertas. */
+    get mostrarConduccion() {
+        if (this.state.navegando || this.conduccion.copiloto || !this.conduccion.enMovimiento) {
+            return false;
+        }
+        return (
+            this.state.tab === "lista" ||
+            !!this.state.visitaAbiertaId ||
+            !!this.state.edicionLocationId
+        );
+    }
+
+    activarCopiloto() {
+        this.conduccion.setCopiloto(true);
     }
 
     get resumen() {

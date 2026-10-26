@@ -282,4 +282,102 @@
         font-size: 0.78rem;
         color: var(--shalom-ink-muted);
     }
+
+    // ======================================================================
+    // Modo conducción: cubre la LISTA de clientes y las hojas de pedido
+    // mientras el vendedor va en movimiento. RutaDetalle nunca lo monta
+    // durante la navegación en vivo ni sobre el mapa solo.
+    // ======================================================================
+    .cond-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 120; // por encima de las hojas (visita, catálogo, ficha: <= 97)
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 56px 24px 28px;
+        background: var(--shalom-bg);
+        color: var(--shalom-ink);
+        text-align: center;
+    }
+    .cond-pastilla {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-completado);
+        font-size: 0.82rem;
+        font-weight: 800;
+    }
+    .cond-velocidad {
+        margin-top: 44px;
+        font-size: 6rem;
+        font-weight: 800;
+        line-height: 1;
+        color: var(--shalom-accent);
+    }
+    .cond-unidad {
+        margin-top: 4px;
+        font-size: 1rem;
+        color: var(--shalom-ink-muted);
+    }
+    .cond-titulo {
+        margin-top: 36px;
+        font-size: 1.5rem;
+        font-weight: 800;
+    }
+    .cond-texto {
+        margin-top: 8px;
+        max-width: 320px;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        color: var(--shalom-ink-muted);
+    }
+    .cond-pie {
+        margin-top: auto;
+        width: 100%;
+        max-width: 420px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .cond-copiloto {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        padding: 14px 16px;
+        border-radius: 16px;
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        font-family: inherit;
+        font-size: 0.95rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .cond-interruptor {
+        position: relative;
+        width: 48px;
+        height: 28px;
+        border-radius: 999px;
+        background: var(--shalom-line);
+    }
+    .cond-interruptor-bola {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        background: var(--shalom-ink-muted);
+    }
+    .cond-nota {
+        font-size: 0.78rem;
+        line-height: 1.45;
+        color: var(--shalom-ink-muted);
+    }
 }
