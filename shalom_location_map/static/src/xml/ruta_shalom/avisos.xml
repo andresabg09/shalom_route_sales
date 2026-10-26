@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.Avisos">
+        <div class="av-overlay" t-att-class="state.cerrando ? 'av-closing' : ''" t-on-click.self="cerrar">
+            <div class="av-card" t-att-class="state.cerrando ? 'av-closing' : ''">
+                <div class="av-head">
+                    <button class="av-back" t-on-click="cerrar" title="Atrás">
+                        <i class="fa fa-arrow-left" aria-hidden="true"/>
+                    </button>
+                    <div class="av-head-title">Avisos</div>
+                </div>
+
+                <div class="av-body">
+                    <div t-if="state.cargando" class="av-empty">Cargando…</div>
+                    <t t-else="">
+                        <!-- 1. Avisar por WhatsApp -->
+                        <div class="av-seccion">
+                            <div class="av-seccion-titulo">Avisar por WhatsApp</div>
+                            <div class="av-seccion-nota">
+                                Clientes grandes que visitas en los próximos 3 días. Un aviso
+                                con tiempo asegura que te esperen.
+                            </div>
+
+                            <div class="av-empty" t-if="state.errorAvisos">
+                                No se pudieron cargar los avisos. Intenta de nuevo más tarde.
+                            </div>
+                            <div class="av-empty av-sin-avisos" t-elif="!state.avisos.length">
+                                No hay avisos para los próximos 3 días.
+                            </div>
+                            <t t-else="">
+                                <div class="av-lista">
+                                    <div
+                                        t-foreach="pendientes"
+                                        t-as="aviso"
+                                        t-key="aviso.order_id"
+                                        class="av-item av-aviso"
+                                    >
+                                        <div class="av-item-fila">
+                                            <div class="av-item-nombre" t-esc="aviso.nombre"/>
+                                            <span class="av-chip" t-esc="aviso.clase + ' · ' + dinero(aviso.esperado)"/>
+                                        </div>
+                                        <div class="av-item-detalle">
+                                            Te toca <b t-esc="aviso.fecha_texto"/> (<t t-esc="cuando(aviso.dias)"/>)
+                                            · <t t-esc="aviso.ruta"/>
+                                        </div>
+                                        <div class="av-item-tel"><i class="fa fa-phone" aria-hidden="true"/> <t t-esc="aviso.telefono_texto"/></div>
+                                        <div class="av-mensaje" t-esc="aviso.mensaje"/>
+                                        <button class="av-btn-wa" t-on-click="() => this.avisar(aviso)">
+                                            <i class="fa fa-whatsapp" aria-hidden="true"/> Avisar por WhatsApp
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="av-todos-listos" t-if="!pendientes.length">
+                                    Ya avisaste a todos. 👏
+                                </div>
+                                <t t-if="avisados.length">
+                                    <div class="av-subtitulo">Ya avisados</div>
+                                    <div class="av-lista">
+                                        <div
+                                            t-foreach="avisados"
+                                            t-as="aviso"
+                                            t-key="aviso.order_id"
+                                            class="av-item av-aviso av-hecho"
+                                        >
+                                            <div class="av-item-fila">
+                                                <div class="av-item-nombre" t-esc="aviso.nombre"/>
+                                                <span class="av-chip av-chip-ok"><i class="fa fa-check" aria-hidden="true"/> Avisado</span>
+                                            </div>
+                                            <div class="av-item-detalle">
+                                                <t t-esc="aviso.fecha_texto"/> · <t t-esc="aviso.telefono_texto"/>
+                                            </div>
+                                            <button class="av-btn-secundario" t-on-click="() => this.avisar(aviso)">
+                                                Escribir de nuevo
+                                            </button>
+                                        </div>
+                                    </div>
+                                </t>
+                            </t>
+                        </div>
+
+                        <!-- 2. Distribuidoras -->
+                        <div class="av-seccion">
+                            <div class="av-seccion-titulo">Distribuidoras: solo escríbeles</div>
+                            <div class="av-seccion-nota">
+                                Nunca se visitan en persona ni salen en la ruta. Aquí solo ves
+                                a quién escribirle.
+                            </div>
+                            <div class="av-empty" t-if="state.errorDistribuidoras">
+                                No se pudieron cargar las distribuidoras. Intenta de nuevo más tarde.
+                            </div>
+                            <div class="av-empty av-sin-distribuidoras" t-elif="!state.distribuidoras.length">
+                                Todavía no hay distribuidoras marcadas.
+                            </div>
+                            <div class="av-lista" t-else="">
+                                <div
+                                    t-foreach="state.distribuidoras"
+                                    t-as="dist"
+                                    t-key="dist.location_id"
+                                    class="av-item av-dist"
+                                >
+                                    <div class="av-item-fila">
+                                        <div class="av-item-nombre" t-esc="dist.nombre"/>
+                                        <span class="av-item-hace" t-esc="hace(dist.dias)"/>
+                                    </div>
+                                    <div class="av-item-detalle" t-if="dist.ultimo_fecha">
+                                        Último pedido <b t-esc="dinero(dist.ultimo_monto)"/>
+                                    </div>
+                                    <div class="av-item-tel" t-if="dist.telefono"><i class="fa fa-phone" aria-hidden="true"/> <t t-esc="dist.telefono_texto"/></div>
+                                    <button class="av-btn-wa" t-if="dist.url" t-on-click="() => this.escribir(dist)">
+                                        <i class="fa fa-whatsapp" aria-hidden="true"/> Escribir por WhatsApp
+                                    </button>
+                                    <div class="av-sin-telefono" t-else="">Sin teléfono: pídelo a oficina.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </t>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

@@ -15,6 +15,12 @@
                 </div>
             </div>
 
+            <button class="avisos-btn" t-if="state.avisosPendientes !== null" t-on-click="abrirAvisos">
+                <i class="fa fa-whatsapp" aria-hidden="true"/> Avisos
+                <span class="avisos-btn-cuenta" t-if="state.avisosPendientes" t-esc="state.avisosPendientes"/>
+            </button>
+            <Avisos t-if="state.avisosAbiertos" onCerrar.bind="cerrarAvisos"/>
+
             <div class="confirm-overlay" t-if="state.estrategiasAbiertas" t-on-click.self="toggleEstrategias">
                 <div class="confirm-card estrategias-card">
                     <h3><i class="fa fa-lightbulb-o" aria-hidden="true"/> Estrategias de hoy</h3>

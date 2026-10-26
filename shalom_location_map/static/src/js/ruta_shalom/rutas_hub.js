@@ -4,6 +4,7 @@ import {Component, onMounted, onWillStart, onWillUnmount, useEffect, useRef, use
 import {useService} from "@web/core/utils/hooks";
 import {cargarMapboxGl, getMapboxToken} from "./mapbox_utils";
 import {TemaSelector} from "./tema_selector";
+import {Avisos} from "./avisos";
 
 /**
  * Pestaña "Rutas" de la app del vendedor: lista de fsm.route.schedule
@@ -87,7 +88,7 @@ function formatoHorasImpl(horas) {
 
 export class RutasHub extends Component {
     static template = "shalom_location_map.RutasHub";
-    static components = {TemaSelector};
+    static components = {TemaSelector, Avisos};
     static props = {
         onAbrirRuta: Function,
     };
@@ -111,6 +112,10 @@ export class RutasHub extends Component {
             // elegir ruta; "lista" es la vista de siempre. Se recuerda la
             // última elegida por dispositivo.
             vista: leerVistaGuardada(),
+            // Avisos a 3 días por WhatsApp (Fase 6B): null = sin datos
+            // (el botón no sale); si no, cuántos faltan por avisar.
+            avisosPendientes: null,
+            avisosAbiertos: false,
         });
         this.mapaRef = useRef("mapaRutas");
         this.mapboxMap = null;
@@ -132,7 +137,27 @@ export class RutasHub extends Component {
         onMounted(() => {
             this.cargarEstrategias();
             this.cargarProgreso();
+            this.cargarAvisos();
         });
+    }
+
+    async cargarAvisos() {
+        try {
+            const avisos = await this.orm.call("fsm.person", "shalom_avisos_proximos", []);
+            this.state.avisosPendientes = avisos.filter((a) => !a.avisado).length;
+        } catch (error) {
+            // No es crítico: sin avisos el botón simplemente no sale.
+            console.error("shalom: error al leer los avisos", error);
+        }
+    }
+
+    abrirAvisos() {
+        this.state.avisosAbiertos = true;
+    }
+
+    cerrarAvisos() {
+        this.state.avisosAbiertos = false;
+        this.cargarAvisos(); // el contador refleja lo que se acaba de avisar
     }
 
     async cargarProgreso() {
