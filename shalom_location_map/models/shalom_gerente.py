@@ -71,6 +71,10 @@ class FSMRouteGerente(models.Model):
         `unassigning` del propio fieldservice_route) y se suelta la visita
         de la ruta del día que pudiera tener, borrando las que queden
         vacías."""
+        # _write() va directo a SQL: lo pendiente en el ORM (escrituras sin
+        # volcar, campos por recalcular) se vuelca ANTES, o se escribiría
+        # encima de lo nuevo al volcarse después.
+        self.env.flush_all()
         dayroutes = visitas.mapped("dayroute_id") if "dayroute_id" in visitas._fields else visitas.browse()
         valores = {
             "person_id": persona.id,
@@ -78,7 +82,9 @@ class FSMRouteGerente(models.Model):
             "write_date": fields.Datetime.now(),
         }
         if "dayroute_id" in visitas._fields:
-            valores["dayroute_id"] = False
+            # None, no False: _write() recibe el valor de la columna tal cual
+            # (False se guardaría como 0 y rompe la llave foránea).
+            valores["dayroute_id"] = None
         visitas._write(valores)
         visitas.invalidate_recordset(list(valores))
         if dayroutes and hasattr(dayroutes, "_unlink_removable"):
