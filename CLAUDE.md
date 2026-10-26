@@ -197,8 +197,8 @@ the short version:
   `models/shalom_estrategia.py` (modelo `shalom.estrategia`: qué empujar /
   no ofrezcas), `models/shalom_juego.py` (modelo `shalom.juego.evento`: libro
   de XP), campos `x_cartera_*` en `fsm.order`, `x_es_distribuidora` en
-  `fsm.location`. El cron de reposición de ciclos está DESACTIVADO a pedido
-  del usuario (`data/reponer_rutas_cron.xml`, `active=False`).
+  `fsm.location`. El cron de reposición de ciclos está ACTIVO
+  (`data/reponer_rutas_cron.xml`, `active=True`; estuvo pausado del 25 al 26/10/2026).
 - `controllers/mapbox_token.py` — exposes the server's public Mapbox
   token to authenticated frontend sessions.
 - `static/src/` — Owl widgets: GPS-capture button, Mapbox background tile

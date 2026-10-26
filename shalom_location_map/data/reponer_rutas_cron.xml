@@ -26,10 +26,10 @@
             actualización del módulo: el valor de abajo pisa lo que se
             haya cambiado a mano desde la UI. Por eso el código tiene
             que reflejar el estado real en producción.
-            DESACTIVADO a pedido del usuario (por ahora no se usa la
-            reposición automática). Para reactivarla: poner True acá y
-            desplegar.
+            REACTIVADO a pedido del usuario (26/10/2026): cada ruta genera su
+            ciclo siguiente al cumplirse su periodicidad. Para pausarla otra
+            vez: poner False acá y desplegar.
         -->
-        <field name="active">False</field>
+        <field name="active">True</field>
     </record>
 </odoo>
