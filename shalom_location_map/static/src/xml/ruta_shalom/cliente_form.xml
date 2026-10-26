@@ -171,6 +171,14 @@
                                 </div>
                             </div>
                         </div>
+
+                        <label class="clf-dist-check" t-if="props.modo === 'editar' and state.puedeMarcarDistribuidora">
+                            <input type="checkbox" class="clf-dist-input" t-model="state.esDistribuidora" t-on-change="marcarModificado"/>
+                            <span>
+                                <b>Es distribuidora</b>
+                                <span class="clf-dist-nota">(solo se le escribe, no se visita)</span>
+                            </span>
+                        </label>
                     </t>
                 </div>
 

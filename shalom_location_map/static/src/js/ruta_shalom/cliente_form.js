@@ -94,6 +94,12 @@ export class ClienteForm extends Component {
             fotoBase64: false,
             lat: false,
             lng: false,
+            // Distribuidora (Fase 6B): solo el dueño ve la casilla (el
+            // servidor decide, ver fsm.location.shalom_puede_marcar_
+            // distribuidora) y solo en "Editar cliente".
+            puedeMarcarDistribuidora: false,
+            esDistribuidora: false,
+            esDistribuidoraOriginal: false,
             formModificado: false,
             confirmandoSalida: false,
             cerrando: false,
@@ -102,7 +108,7 @@ export class ClienteForm extends Component {
         onWillStart(async () => {
             await this.cargarRutas();
             if (this.props.modo === "editar") {
-                await this.cargarCliente();
+                await Promise.all([this.cargarPermisoDistribuidora(), this.cargarCliente()]);
             }
         });
 
@@ -142,6 +148,20 @@ export class ClienteForm extends Component {
         this.state.rutas = await this.orm.call("fsm.person", "shalom_mis_rutas", []);
     }
 
+    /** ¿Este usuario puede marcar distribuidoras? Si la pregunta falla,
+     * simplemente no se ofrece la casilla. */
+    async cargarPermisoDistribuidora() {
+        try {
+            this.state.puedeMarcarDistribuidora = !!(await this.orm.call(
+                "fsm.location",
+                "shalom_puede_marcar_distribuidora",
+                []
+            ));
+        } catch (error) {
+            this.state.puedeMarcarDistribuidora = false;
+        }
+    }
+
     async cargarCliente() {
         this.state.cargando = true;
         try {
@@ -157,8 +177,11 @@ export class ClienteForm extends Component {
                     "fsm_route_id",
                     "partner_latitude",
                     "partner_longitude",
+                    "x_es_distribuidora",
                 ]
             );
+            this.state.esDistribuidora = !!loc.x_es_distribuidora;
+            this.state.esDistribuidoraOriginal = !!loc.x_es_distribuidora;
             this.state.campos.name = loc.name || "";
             this.state.campos.phone = loc.phone || "";
             this.state.campos.street = loc.street || "";
@@ -426,14 +449,23 @@ export class ClienteForm extends Component {
                 // arriba). Al venir explícitas en el mismo write(), no
                 // quedan "vacías" para que el geocoder automático las
                 // toque.
-                await this.orm.write("fsm.location", [this.props.locationId], {
+                const valoresLocation = {
                     name: nombre,
                     phone: this.state.campos.phone.trim() || false,
                     street: this.state.campos.street.trim() || false,
                     street2: this.state.campos.street2.trim() || false,
                     partner_latitude: this.state.lat || 0,
                     partner_longitude: this.state.lng || 0,
-                });
+                };
+                // Solo se manda si el dueño la cambió: el servidor rechaza
+                // cualquier escritura de este campo hecha por un vendedor.
+                if (
+                    this.state.puedeMarcarDistribuidora &&
+                    this.state.esDistribuidora !== this.state.esDistribuidoraOriginal
+                ) {
+                    valoresLocation.x_es_distribuidora = this.state.esDistribuidora;
+                }
+                await this.orm.write("fsm.location", [this.props.locationId], valoresLocation);
                 if (this.state.partnerId) {
                     const valoresPartner = {
                         vat: this.state.campos.vat.trim() || false,

@@ -253,4 +253,33 @@
             border-radius: var(--shalom-radius-lg) var(--shalom-radius-lg) 0 0;
         }
     }
+
+    // ======================================================================
+    // Casilla "Es distribuidora" de la ficha de cliente (solo el dueño)
+    // ======================================================================
+    .clf-dist-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: var(--shalom-radius-md);
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface-2);
+        font-size: 0.88rem;
+        line-height: 1.4;
+        cursor: pointer;
+    }
+    .clf-dist-input {
+        flex: none;
+        width: 22px;
+        height: 22px;
+        margin: 0;
+        accent-color: var(--shalom-accent);
+    }
+    .clf-dist-nota {
+        display: block;
+        font-size: 0.78rem;
+        color: var(--shalom-ink-muted);
+    }
 }
