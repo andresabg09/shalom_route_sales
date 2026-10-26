@@ -324,6 +324,7 @@ export class OrderScreen extends Component {
         // sub-nivel que SÍ maneja esta misma pantalla directo -- ver
         // irACarrito()/irACatalogo() más abajo.
         onWillUnmount(() => {
+            this._destruido = true;
             this.detenerEscaneo();
             if (this._syncTimer) {
                 clearInterval(this._syncTimer);
@@ -1158,6 +1159,9 @@ export class OrderScreen extends Component {
      * "+") la evaluación del carrito actual. Si falla o no hay
      * cliente, simplemente no se muestra el medidor. */
     _pedirEvaluacion() {
+        if (this._destruido) {
+            return;
+        }
         if (this._evalTimer) {
             clearTimeout(this._evalTimer);
         }

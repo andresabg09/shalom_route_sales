@@ -117,7 +117,17 @@ export class VisitSheet extends Component {
         // catálogo y la ficha de cliente, en cambio, son niveles que
         // SÍ maneja esta misma hoja directo -- ver tomarPedido()/
         // cerrarPedido()/abrirEdicion()/cerrarEdicion() más abajo.
-        onWillStart(() => this.cargar());
+        onWillStart(async () => {
+            await this.cargar();
+            // Reconstrucción tras un Atrás: si el pedido de esta visita ya
+            // se confirmó (Atrás desde la pantalla de resultado), no se
+            // reabre el catálogo encima de una visita Completada.
+            const v = this.state.visita;
+            if (this.state.tomandoPedido && v && v.saleId && v.estado === "completado") {
+                this.state.tomandoPedido = false;
+                cerrarNivel();
+            }
+        });
         onWillStart(() => this._chequearCarritoActivo());
         this._heartbeatTimer = setInterval(
             () => this._chequearCarritoActivo(), SHALOM_INTERVALO_HEARTBEAT_MS
