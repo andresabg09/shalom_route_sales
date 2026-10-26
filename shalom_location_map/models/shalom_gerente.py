@@ -227,3 +227,118 @@ class FSMRouteGerente(models.Model):
         ]
         reparto["por_dia"] = gerente_utils.VALOR_POR_DIA
         return reparto
+
+    # ------------------------------------------------------------------
+    # Cómo va el mes
+    # ------------------------------------------------------------------
+
+    @api.model
+    def shalom_admin_gerente_mes(self):
+        """Tarjetas "Mes en curso" de la vista del gerente (mes calendario
+        en hora de Panamá):
+
+        - ventas SIN impuestos de los pedidos confirmados del mes contra
+          el piso y la meta (parámetros shalom.juego.piso_mes = 60000 y
+          shalom.juego.meta_mes = 80000).
+        - utilidad, costo y margen % del mes y margen % del año (campo
+          `margin` de sale_margin; sin ese módulo quedan en None). Son
+          dólares: esta es la vista del dueño.
+        - unidades de oxigenta por cada 100 de tinte (productos por
+          nombre, ver gerente_utils.oxigenta_por_100_tintes).
+        - pedidos, estrellas y XP por vendedor (libro shalom.juego.evento,
+          solo los pedidos confirmados desde la app) y el total del
+          equipo."""
+        self._shalom_gerente_exigir()
+        env = self.env
+        hoy = tz_utils.hoy_local(env)
+        inicio, siguiente = gerente_utils.limites_mes(hoy)
+        desde = tz_utils.inicio_de_dia_utc(env, inicio)
+        hasta = tz_utils.inicio_de_dia_utc(env, siguiente)
+
+        Orden = env["sale.order"].sudo()
+        con_margen = "margin" in Orden._fields
+        estados = list(ESTADOS_VENTA_CONFIRMADA)
+        ordenes = Orden.search([
+            ("state", "in", estados), ("date_order", ">=", desde), ("date_order", "<", hasta),
+        ])
+        ventas = round(sum(ordenes.mapped("amount_untaxed")), 2)
+        utilidad = round(sum(ordenes.mapped("margin")), 2) if con_margen else None
+
+        # Margen del año (enero a hoy), por la misma regla.
+        margen_anio = None
+        if con_margen:
+            inicio_anio = tz_utils.inicio_de_dia_utc(env, inicio.replace(month=1))
+            [(neto_anio, util_anio)] = Orden._read_group(
+                [("state", "in", estados), ("date_order", ">=", inicio_anio), ("date_order", "<", hasta)],
+                [],
+                ["amount_untaxed:sum", "margin:sum"],
+            )
+            margen_anio = gerente_utils.margen_pct(util_anio or 0.0, neto_anio or 0.0)
+
+        piso, meta = self._shalom_gerente_metas()
+
+        # Oxigenta por cada 100 tintes: unidades por línea de pedido.
+        lineas = env["sale.order.line"].sudo().search_read(
+            [("order_id", "in", ordenes.ids), ("product_id", "!=", False), ("product_uom_qty", ">", 0)],
+            ["order_id", "product_id", "product_uom_qty"],
+            load="",
+        )
+        nombres = {
+            p["id"]: p["name"]
+            for p in env["product.product"].sudo().with_context(active_test=False)
+            .browse(list({li["product_id"] for li in lineas})).read(["name"])
+        }
+        por_pedido = {}
+        for li in lineas:
+            por_pedido.setdefault(li["order_id"], []).append(
+                (nombres.get(li["product_id"], ""), li["product_uom_qty"])
+            )
+
+        # Pedidos, estrellas y XP por vendedor.
+        eventos = env["shalom.juego.evento"].sudo().search([("fecha", ">=", desde), ("fecha", "<", hasta)])
+        por_persona = {}
+        for ev in eventos:
+            fila = por_persona.setdefault(ev.person_id.id, {
+                "persona_id": ev.person_id.id, "persona_nombre": ev.person_id.name or "",
+                "pedidos": 0, "ventas": 0.0, "estrellas": 0, "oro": 0, "xp": 0,
+            })
+            fila["pedidos"] += 1
+            fila["ventas"] = round(fila["ventas"] + ev.total, 2)
+            fila["estrellas"] += ev.estrellas
+            fila["oro"] += 1 if ev.estrellas >= 3 else 0
+            fila["xp"] += ev.xp
+        vendedores = sorted(por_persona.values(), key=lambda f: f["persona_nombre"].lower())
+
+        resultado = {
+            "mes": fields.Date.to_string(inicio),
+            "hasta": fields.Date.to_string(siguiente),
+            "pedidos": len(ordenes),
+            "ventas": ventas,
+            "utilidad": utilidad,
+            "costo": round(ventas - utilidad, 2) if utilidad is not None else None,
+            "margen_pct": gerente_utils.margen_pct(utilidad, ventas) if utilidad is not None else None,
+            "margen_anio_pct": margen_anio,
+            "piso": piso,
+            "meta": meta,
+            "oxigenta": gerente_utils.oxigenta_por_100_tintes(por_pedido.values()),
+            "vendedores": vendedores,
+            "equipo": {
+                "pedidos": sum(f["pedidos"] for f in vendedores),
+                "estrellas": sum(f["estrellas"] for f in vendedores),
+                "oro": sum(f["oro"] for f in vendedores),
+                "xp": sum(f["xp"] for f in vendedores),
+            },
+        }
+        resultado.update(gerente_utils.avance_mes(ventas, piso, meta))
+        return resultado
+
+    @api.model
+    def _shalom_gerente_metas(self):
+        """(piso, meta) del mes de ir.config_parameter."""
+        param = self.env["ir.config_parameter"].sudo()
+        return (
+            gerente_utils.parametro_numero(
+                param.get_param("shalom.juego.piso_mes"), gerente_utils.PISO_MES_DEFECTO),
+            gerente_utils.parametro_numero(
+                param.get_param("shalom.juego.meta_mes"), gerente_utils.META_MES_DEFECTO),
+        )
