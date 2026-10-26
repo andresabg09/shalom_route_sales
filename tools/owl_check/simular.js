@@ -55,7 +55,7 @@ function mapboxFalso() {
         on(ev, fn) { this._on[ev] = fn; return this; }
         remove() { log.quitados += 1; }
         fitBounds() { log.fitBounds += 1; }
-        setCenter() {} setZoom() {}
+        setCenter() {} setZoom() {} resize() {}
         addSource() {} addLayer() {}
     }
     return {Map, Marker, Popup, LngLatBounds};

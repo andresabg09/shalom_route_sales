@@ -14,7 +14,12 @@ mkdir -p "$W" && cd "$W"
 echo "=== 1/4 Compilación de plantillas (Owl dev:true) ==="
 node "$AQUI/compilar_plantillas.js" "$W/owl_odoo18.js"
 echo; echo "=== 2/4 SCSS -> CSS y clases/variables ==="
-npx sass --no-source-map "${SHALOM_MOD:-$AQUI/../../shalom_location_map}/static/src/scss/ruta_shalom.scss" "$W/out.css"
+SCSS="${SHALOM_MOD:-$AQUI/../../shalom_location_map}/static/src/scss"
+npx sass --no-source-map "$SCSS/ruta_shalom.scss" "$W/out.css"
+# Los demás .scss del módulo (admin_gerente.scss, ...) se compilan y suman al mismo CSS.
+for extra in "$SCSS"/*.scss; do
+  [ "$(basename "$extra")" = "ruta_shalom.scss" ] || npx sass --no-source-map "$extra" >> "$W/out.css"
+done
 python3 -I "$AQUI/clases_css.py" "$W/out.css" | grep -v "fa-" || true
 echo; echo "=== 3/4 Bundle de componentes ==="
 node "$AQUI/build_bundle.js" "$W/bundle.cjs"
