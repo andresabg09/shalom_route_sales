@@ -7,3 +7,4 @@ from . import test_50_carteras
 from . import test_60_mis_rutas
 from . import test_70_regresion
 from . import test_85_campo
+from . import test_80_social

@@ -47,7 +47,7 @@
             </div>
 
             <t t-set="prog" t-value="progresoVista"/>
-            <div class="progreso-juego" t-if="prog">
+            <div class="progreso-juego" t-if="prog" role="button" t-on-click="abrirJuego">
                 <div class="progreso-juego-fila">
                     <b>Nivel <t t-esc="prog.nivel"/> · <t t-esc="prog.nivel_nombre"/></b>
                     <span><t t-esc="prog.xp_total"/> XP</span>
@@ -56,7 +56,20 @@
                 <div class="progreso-juego-mes">
                     Este mes: <t t-esc="prog.pedidos_mes"/> pedido(s) · $<t t-esc="Math.round(prog.ventas_mes).toLocaleString('en-US')"/> · ★ <t t-esc="prog.estrellas_mes"/>
                 </div>
+                <div class="progreso-juego-link">
+                    Logros, equipo y temporada ›
+                    <span class="progreso-juego-nuevo" t-if="state.logrosNuevosHoy">¡<t t-esc="state.logrosNuevosHoy"/> logro(s) hoy!</span>
+                </div>
             </div>
+
+            <JuegoPanel t-if="state.juegoAbierto" onCerrar.bind="cerrarJuego" onRepasarTutorial.bind="repasarTutorial"/>
+            <Tutorial
+                t-if="state.tutorialAbierto"
+                repaso="state.tutorialRepaso"
+                nombre="state.tutorialNombre"
+                onCerrar.bind="cerrarTutorial"
+                onIrAlMapa.bind="irAlMapaDesdeTutorial"
+            />
 
             <div class="search-row">
                 <div class="search-box-live">

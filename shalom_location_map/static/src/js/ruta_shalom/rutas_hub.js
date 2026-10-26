@@ -5,6 +5,8 @@ import {useService} from "@web/core/utils/hooks";
 import {cargarMapboxGl, getMapboxToken} from "./mapbox_utils";
 import {TemaSelector} from "./tema_selector";
 import {Avisos} from "./avisos";
+import {JuegoPanel} from "./juego_panel";
+import {Tutorial} from "./tutorial";
 
 /**
  * Pestaña "Rutas" de la app del vendedor: lista de fsm.route.schedule
@@ -88,7 +90,7 @@ function formatoHorasImpl(horas) {
 
 export class RutasHub extends Component {
     static template = "shalom_location_map.RutasHub";
-    static components = {TemaSelector, Avisos};
+    static components = {TemaSelector, Avisos, JuegoPanel, Tutorial};
     static props = {
         onAbrirRuta: Function,
     };
@@ -108,6 +110,13 @@ export class RutasHub extends Component {
             estrategiasAbiertas: false,
             // XP / nivel del vendedor (juego) -- null si no hay datos.
             progreso: null,
+            // Fase 6A: panel de juego (Logros / Equipo / Temporada) y
+            // tutorial de bienvenida (una vez por usuario, o repaso).
+            juegoAbierto: false,
+            tutorialAbierto: false,
+            tutorialRepaso: false,
+            tutorialNombre: "",
+            logrosNuevosHoy: 0,
             // Mapa de rutas (Fase 5): la pestaña abre en el mapa para
             // elegir ruta; "lista" es la vista de siempre. Se recuerda la
             // última elegida por dispositivo.
@@ -138,6 +147,7 @@ export class RutasHub extends Component {
             this.cargarEstrategias();
             this.cargarProgreso();
             this.cargarAvisos();
+            this.cargarTutorial();
         });
     }
 
@@ -162,10 +172,58 @@ export class RutasHub extends Component {
 
     async cargarProgreso() {
         try {
+            // Recoge los logros pendientes (su XP suma al nivel) antes de
+            // leer el progreso. Si falla, el progreso se lee igual.
+            try {
+                const logros = await this.orm.call("shalom.juego.evento", "shalom_mis_logros", []);
+                this.state.logrosNuevosHoy = (logros && logros.nuevos_hoy) || 0;
+            } catch (error) {
+                console.error("shalom: error al leer los logros", error);
+            }
             this.state.progreso = await this.orm.call("shalom.juego.evento", "shalom_mi_progreso", []);
         } catch (error) {
             console.error("shalom: error al leer el progreso", error);
         }
+    }
+
+    /** Tutorial de bienvenida: solo si el servidor dice que este usuario
+     * todavía no lo vio. Si la consulta falla, Rutas sigue normal. */
+    async cargarTutorial() {
+        try {
+            const estado = await this.orm.call("shalom.juego.evento", "shalom_tutorial_estado", []);
+            this.state.tutorialNombre = (estado && estado.nombre) || "";
+            if (estado && estado.mostrar) {
+                this.state.tutorialAbierto = true;
+                this.state.tutorialRepaso = false;
+            }
+        } catch (error) {
+            console.error("shalom: error al leer el estado del tutorial", error);
+        }
+    }
+
+    abrirJuego() {
+        this.state.juegoAbierto = true;
+    }
+
+    cerrarJuego() {
+        this.state.juegoAbierto = false;
+        this.cargarProgreso(); // el panel pudo recoger logros nuevos
+    }
+
+    repasarTutorial() {
+        this.state.juegoAbierto = false;
+        this.state.tutorialRepaso = true;
+        this.state.tutorialAbierto = true;
+    }
+
+    cerrarTutorial() {
+        this.state.tutorialAbierto = false;
+        this.cargarProgreso();
+    }
+
+    irAlMapaDesdeTutorial() {
+        this.cambiarVista("mapa");
+        this.cerrarTutorial();
     }
 
     get progresoVista() {

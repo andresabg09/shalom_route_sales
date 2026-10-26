@@ -10,6 +10,10 @@ Las reglas salen de docs/plan_implementacion_ruta_juego.md y del
 prototipo aprobado; los números marcados "propuesta" son los que el
 dueño ajusta.
 """
+import calendar
+import json
+import unicodedata
+from datetime import date, timedelta
 
 # Pedidos de relleno: menos de este % del récord del cliente. No cuentan
 # para su ticket típico (dos compras de $53 no bajan la vara de un cliente
@@ -243,3 +247,248 @@ def repartir_carteras(candidatos, n_personas, minimo=MINIMO_CARTERA, reserva_n=R
             }
         )
     return carteras
+
+
+# -- Fase 6A: logros, equipo cooperativo y temporada del mes --
+
+# Palabras que identifican un producto de tinte / de oxigenta (por nombre
+# o por categoría, sin tildes ni mayúsculas). Un solo lugar: lo reusa quien
+# necesite saber "qué es un tinte" (p. ej. el cálculo de oxigenta por cada
+# 100 tintes del gerente).
+PALABRAS_TINTE = ("tinte",)
+PALABRAS_OXIGENTA = ("oxigenta", "oxidante")
+
+
+def _sin_tildes(texto):
+    base = unicodedata.normalize("NFD", texto or "")
+    return "".join(c for c in base if unicodedata.category(c) != "Mn").lower()
+
+
+def es_tinte(nombre, categoria=""):
+    texto = _sin_tildes(f"{nombre} {categoria}")
+    return any(p in texto for p in PALABRAS_TINTE)
+
+
+def es_oxigenta(nombre, categoria=""):
+    texto = _sin_tildes(f"{nombre} {categoria}")
+    return any(p in texto for p in PALABRAS_OXIGENTA)
+
+
+def pedido_con_tinte_y_oxigenta(productos):
+    """productos: [(nombre, categoria)] de las líneas del pedido.
+    Devuelve (con_tinte, con_oxigenta). Un producto que dice "tinte" y
+    "oxigenta" a la vez (p. ej. "Kit tinte + oxigenta") cuenta como ambos."""
+    con_tinte = any(es_tinte(n, c) for n, c in productos)
+    con_oxigenta = any(es_oxigenta(n, c) for n, c in productos)
+    return con_tinte, con_oxigenta
+
+
+# Pedido grande para el logro "Cazador de grandes" (venta sin impuestos).
+PEDIDO_GRANDE = 2000.0
+RACHA_RUTA_SIN_SALTOS = 5
+PEDIDOS_QUIMICO = 3
+
+# Catálogo de logros (propuesta de XP). Cada uno se gana UNA sola vez por
+# vendedor. `bienvenida`: las 3 misiones del tutorial (100+200+300 = 600 XP,
+# lo justo para el nivel 2).
+LOGROS = [
+    {"codigo": "primer_pedido", "nombre": "Primer pedido", "descripcion": "Toma tu primer pedido", "xp": 100, "meta": 1, "bienvenida": True},
+    {"codigo": "quimico", "nombre": "El Químico", "descripcion": "Pon oxigenta en 3 pedidos que lleven tinte", "xp": 200, "meta": PEDIDOS_QUIMICO, "bienvenida": True},
+    {"codigo": "ruta_sin_saltos", "nombre": "Ruta sin saltos", "descripcion": "Cierra 5 clientes seguidos de la misma ruta", "xp": 300, "meta": RACHA_RUTA_SIN_SALTOS, "bienvenida": True},
+    {"codigo": "primera_plata", "nombre": "Primera plata", "descripcion": "Gana 2 estrellas (plata) en un pedido", "xp": 75, "meta": 1, "bienvenida": False},
+    {"codigo": "oro", "nombre": "Oro", "descripcion": "Gana 3 estrellas (oro) en un pedido", "xp": 150, "meta": 1, "bienvenida": False},
+    {"codigo": "record_roto", "nombre": "Rompe Récords", "descripcion": "Superar el récord de un cliente", "xp": 150, "meta": 1, "bienvenida": False},
+    {"codigo": "cazador_grandes", "nombre": "Cazador de grandes", "descripcion": "Cerrar un cliente de más de $2,000", "xp": 100, "meta": 1, "bienvenida": False},
+    {"codigo": "nivel_2", "nombre": "Nivel 2", "descripcion": "Llegar al nivel 2 (600 XP)", "xp": 50, "meta": NIVELES[1][2], "bienvenida": False},
+]
+LOGROS_POR_CODIGO = {logro["codigo"]: logro for logro in LOGROS}
+
+
+def racha_mas_larga(rutas):
+    """Tramo más largo de pedidos seguidos de la MISMA ruta. `rutas`: id
+    de ruta de cada pedido del vendedor en orden cronológico. Un pedido
+    sin ruta conocida (falsy) corta la racha y no cuenta."""
+    mejor = actual = 0
+    anterior = None
+    for ruta in rutas:
+        if not ruta:
+            actual, anterior = 0, None
+            continue
+        actual = actual + 1 if ruta == anterior else 1
+        anterior = ruta
+        mejor = max(mejor, actual)
+    return mejor
+
+
+def estado_logros(stats):
+    """Progreso de cada logro del catálogo a partir de las estadísticas
+    del vendedor (monótonas: solo crecen, así que un logro completo no se
+    "des-completa").
+
+    stats: {"n_pedidos", "n_quimico", "mejor_racha", "max_estrellas",
+    "hay_record", "mayor_pedido", "xp_total"}.
+    Devuelve [{codigo, nombre, descripcion, xp, meta, progreso, completo,
+    bienvenida}] en el orden del catálogo."""
+    progresos = {
+        "primer_pedido": stats.get("n_pedidos", 0),
+        "quimico": stats.get("n_quimico", 0),
+        "ruta_sin_saltos": stats.get("mejor_racha", 0),
+        "primera_plata": 1 if stats.get("max_estrellas", 0) >= 2 else 0,
+        "oro": 1 if stats.get("max_estrellas", 0) >= 3 else 0,
+        "record_roto": 1 if stats.get("hay_record") else 0,
+        "cazador_grandes": 1 if stats.get("mayor_pedido", 0) > PEDIDO_GRANDE else 0,
+        "nivel_2": stats.get("xp_total", 0),
+    }
+    resultado = []
+    for logro in LOGROS:
+        progreso = min(progresos[logro["codigo"]], logro["meta"])
+        resultado.append(
+            {
+                "codigo": logro["codigo"],
+                "nombre": logro["nombre"],
+                "descripcion": logro["descripcion"],
+                "xp": logro["xp"],
+                "meta": logro["meta"],
+                "progreso": progreso,
+                "completo": progreso >= logro["meta"],
+                "bienvenida": logro["bienvenida"],
+            }
+        )
+    return resultado
+
+
+# -- Equipo cooperativo del mes --
+
+PISO_MES_DEFECTO = 60000.0
+META_MES_DEFECTO = 80000.0
+# Días en que se vende (propuesta: lunes a viernes; 0 = lunes). Los feriados
+# no se descuentan.
+DIAS_HABILES_SEMANA = (0, 1, 2, 3, 4)
+
+
+def dias_habiles_entre(desde, hasta):
+    """Cantidad de días hábiles en [desde, hasta] (date, ambos incluidos)."""
+    if hasta < desde:
+        return 0
+    n = 0
+    dia = desde
+    while dia <= hasta:
+        if dia.weekday() in DIAS_HABILES_SEMANA:
+            n += 1
+        dia += timedelta(days=1)
+    return n
+
+
+def ritmo_equipo(ventas, piso, meta, hoy):
+    """Estado del equipo en el mes de `hoy` (date). Sin ranking ni
+    comparación entre vendedores: solo el total del equipo contra el piso
+    y la meta (jefe final).
+
+    Devuelve {dias_mes, dia_actual, dias_habiles_mes, dias_habiles_pasados,
+    dias_habiles_restantes, pct_piso, pct_meta, faltan_piso, faltan_meta,
+    ritmo_piso, ritmo_meta, esperado_hoy, en_ritmo, piso_alcanzado,
+    meta_alcanzada}. `restantes` cuenta desde hoy (inclusive); `ritmo_*` =
+    lo que falta entre los días hábiles que quedan (si no quedan, todo lo
+    que falta)."""
+    ventas = float(ventas or 0.0)
+    piso = float(piso or 0.0)
+    meta = float(meta or 0.0)
+    primero = date(hoy.year, hoy.month, 1)
+    dias_mes = calendar.monthrange(hoy.year, hoy.month)[1]
+    ultimo = date(hoy.year, hoy.month, dias_mes)
+    habiles_mes = dias_habiles_entre(primero, ultimo)
+    pasados = dias_habiles_entre(primero, hoy - timedelta(days=1))
+    restantes = dias_habiles_entre(hoy, ultimo)
+    faltan_piso = max(piso - ventas, 0.0)
+    faltan_meta = max(meta - ventas, 0.0)
+    divisor = max(restantes, 1)
+    esperado_hoy = piso * pasados / habiles_mes if habiles_mes else 0.0
+    return {
+        "dias_mes": dias_mes,
+        "dia_actual": hoy.day,
+        "dias_habiles_mes": habiles_mes,
+        "dias_habiles_pasados": pasados,
+        "dias_habiles_restantes": restantes,
+        "pct_piso": round(ventas / piso * 100.0, 1) if piso else 0.0,
+        "pct_meta": round(ventas / meta * 100.0, 1) if meta else 0.0,
+        "faltan_piso": round(faltan_piso, 2),
+        "faltan_meta": round(faltan_meta, 2),
+        "ritmo_piso": round(faltan_piso / divisor, 2),
+        "ritmo_meta": round(faltan_meta / divisor, 2),
+        "esperado_hoy": round(esperado_hoy, 2),
+        "en_ritmo": ventas >= esperado_hoy,
+        "piso_alcanzado": bool(piso) and ventas >= piso,
+        "meta_alcanzada": bool(meta) and ventas >= meta,
+    }
+
+
+def camion_del_dia(vendido_hoy, meta_dia):
+    """Camión del día: lo vendido hoy contra la carga del reparto.
+    meta_dia ausente/inválida/<=0 -> None (no se muestra)."""
+    try:
+        meta_dia = float(meta_dia or 0)
+    except (TypeError, ValueError):
+        return None
+    if meta_dia <= 0:
+        return None
+    vendido_hoy = float(vendido_hoy or 0.0)
+    return {
+        "meta": round(meta_dia, 2),
+        "vendido": round(vendido_hoy, 2),
+        "pct": round(vendido_hoy / meta_dia * 100.0, 1),
+        "lleno": vendido_hoy >= meta_dia,
+    }
+
+
+# -- Temporada del mes (reinicia cada mes) --
+
+# XP DEL MES que abre cada nivel de temporada, 12 hitos (propuesta; el
+# último es el "jefe final"). Todo lo de la temporada se calcula sobre el
+# XP ganado dentro del mes calendario.
+HITOS_TEMPORADA = [300, 700, 1300, 2100, 3100, 4300, 5700, 7300, 9100, 11100, 13300, 16000]
+
+
+def hitos_temporada(xp_mes):
+    """(nivel, hitos): nivel = cuántos hitos del mes ya se alcanzaron
+    (0..12) e hitos = [{nivel, xp, alcanzado, actual}] donde `actual` es
+    el siguiente por alcanzar (solo uno)."""
+    nivel = sum(1 for xp in HITOS_TEMPORADA if xp_mes >= xp)
+    hitos = [
+        {"nivel": i + 1, "xp": xp, "alcanzado": xp_mes >= xp, "actual": i == nivel}
+        for i, xp in enumerate(HITOS_TEMPORADA)
+    ]
+    return nivel, hitos
+
+
+def premios_de_texto(crudo):
+    """Premios de temporada desde el texto de ir.config_parameter. Acepta
+    un objeto JSON {"4": "Marco plateado", ...} o una lista [{"nivel": 4,
+    "texto": "..."}]. Texto vacío, JSON inválido o forma rara -> {} (no se
+    muestran premios). Devuelve {nivel(int): texto(str)}."""
+    if not crudo or not str(crudo).strip():
+        return {}
+    try:
+        datos = json.loads(crudo)
+    except (TypeError, ValueError):
+        return {}
+    if isinstance(datos, dict):
+        pares = list(datos.items())
+    elif isinstance(datos, list):
+        pares = [(d.get("nivel"), d.get("texto")) for d in datos if isinstance(d, dict)]
+    else:
+        return {}
+    premios = {}
+    for nivel, texto in pares:
+        try:
+            nivel = int(nivel)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(texto, str) and texto.strip() and 1 <= nivel <= len(HITOS_TEMPORADA):
+            premios[nivel] = texto.strip()
+    return premios
+
+
+def dias_quincena_restantes(hoy):
+    """Días que quedan del x1.5 de XP (días 1-15), contando hoy; 0 si ya
+    pasó la primera quincena."""
+    return max(DIA_FIN_PRIMERA_QUINCENA - hoy.day + 1, 0)

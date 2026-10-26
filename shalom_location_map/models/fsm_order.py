@@ -842,6 +842,9 @@ class FSMOrder(models.Model):
                         "estrellas": n_estrellas,
                         "record_roto": record_roto,
                         "xp": xp,
+                        # Fase 6A: qué llevaba el pedido (logro "El Químico").
+                        # Ambos helpers son a prueba de fallos: nunca lanzan.
+                        **Evento._shalom_banderas_pedido(sale_order),
                     }
                 )
                 despues = Evento._shalom_progreso_de(persona)
