@@ -930,6 +930,19 @@ class FSMOrder(models.Model):
         return bodegas[0], bodegas[1]
 
     @api.model
+    def _shalom_empresas_ventas(self):
+        """Ids de las empresas cuyas ventas cuentan para el juego (historial
+        de estrellas, clases, equipo, gerente): todas MENOS la de la bodega
+        Nevada (Greenpeak), que es una empresa aparte -- Dianke y Shalom
+        trabajan juntos, Nevada no. Solo es un proveedor/bodega para el
+        catálogo (ver _shalom_bodegas_catalogo)."""
+        _dianke, nevada = self._shalom_bodegas_catalogo()
+        todas = self.env["res.company"].sudo().search([]).ids
+        if nevada and nevada.company_id:
+            return [c for c in todas if c != nevada.company_id.id]
+        return todas
+
+    @api.model
     def shalom_existencias_bodegas(self, product_ids):
         """Existencia libre de cada producto en las dos bodegas del
         catálogo, para mostrar Dianke y Nevada a la vez (solo
@@ -975,6 +988,7 @@ class FSMOrder(models.Model):
             [
                 ("partner_id", "child_of", location.partner_id.commercial_partner_id.id),
                 ("state", "in", ("sale", "done")),
+                ("company_id", "in", self._shalom_empresas_ventas()),
             ],
             order="date_order desc, id desc",
             limit=limite,
@@ -1072,6 +1086,7 @@ class FSMOrder(models.Model):
             dominio = [
                 ("partner_id.commercial_partner_id", "in", list(set(comercial_de.values()))),
                 ("state", "in", list(ESTADOS_VENTA_CONFIRMADA)),
+                ("company_id", "in", self._shalom_empresas_ventas()),
             ]
             if excluir_sale_ids:
                 dominio.append(("id", "not in", list(excluir_sale_ids)))

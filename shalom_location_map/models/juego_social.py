@@ -312,7 +312,7 @@ class ShalomJuegoEventoSocial(models.Model):
         persona = self.env["fsm.person"]._shalom_persona_actual()
         if not persona:
             return None
-        companias = self.env.companies.ids  # antes de pasar a sudo
+        companias = self.env["fsm.order"]._shalom_empresas_ventas()  # sin la empresa de Nevada
         piso = self._shalom_param_numero(PARAM_PISO, juego_utils.PISO_MES_DEFECTO)
         meta = self._shalom_param_numero(PARAM_META, juego_utils.META_MES_DEFECTO)
         hoy = tz_utils.hoy_local(self.env)

@@ -291,8 +291,10 @@ class FSMRouteGerente(models.Model):
         Orden = env["sale.order"].sudo()
         con_margen = "margin" in Orden._fields
         estados = list(ESTADOS_VENTA_CONFIRMADA)
+        empresas = env["fsm.order"]._shalom_empresas_ventas()   # sin la empresa de Nevada
         ordenes = Orden.search([
             ("state", "in", estados), ("date_order", ">=", desde), ("date_order", "<", hasta),
+            ("company_id", "in", empresas),
         ])
         ventas = round(sum(ordenes.mapped("amount_untaxed")), 2)
         utilidad = round(sum(ordenes.mapped("margin")), 2) if con_margen else None
@@ -302,7 +304,8 @@ class FSMRouteGerente(models.Model):
         if con_margen:
             inicio_anio = tz_utils.inicio_de_dia_utc(env, inicio.replace(month=1))
             [(neto_anio, util_anio)] = Orden._read_group(
-                [("state", "in", estados), ("date_order", ">=", inicio_anio), ("date_order", "<", hasta)],
+                [("state", "in", estados), ("date_order", ">=", inicio_anio), ("date_order", "<", hasta),
+                 ("company_id", "in", empresas)],
                 [],
                 ["amount_untaxed:sum", "margin:sum"],
             )

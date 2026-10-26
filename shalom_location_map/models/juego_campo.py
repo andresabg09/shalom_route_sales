@@ -261,6 +261,7 @@ class FSMPersonCampo(models.Model):
                 [
                     ("partner_id.commercial_partner_id", "in", list(set(comercial_de.values()))),
                     ("state", "in", list(ESTADOS_VENTA_CONFIRMADA)),
+                    ("company_id", "in", self.env["fsm.order"]._shalom_empresas_ventas()),
                 ],
                 ["partner_id", "amount_untaxed", "date_order"],
                 order="date_order desc",
