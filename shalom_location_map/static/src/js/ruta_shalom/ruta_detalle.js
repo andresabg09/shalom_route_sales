@@ -499,10 +499,11 @@ export class RutaDetalle extends Component {
         this.state.visitas = this._vistaDeVisitas(this.state.visitasTodas);
         // El mapa se vuelve a dibujar cuando cargando cambia (ver el
         // useEffect de dibujarMapa): se baja y se sube cargando con un
-        // respiro en el medio para que Owl llegue a renderizar los dos.
+        // respiro en el medio (dos cuadros de animación: un setTimeout(0)
+        // llegaba ANTES del próximo render de Owl y el mapa no se recreaba).
         if (this.state.tab === "mapa") {
             this.state.cargando = true;
-            await new Promise((resolve) => setTimeout(resolve, 0));
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
             this.state.cargando = false;
         }
     }
