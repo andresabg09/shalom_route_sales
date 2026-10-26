@@ -1213,6 +1213,8 @@ export class OrderScreen extends Component {
         return {
             tiene,
             estrellas: ev.estrellas,
+            // El % de margen solo llega al administrador; al vendedor no se le muestra.
+            verMargen: ev.margen_pct !== undefined,
             margen: ev.margen_pct,
             margenBajo: ev.margen_pct < 20,
             mensaje,

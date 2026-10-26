@@ -19,7 +19,7 @@ from .common import ShalomCommon
 _logger = logging.getLogger(__name__)
 
 CLAVES_JUEGO = {
-    "estrellas", "xp", "total", "margen_pct", "record_roto",
+    "estrellas", "xp", "total", "record_roto",
     "margen_bajo", "refs", "clase", "progreso", "subio_nivel",
 }
 
@@ -67,7 +67,8 @@ class TestConfirmarPedido(ShalomCommon):
         self.assertTrue(j["record_roto"])
         self.assertFalse(j["margen_bajo"])
         self.assertNotIn("utilidad", j)
-        self.assertEqual(j["margen_pct"], 40.0)
+        self.assertNotIn("margen_pct", j)   # el vendedor no ve márgenes
+        self.assertEqual(self._eventos().sorted("id")[-1].margen_pct, 40.0)   # queda en el libro
         self.assertEqual(j["clase"], "A")
         dia = tz_utils.hoy_local(self.env).day if tz_utils else fields.Date.context_today(visita).day
         self.assertEqual(j["xp"], ju.xp_pedido(680.0, 3, dia))
@@ -144,7 +145,7 @@ class TestConfirmarPedido(ShalomCommon):
         ev = self._eventos().sorted("id")[-1]
         self.assertEqual((ev.total, ev.utilidad), (1700.0, 680.0))
         self.assertEqual(res["juego"]["estrellas"], 3)   # 1700 > 1600 (récord sin impuesto)
-        self.assertEqual(res["juego"]["margen_pct"], 40.0)
+        self.assertNotIn("margen_pct", res["juego"])
 
     def test_dia_del_mes_en_hora_panama(self):
         if tz_utils is None:
@@ -295,7 +296,7 @@ class TestConfirmarPedido(ShalomCommon):
         ]
         previo = self.env["fsm.order"].with_user(self.u_a).shalom_evaluar_pedido(self.clientes["A5"].id, lineas)
         real = self._confirmar("A5", self.u_a, lineas)["juego"]
-        for k in ("total", "margen_pct", "estrellas"):
+        for k in ("total", "estrellas"):
             self.assertEqual(previo[k], real[k], k)
 
     # ---------------- permisos de ventas del vendedor -----------------
@@ -319,21 +320,32 @@ class TestConfirmarPedido(ShalomCommon):
         except Exception as e:  # noqa: BLE001
             _logger.warning("INFO fsm_user solo: confirmar falla con %s: %s", type(e).__name__, str(e)[:120])
 
-    def test_historial_incluye_otra_compania(self):
-        """INFORMATIVO (decisión de negocio): con sudo(), un pedido
-        confirmado en la compañía 2 (Greenpeak) al mismo cliente SÍ
-        cuenta en récord/típico. Antes (sin sudo, vendedor solo en
-        compañía 1) no contaba."""
+    def test_historial_no_incluye_la_empresa_de_nevada(self):
+        """Decisión del dueño: Nevada (Greenpeak) es una empresa aparte; sus
+        pedidos NO cuentan en récord/típico/clase ni en la precarga."""
         loc = self.clientes["N1"]
-        wh2 = self.wh_nevada
         so = self.env["sale.order"].with_company(self.company2).sudo().create({
-            "partner_id": loc.partner_id.id, "company_id": self.company2.id, "warehouse_id": wh2.id,
+            "partner_id": loc.partner_id.id, "company_id": self.company2.id,
+            "warehouse_id": self.wh_nevada.id,
             "order_line": [(0, 0, {"product_id": self.p_tinte.id, "product_uom_qty": 10})],
         })
         so.write({"state": "sale"})
-        f = self.env["fsm.order"].with_user(self.u_a).shalom_ficha_juego(loc.id)
-        _logger.warning("INFO pedido de otra compañía cuenta en el historial: n=%s record=%s", f["n"], f["refs"]["record"])
-        self.assertIn(f["n"], (0, 1))
+        Order = self.env["fsm.order"].with_user(self.u_a)
+        f = Order.shalom_ficha_juego(loc.id)
+        self.assertEqual(f["n"], 0)
+        self.assertEqual(f["refs"]["record"], 0.0)
+        self.assertEqual(Order.shalom_pedidos_anteriores(loc.id), [])
+        self.assertNotIn(self.company2.id, Order._shalom_empresas_ventas())
+
+    def test_margen_solo_para_el_administrador(self):
+        """El vendedor no ve el % de margen (ni en vivo ni al confirmar); el
+        administrador sí. Las estrellas de oro se calculan igual."""
+        lineas = self.lineas((self.p_tinte, 3))
+        vend = self.env["fsm.order"].with_user(self.u_a).shalom_evaluar_pedido(self.clientes["A2"].id, lineas)
+        adm = self.env["fsm.order"].with_user(self.u_mgr).shalom_evaluar_pedido(self.clientes["A2"].id, lineas)
+        self.assertNotIn("margen_pct", vend)
+        self.assertIn("margen_pct", adm)
+        self.assertEqual(vend["estrellas"], adm["estrellas"])
 
     def test_flush_previo_fuera_del_try(self):
         """Diseño (6fc1b7d): si el flush previo al savepoint falla, el

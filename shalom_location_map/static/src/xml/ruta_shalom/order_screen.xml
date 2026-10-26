@@ -34,7 +34,7 @@
                     <span class="medidor-estrellas" t-if="med.tiene" t-att-title="med.estrellas + ' de 3 estrellas'">
                         <span t-foreach="[1, 2, 3]" t-as="n" t-key="n" t-att-class="med.estrellas >= n ? 'estrella-on estrella-' + n : 'estrella-off'">★</span>
                     </span>
-                    <span class="medidor-margen" t-att-class="med.margenBajo ? 'margen-bajo' : 'margen-ok'" t-esc="'Margen ' + Math.round(med.margen) + '%'"/>
+                    <span class="medidor-margen" t-if="med.verMargen" t-att-class="med.margenBajo ? 'margen-bajo' : 'margen-ok'" t-esc="'Margen ' + Math.round(med.margen) + '%'"/>
                 </div>
                 <div class="medidor-barra" t-if="med.tiene">
                     <div class="medidor-relleno" t-att-style="'width:' + med.relleno + '%'"/>
@@ -446,7 +446,7 @@
                     <div class="resultado-linea" t-if="res.pctDelTipico !== null">
                         <span>De su pedido típico</span><b t-esc="res.pctDelTipico + '%'"/>
                     </div>
-                    <div class="resultado-linea">
+                    <div class="resultado-linea" t-if="res.margen_pct !== undefined">
                         <span>Margen</span><b t-esc="Math.round(res.margen_pct) + '%'"/>
                     </div>
                     <div class="resultado-aviso resultado-record" t-if="res.record_roto and !res.margen_bajo">

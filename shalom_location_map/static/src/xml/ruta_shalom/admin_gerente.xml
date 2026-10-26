@@ -82,6 +82,28 @@
                         </div>
                     </div>
                 </div>
+                <!-- Margen de CADA venta: solo lo ve el administrador (el vendedor no ve márgenes). -->
+                <div t-if="state.mes.pedidos_recientes.length" class="adm-section-label adm-section-label-sep">
+                    Margen por venta (últimas <t t-esc="state.mes.pedidos_recientes.length"/>)
+                    <t t-if="state.mes.margen_pct !== null"> · promedio del mes <t t-esc="state.mes.margen_pct"/>%</t>
+                </div>
+                <div t-if="state.mes.pedidos_recientes.length" class="adm-card-list">
+                    <div t-foreach="state.mes.pedidos_recientes" t-as="p" t-key="p.id" class="adm-row">
+                        <div class="adm-row-info">
+                            <div class="adm-row-name" t-esc="p.cliente"/>
+                            <div class="adm-row-meta">
+                                <t t-esc="p.nombre"/> · <t t-esc="p.fecha"/> · <t t-esc="p.vendedor || 'sin vendedor'"/>
+                            </div>
+                        </div>
+                        <div class="adm-row-right">
+                            <div class="adm-row-estado" t-esc="dinero(p.total)"/>
+                            <div class="adm-row-fecha">
+                                <t t-if="p.margen_pct !== null"><t t-esc="p.margen_pct"/>% de margen</t>
+                                <t t-else="">sin margen</t>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </t>
 
             <!-- ============ Reparto de rutas ============ -->

@@ -284,6 +284,12 @@ class TestGerente(ShalomCommon):
         self.assertAlmostEqual(res["utilidad"], 2105.0, places=2)
         self.assertAlmostEqual(res["costo"], 5450.0 - 2105.0, places=2)
         self.assertAlmostEqual(res["margen_pct"], 38.6, places=1)
+        # margen de CADA venta (solo administrador)
+        rec = res["pedidos_recientes"]
+        self.assertEqual(len(rec), 3)
+        self.assertEqual(sorted(r["margen_pct"] for r in rec),
+                         sorted([round(490 * 100.0 / 1300, 1), 40.0, round(415 * 100.0 / 1150, 1)]))
+        self.assertTrue(all({"nombre", "cliente", "fecha", "total", "vendedor"} <= set(r) for r in rec))
         # piso y meta por defecto
         self.assertEqual((res["piso"], res["meta"]), (60000.0, 80000.0))
         self.assertAlmostEqual(res["pct_piso"], 9.1, places=1)

@@ -179,13 +179,16 @@ class TestCatalogo(ShalomCommon):
         # con margen 10% -> NO oro (2 estrellas) y "siguiente" marca margen_bajo
         res = Order.shalom_evaluar_pedido(loc.id, self.lineas((self.p_oxi, 40)))
         self.assertEqual(res["total"], 2000.0)
-        self.assertEqual(res["margen_pct"], 10.0)
+        self.assertNotIn("margen_pct", res)   # el vendedor no ve márgenes
+        adm = self.env["fsm.order"].with_user(self.u_mgr).shalom_evaluar_pedido(
+            loc.id, self.lineas((self.p_oxi, 40)))
+        self.assertEqual(adm["margen_pct"], 10.0)   # el administrador sí
         self.assertEqual(res["estrellas"], 2)
         self.assertTrue(res["siguiente"]["margen_bajo"])
         # oro: 3 estrellas -> siguiente None
         res = Order.shalom_evaluar_pedido(loc.id, self.lineas((self.p_tinte, 17)))
         self.assertIsNone(res["siguiente"])
-        self.assertEqual(res["margen_pct"], 40.0)
+        self.assertNotIn("margen_pct", res)
         self.assertNotIn("utilidad", res)
         # el COSTO no sale por ninguna vía
         self.assertNotIn("costo", res)
@@ -205,7 +208,9 @@ class TestCatalogo(ShalomCommon):
         # el regalo no suma a la venta pero sí al costo: 1100 vs costo 12*60=720
         # (margen 34.5%)
         self.assertEqual(res["total"], 1100.0)
-        self.assertEqual(res["margen_pct"], 34.5)
+        self.assertNotIn("margen_pct", res)
+        adm = self.env["fsm.order"].with_user(self.u_mgr).shalom_evaluar_pedido(loc.id, lineas)
+        self.assertEqual(adm["margen_pct"], 34.5)
         # cliente sin historial: 0 estrellas, sin siguiente
         res = Order.shalom_evaluar_pedido(self.clientes["N1"].id, self.lineas((self.p_tinte, 50)))
         self.assertEqual(res["estrellas"], 0)

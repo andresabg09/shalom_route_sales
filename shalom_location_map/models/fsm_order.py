@@ -848,11 +848,10 @@ class FSMOrder(models.Model):
                     }
                 )
                 despues = Evento._shalom_progreso_de(persona)
-                return {
+                resultado = {
                     "estrellas": n_estrellas,
                     "xp": xp,
                     "total": total,
-                    "margen_pct": round(margen_pct, 1),
                     "record_roto": record_roto,
                     "margen_bajo": bool(refs["n"]) and total > refs["record"] and margen_pct < juego_utils.MARGEN_MINIMO_ORO,
                     "refs": refs,
@@ -860,6 +859,7 @@ class FSMOrder(models.Model):
                     "progreso": despues,
                     "subio_nivel": despues["nivel"] > antes["nivel"],
                 }
+                return self._shalom_con_margen_si_admin(resultado, margen_pct)
         except Exception:  # noqa: BLE001 -- jamás romper la confirmación
             _logger.exception(
                 "No se pudo calcular el resultado del juego para fsm.order id=%s", self.id
@@ -1169,22 +1169,33 @@ class FSMOrder(models.Model):
                 "utilidad": round(utilidad, 2), "margen_pct": round(margen_pct, 1)}
 
     @api.model
+    def _shalom_con_margen_si_admin(self, resultado, margen_pct):
+        """Agrega "margen_pct" a la respuesta SOLO si quien llama es
+        administrador de Servicio de Campo: el vendedor no ve márgenes (ni
+        % ni dólares); las estrellas de oro igual se calculan con el margen
+        en el servidor."""
+        if self.env.user.has_group("fieldservice.group_fsm_manager"):
+            resultado["margen_pct"] = round(margen_pct, 1)
+        return resultado
+
+    @api.model
     def shalom_evaluar_pedido(self, location_id, lineas):
         """Estrellas y margen EN VIVO del carrito contra la vara del
         cliente (ticket típico, 75%, récord). Informativo: no bloquea
-        ni cambia nada. Devuelve {"total", "margen_pct",
-        "estrellas", "refs": {...}, "siguiente": {...}|None}; el costo
-        no sale del servidor."""
+        ni cambia nada. Devuelve {"total", "estrellas", "refs": {...},
+        "siguiente": {...}|None}; el costo y la utilidad no salen del
+        servidor, y el % de margen ("margen_pct") solo se incluye para el
+        administrador (el vendedor no ve márgenes)."""
         location = self.env["fsm.location"].browse(location_id).exists()
         refs = self._shalom_referencias_cliente(location)
         eco = self._shalom_economia_pedido(lineas or [])
-        return {
+        resultado = {
             "total": eco["total"],
-            "margen_pct": eco["margen_pct"],
             "estrellas": juego_utils.estrellas(eco["total"], refs, eco["margen_pct"]),
             "refs": refs,
             "siguiente": juego_utils.siguiente_objetivo(eco["total"], refs, eco["margen_pct"]),
         }
+        return self._shalom_con_margen_si_admin(resultado, eco["margen_pct"])
 
     @api.model
     def shalom_estado_promociones_carrito(self, lineas):

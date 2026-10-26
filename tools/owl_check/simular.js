@@ -159,12 +159,12 @@ function evaluar(lineas) {
     const est = total > 400 ? 3 : total >= 200 ? 2 : total >= 150 ? 1 : 0;
     const objetivo = est === 0 ? 150 : est === 1 ? 200 : 400.01;
     return {
-        total, margen_pct: 35, utilidad: total * 0.35, estrellas: est, refs: REFS,
+        total, ...(window.__sinMargen ? {} : {margen_pct: 35}), estrellas: est, refs: REFS,
         siguiente: est >= 3 ? null : {estrellas: est + 1, objetivo, faltan: Math.max(objetivo - total, 0), margen_bajo: false},
     };
 }
 const JUEGO = {
-    estrellas: 2, xp: 120, total: 220, utilidad: 77, margen_pct: 35, record_roto: false, margen_bajo: false,
+    estrellas: 2, xp: 120, total: 220, ...(window.__sinMargen ? {} : {margen_pct: 35}), record_roto: false, margen_bajo: false,
     refs: REFS, clase: "A", subio_nivel: true,
     progreso: {xp_total: 450, nivel: 2, nivel_nombre: "Explorador", xp_nivel: 300, xp_siguiente: 700},
 };
@@ -763,7 +763,7 @@ escenarios.back = async function () {
 // editar este archivo.
 for (const f of fs.readdirSync(__dirname).filter((x) => /^escenarios_.*\.js$/.test(x)).sort()) {
     require(path.join(__dirname, f))({
-        escenarios, bundle, montar, ok, q, qa, click, texto, esperar, sleep, window, localStorage, sessionStorage, owl, MOD,
+        escenarios, bundle, montar, handlersOrder, ok, q, qa, click, texto, esperar, sleep, window, localStorage, sessionStorage, owl, MOD,
         fallo: () => { fallos++; },
     });
 }

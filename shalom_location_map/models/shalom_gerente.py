@@ -345,7 +345,24 @@ class FSMRouteGerente(models.Model):
             fila["xp"] += ev.xp
         vendedores = sorted(por_persona.values(), key=lambda f: f["persona_nombre"].lower())
 
+        # Margen de CADA venta del mes (solo lo ve el administrador): las 30 más
+        # recientes, con quién la vendió (el vendedor del juego, o el del pedido).
+        persona_de = {ev.sale_id.id: ev.person_id.name for ev in eventos if ev.sale_id}
+        pedidos_recientes = []
+        for o in ordenes.sorted(key=lambda o: (o.date_order, o.id), reverse=True)[:30]:
+            neto = o.amount_untaxed
+            pedidos_recientes.append({
+                "id": o.id,
+                "nombre": o.name,
+                "cliente": o.partner_id.display_name or "",
+                "fecha": fields.Date.to_string(tz_utils.a_local(env, o.date_order).date()),
+                "total": round(neto, 2),
+                "margen_pct": gerente_utils.margen_pct(o.margin, neto) if con_margen else None,
+                "vendedor": persona_de.get(o.id) or o.user_id.name or "",
+            })
+
         resultado = {
+            "pedidos_recientes": pedidos_recientes,
             "mes": fields.Date.to_string(inicio),
             "hasta": fields.Date.to_string(siguiente),
             "pedidos": len(ordenes),
