@@ -129,15 +129,15 @@
                         class="product-card"
                         t-att-class="cantidadEnCarrito(producto.id) ? 'product-card-en-carrito' : ''"
                     >
-                        <div class="name">
-                            <t t-esc="producto.name"/>
-                            <span t-if="estrategiaDe(producto) === 'no_ofrecer'" class="estrategia-marca marca-no-ofrecer">NO OFRECER</span>
-                            <span t-elif="estrategiaDe(producto) === 'empujar'" class="estrategia-marca marca-empujar">EMPUJAR</span>
-                        </div>
+                        <div class="name" t-esc="producto.name"/>
                         <div class="product-thumb-wrap">
                             <img class="product-thumb" t-att-src="imagenUrl(producto)" alt="" t-on-error="onImagenError"/>
                         </div>
                         <div class="product-side">
+                            <!-- Marca de estrategia en la columna lateral (dentro del
+                                 nombre, que se recorta a 2 líneas, quedaba cortada). -->
+                            <span t-if="estrategiaDe(producto) === 'no_ofrecer'" class="estrategia-marca marca-no-ofrecer">NO OFRECER</span>
+                            <span t-elif="estrategiaDe(producto) === 'empujar'" class="estrategia-marca marca-empujar">EMPUJAR</span>
                             <div class="price-label">Precio unitario</div>
                             <div class="price" t-esc="'$' + producto.list_price.toFixed(2)"/>
                             <t t-set="bodegas" t-value="chipsBodegas(producto)"/>

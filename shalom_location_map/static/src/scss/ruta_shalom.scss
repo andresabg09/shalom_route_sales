@@ -2192,7 +2192,8 @@
     }
     .estrategia-marca {
         display: inline-block;
-        margin-left: 6px;
+        align-self: flex-start;
+        margin-bottom: 4px;
         padding: 1px 6px;
         border-radius: 6px;
         font-size: 0.62rem;
