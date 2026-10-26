@@ -830,7 +830,6 @@ class FSMOrder(models.Model):
                     "estrellas": n_estrellas,
                     "xp": xp,
                     "total": total,
-                    "utilidad": round(utilidad, 2),
                     "margen_pct": round(margen_pct, 1),
                     "record_roto": record_roto,
                     "margen_bajo": bool(refs["n"]) and total > refs["record"] and margen_pct < juego_utils.MARGEN_MINIMO_ORO,
@@ -1098,7 +1097,7 @@ class FSMOrder(models.Model):
         de líneas que shalom_confirmar_pedido). Las líneas de
         recompensa (regalo) venden a $0 pero SÍ cuestan. El costo es el
         costo estándar del producto: se lee con sudo() y NUNCA se manda
-        al vendedor, solo el % de margen y la utilidad."""
+        al vendedor, solo el % de margen (la utilidad en dólares tampoco)."""
         ids = [linea["product_id"] for linea in lineas]
         productos = {p.id: p for p in self.env["product.product"].sudo().browse(ids).exists()}
         total = costo = 0.0
@@ -1119,7 +1118,7 @@ class FSMOrder(models.Model):
     def shalom_evaluar_pedido(self, location_id, lineas):
         """Estrellas y margen EN VIVO del carrito contra la vara del
         cliente (ticket típico, 75%, récord). Informativo: no bloquea
-        ni cambia nada. Devuelve {"total", "margen_pct", "utilidad",
+        ni cambia nada. Devuelve {"total", "margen_pct",
         "estrellas", "refs": {...}, "siguiente": {...}|None}; el costo
         no sale del servidor."""
         location = self.env["fsm.location"].browse(location_id).exists()
@@ -1128,7 +1127,6 @@ class FSMOrder(models.Model):
         return {
             "total": eco["total"],
             "margen_pct": eco["margen_pct"],
-            "utilidad": eco["utilidad"],
             "estrellas": juego_utils.estrellas(eco["total"], refs, eco["margen_pct"]),
             "refs": refs,
             "siguiente": juego_utils.siguiente_objetivo(eco["total"], refs, eco["margen_pct"]),
