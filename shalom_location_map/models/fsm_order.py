@@ -943,7 +943,13 @@ class FSMOrder(models.Model):
         location = self.env["fsm.location"].browse(location_id)
         if not location.exists() or not location.partner_id:
             return []
-        ordenes = self.env["sale.order"].search(
+        try:
+            limite = max(1, min(int(limite or 8), 20))
+        except (TypeError, ValueError):
+            limite = 8
+        # sudo(): se precarga lo que ESTE CLIENTE compró antes, lo haya
+        # vendido quien lo haya vendido (ver _shalom_perfiles_clientes).
+        ordenes = self.env["sale.order"].sudo().search(
             [
                 ("partner_id", "child_of", location.partner_id.commercial_partner_id.id),
                 ("state", "in", ("sale", "done")),
@@ -1020,7 +1026,13 @@ class FSMOrder(models.Model):
         queda en 0 y todo cliente de ticket alto cae en A2.
         `excluir_sale_ids`: pedidos que no deben contar (el que se acaba
         de confirmar, para medirlo contra el historial ANTERIOR)."""
-        Order = self.env["sale.order"]
+        # sudo(): el historial de un cliente debe verse COMPLETO sin importar
+        # qué vendedor lo pida -- la regla nativa "Personal Orders" de Ventas
+        # filtra por vendedor del pedido y daba récord/típico/clase parciales
+        # (y, dentro de _shalom_registrar_resultado_juego, un AccessError
+        # tragado que escondía la pantalla de resultado). Solo salen montos
+        # agregados, nunca datos de otros pedidos.
+        Order = self.env["sale.order"].sudo()
         con_margen = "margin" in Order._fields
         comercial_de = {
             loc.id: loc.partner_id.commercial_partner_id.id
@@ -1038,13 +1050,15 @@ class FSMOrder(models.Model):
             ]
             if excluir_sale_ids:
                 dominio.append(("id", "not in", list(excluir_sale_ids)))
-            ordenes = Order.search_read(dominio, campos)
-            partners = self.env["res.partner"].browse(
-                list({o["partner_id"][0] for o in ordenes})
+            # load="": partner_id llega como id plano (sin calcular el nombre
+            # de cada partner, que en rutas grandes pesaba por nada).
+            ordenes = Order.search_read(dominio, campos, load="")
+            partners = self.env["res.partner"].sudo().browse(
+                list({o["partner_id"] for o in ordenes})
             )
             comercial_de_partner = {p.id: p.commercial_partner_id.id for p in partners}
             for orden in ordenes:
-                comercial = comercial_de_partner.get(orden["partner_id"][0])
+                comercial = comercial_de_partner.get(orden["partner_id"])
                 por_comercial.setdefault(comercial, []).append(orden)
         hoy = fields.Date.context_today(self)
         perfiles = {}
