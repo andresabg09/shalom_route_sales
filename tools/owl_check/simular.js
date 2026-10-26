@@ -757,6 +757,17 @@ escenarios.back = async function () {
     app.destroy();
 };
 
+// Escenarios en archivos aparte (escenarios_*.js, uno por quien los agrega):
+// cada archivo exporta function (ctx) { ctx.escenarios.nombre = async () => {...} }
+// con las utilidades de este arnés. Así varias personas agregan pruebas sin
+// editar este archivo.
+for (const f of fs.readdirSync(__dirname).filter((x) => /^escenarios_.*\.js$/.test(x)).sort()) {
+    require(path.join(__dirname, f))({
+        escenarios, bundle, montar, ok, q, qa, click, texto, esperar, sleep, window, localStorage, sessionStorage, owl, MOD,
+        fallo: () => { fallos++; },
+    });
+}
+
 (async () => {
     const pedidos = process.argv.slice(2);
     for (const [nombre, fn] of Object.entries(escenarios)) {

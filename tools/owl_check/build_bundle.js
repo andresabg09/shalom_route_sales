@@ -15,8 +15,10 @@ const alias = {
     "@web/core/network/rpc": S("rpc.js"),
     "@web/core/assets": S("assets.js"),
 };
-const entry = ["order_screen", "rutas_hub", "ruta_detalle", "visit_sheet", "admin_gestion", "app"]
-    .map((m) => `export * from ${JSON.stringify(path.join(JS, m + ".js"))};`).join("\n");
+// Todos los módulos JS de la app (los componentes nuevos se incluyen solos).
+const fs = require("fs");
+const entry = fs.readdirSync(JS).filter((f) => f.endsWith(".js")).sort()
+    .map((f) => `export * from ${JSON.stringify(path.join(JS, f))};`).join("\n");
 esbuild.build({
     stdin: {contents: entry, resolveDir: JS, loader: "js"},
     bundle: true, format: "cjs", platform: "node", logLevel: "warning",
