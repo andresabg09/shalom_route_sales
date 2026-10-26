@@ -1,0 +1,809 @@
+// Fase 6A del juego: tutorial de bienvenida (tut-*) y panel Logros /
+// Equipo / Temporada (jp-*). Archivo APARTE de ruta_shalom.scss a
+// propósito (otras fases también tocan ese archivo). Todo anidado bajo
+// .o_shalom_ruta_app y SOLO con variables --shalom-* (las define
+// ruta_shalom.scss, claro por defecto y oscuro por selector), así que se
+// lee en tema claro (al sol) y en oscuro sin colores sueltos.
+//
+// Las clases .estrella-1/2/3, .estrella-on/.estrella-off, .icon-btn y
+// .segmented vienen de ruta_shalom.scss y se reusan tal cual.
+
+.o_shalom_ruta_app {
+    // ------------------------------------------------------------------
+    // Tarjeta de nivel de la pestaña Rutas: ahora abre el panel
+    // ------------------------------------------------------------------
+    .progreso-juego[role="button"] {
+        cursor: pointer;
+    }
+    .progreso-juego-link {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: var(--shalom-accent);
+    }
+    .progreso-juego-nuevo {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--shalom-stock-success-bg);
+        color: var(--shalom-stock-success-ink);
+        font-size: 0.72rem;
+    }
+
+    // ------------------------------------------------------------------
+    // Tutorial
+    // ------------------------------------------------------------------
+    .tut-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 90;
+        background: var(--shalom-bg);
+        color: var(--shalom-ink);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        animation: shalom-fondo-in 0.18s ease both;
+    }
+    .tut-pantalla {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        max-width: 480px;
+        margin: 0 auto;
+        padding: 28px 22px 22px;
+        gap: 10px;
+    }
+    .tut-estrellas {
+        display: flex;
+        align-items: flex-end;
+        gap: 4px;
+        color: var(--shalom-estrella-3);
+        line-height: 1;
+    }
+    .tut-estrella-chica {
+        font-size: 1.7rem;
+    }
+    .tut-estrella-grande {
+        font-size: 2.3rem;
+    }
+    .tut-eyebrow {
+        margin-top: 12px;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--shalom-accent);
+    }
+    .tut-titulo-grande {
+        font-size: 2rem;
+        line-height: 1.12;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: var(--shalom-ink);
+    }
+    .tut-texto {
+        font-size: 0.98rem;
+        line-height: 1.5;
+        color: var(--shalom-ink-muted);
+    }
+    .tut-puntos {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .tut-punto {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 14px;
+        border: 1.5px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-surface);
+        font-size: 0.92rem;
+        line-height: 1.35;
+        color: var(--shalom-ink);
+    }
+    .tut-punto-icono {
+        flex: 0 0 auto;
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+    }
+    .tut-punto-icono.tut-icono-oro {
+        color: var(--shalom-estrella-3);
+    }
+    .tut-pie {
+        margin-top: auto;
+        padding-top: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .tut-usuario {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1.5px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-surface);
+    }
+    .tut-avatar {
+        flex: 0 0 auto;
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        font-weight: 800;
+        font-size: 1.05rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .tut-usuario-texto {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        font-size: 0.72rem;
+        color: var(--shalom-ink-muted);
+    }
+    .tut-usuario-texto b {
+        font-size: 0.95rem;
+        color: var(--shalom-ink);
+    }
+    .tut-check {
+        color: var(--shalom-completado);
+    }
+    .tut-btn-principal {
+        border: none;
+        border-radius: var(--shalom-radius-md);
+        padding: 15px 16px;
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        font-family: inherit;
+        font-size: 1rem;
+        font-weight: 800;
+        cursor: pointer;
+        width: 100%;
+    }
+    .tut-btn-principal:disabled {
+        opacity: 0.6;
+    }
+    .tut-saltar {
+        border: none;
+        background: transparent;
+        color: var(--shalom-ink-muted);
+        font-family: inherit;
+        font-size: 0.9rem;
+        font-weight: 800;
+        padding: 12px 14px;
+        cursor: pointer;
+        text-decoration: underline;
+    }
+    .tut-saltar-centrado {
+        align-self: center;
+    }
+    .tut-nota {
+        text-align: center;
+        font-size: 0.78rem;
+        color: var(--shalom-ink-muted);
+        line-height: 1.4;
+    }
+
+    // --- pasos 1 a 3 ---
+    .tut-practica-aviso {
+        align-self: flex-start;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: var(--shalom-info-soft);
+        color: var(--shalom-info);
+        font-size: 0.72rem;
+        font-weight: 800;
+    }
+    .tut-cliente {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .tut-cliente-fecha {
+        font-size: 0.78rem;
+        font-weight: 800;
+        color: var(--shalom-ink-muted);
+    }
+    .tut-cliente-nombre {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: var(--shalom-ink);
+    }
+    .tut-tarjeta {
+        padding: 14px;
+        border: 1.5px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-surface);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .tut-tarjeta-titulo {
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--shalom-ink-muted);
+    }
+    .tut-escalera-fila {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: var(--shalom-radius-sm);
+        background: var(--shalom-surface-2);
+        font-size: 0.92rem;
+        color: var(--shalom-ink);
+    }
+    .tut-escalera-nombre {
+        font-weight: 800;
+    }
+    .tut-sugerencia {
+        font-size: 0.82rem;
+        line-height: 1.4;
+        color: var(--shalom-ink-muted);
+    }
+    .tut-pedido-fila {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .tut-pedido-total {
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--shalom-ink);
+    }
+    .tut-pedido-estrellas {
+        font-size: 1.7rem;
+        letter-spacing: 3px;
+    }
+    .tut-pedido-mensaje {
+        font-size: 0.92rem;
+        font-weight: 800;
+        color: var(--shalom-accent);
+    }
+    .tut-pedido-botones {
+        display: flex;
+        gap: 8px;
+    }
+    .tut-btn-mas,
+    .tut-btn-reiniciar {
+        border-radius: var(--shalom-radius-md);
+        padding: 12px 14px;
+        font-family: inherit;
+        font-size: 0.95rem;
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .tut-btn-mas {
+        flex: 1;
+        border: none;
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+    }
+    .tut-btn-reiniciar {
+        border: 1.5px solid var(--shalom-line);
+        background: transparent;
+        color: var(--shalom-ink-muted);
+    }
+    .tut-llegue {
+        text-align: center;
+        padding: 14px;
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-completado);
+        color: var(--shalom-accent-ink);
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        box-shadow: 0 0 0 4px var(--shalom-completado-soft);
+    }
+    // Tarjeta clara del entrenador, siempre abajo
+    .tut-coach {
+        margin-top: auto;
+        padding: 16px;
+        border: 1.5px solid var(--shalom-accent);
+        border-radius: var(--shalom-radius-lg);
+        background: var(--shalom-surface);
+        box-shadow: var(--shalom-shadow);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .tut-coach-paso {
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--shalom-accent);
+    }
+    .tut-coach-titulo {
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: var(--shalom-ink);
+    }
+    .tut-coach-texto {
+        font-size: 0.92rem;
+        line-height: 1.5;
+        color: var(--shalom-ink-muted);
+    }
+    .tut-coach-texto b {
+        color: var(--shalom-ink);
+    }
+    .tut-coach-botones {
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .tut-btn-siguiente {
+        width: auto;
+        flex: 1;
+        max-width: 200px;
+    }
+
+    // --- tutorial terminado ---
+    .tut-fin {
+        gap: 12px;
+    }
+    .tut-contador {
+        font-size: 2.4rem;
+        font-weight: 800;
+        color: var(--shalom-accent);
+    }
+    .tut-premio {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 14px;
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-ink);
+        font-size: 0.85rem;
+    }
+    .tut-premio b {
+        color: var(--shalom-accent);
+    }
+    .tut-misiones {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .tut-mision {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1.5px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-surface);
+    }
+    .tut-mision-marca {
+        flex: 0 0 auto;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 2px solid var(--shalom-line);
+        color: var(--shalom-ink-muted);
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .tut-mision-hecha .tut-mision-marca {
+        border-color: var(--shalom-completado);
+        background: var(--shalom-stock-success-bg);
+        color: var(--shalom-stock-success-ink);
+    }
+    .tut-mision-texto {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        font-size: 0.8rem;
+        color: var(--shalom-ink-muted);
+    }
+    .tut-mision-texto b {
+        font-size: 0.95rem;
+        color: var(--shalom-ink);
+    }
+    .tut-mision-xp {
+        flex: 0 0 auto;
+        font-size: 0.8rem;
+        font-weight: 800;
+        color: var(--shalom-accent);
+    }
+    .tut-recuerda {
+        font-size: 0.85rem;
+        line-height: 1.45;
+        color: var(--shalom-ink-muted);
+    }
+    .tut-recuerda b {
+        color: var(--shalom-ink);
+    }
+
+    // ------------------------------------------------------------------
+    // Panel Logros / Equipo / Temporada
+    // ------------------------------------------------------------------
+    .jp-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 75;
+        background: var(--shalom-bg);
+        color: var(--shalom-ink);
+        display: flex;
+        flex-direction: column;
+        animation: shalom-fondo-in 0.15s ease both;
+    }
+    .jp-cabecera {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 14px 18px 8px;
+    }
+    .jp-titulo {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: var(--shalom-ink);
+    }
+    .jp-pestanas {
+        margin-bottom: 4px;
+    }
+    .jp-cuerpo {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 12px 16px 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .jp-aviso {
+        padding: 18px 14px;
+        text-align: center;
+        font-size: 0.9rem;
+        line-height: 1.45;
+        color: var(--shalom-ink-muted);
+    }
+    .jp-aviso.jp-error {
+        color: var(--shalom-alerta);
+    }
+    .jp-reintentar {
+        display: block;
+        margin: 10px auto 0;
+        border: 1.5px solid var(--shalom-accent);
+        border-radius: 999px;
+        background: var(--shalom-surface);
+        color: var(--shalom-accent);
+        font-family: inherit;
+        font-weight: 800;
+        font-size: 0.85rem;
+        padding: 7px 16px;
+        cursor: pointer;
+    }
+    .jp-seccion-titulo {
+        margin-top: 4px;
+        font-size: 0.74rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--shalom-ink-muted);
+    }
+    .jp-resumen {
+        padding: 14px;
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-accent-soft);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .jp-resumen-grande {
+        font-size: 0.95rem;
+        color: var(--shalom-ink);
+    }
+    .jp-resumen-grande b {
+        font-size: 2rem;
+        color: var(--shalom-accent);
+    }
+    .jp-resumen-chico {
+        font-size: 0.8rem;
+        color: var(--shalom-ink);
+    }
+    .jp-lista {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .jp-logro,
+    .jp-cofre,
+    .jp-hito {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1.5px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-surface);
+    }
+    .jp-logro-icono {
+        flex: 0 0 auto;
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+    }
+    .jp-logro-hecho {
+        border-color: var(--shalom-completado);
+    }
+    .jp-logro-hecho .jp-logro-icono,
+    .jp-cofre-abierto .jp-logro-icono {
+        background: var(--shalom-stock-success-bg);
+        color: var(--shalom-stock-success-ink);
+    }
+    .jp-cofre-abierto {
+        border-color: var(--shalom-completado);
+    }
+    .jp-logro-texto {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        font-size: 0.8rem;
+        line-height: 1.35;
+        color: var(--shalom-ink-muted);
+    }
+    .jp-logro-texto b {
+        font-size: 0.95rem;
+        color: var(--shalom-ink);
+    }
+    .jp-logro-lado {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 3px;
+    }
+    .jp-progreso {
+        font-size: 0.82rem;
+        font-weight: 800;
+        color: var(--shalom-ink);
+    }
+    .jp-xp {
+        font-size: 0.74rem;
+        font-weight: 800;
+        color: var(--shalom-accent);
+    }
+    .jp-etiqueta {
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+    }
+    .jp-etiqueta.jp-etiqueta-hoy {
+        background: var(--shalom-stock-success-bg);
+        color: var(--shalom-stock-success-ink);
+    }
+    .jp-barra {
+        display: block;
+        height: 6px;
+        margin-top: 4px;
+        border-radius: 999px;
+        background: var(--shalom-line);
+        overflow: hidden;
+    }
+    .jp-barra-relleno {
+        display: block;
+        height: 100%;
+        border-radius: 999px;
+        background: var(--shalom-accent);
+    }
+    .jp-enlace {
+        align-self: center;
+        margin-top: 6px;
+        border: none;
+        background: transparent;
+        color: var(--shalom-accent);
+        font-family: inherit;
+        font-size: 0.9rem;
+        font-weight: 800;
+        padding: 10px 14px;
+        cursor: pointer;
+        text-decoration: underline;
+    }
+
+    // --- Equipo ---
+    .jp-tarjeta {
+        padding: 14px;
+        border: 1.5px solid var(--shalom-line);
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-surface);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+    .jp-equipo-total {
+        font-size: 2.4rem;
+        font-weight: 800;
+        line-height: 1;
+        color: var(--shalom-ink);
+    }
+    .jp-equipo-faltan {
+        font-size: 0.9rem;
+        color: var(--shalom-ink-muted);
+    }
+    .jp-equipo-faltan b {
+        color: var(--shalom-ink);
+    }
+    .jp-meta-barra {
+        position: relative;
+        height: 12px;
+        border-radius: 999px;
+        background: var(--shalom-line);
+        overflow: visible;
+    }
+    .jp-meta-relleno {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        border-radius: 999px;
+        background: var(--shalom-accent);
+        transition: width 0.25s ease;
+    }
+    .jp-meta-marca {
+        position: absolute;
+        top: -4px;
+        bottom: -4px;
+        width: 3px;
+        margin-left: -1px;
+        border-radius: 2px;
+        background: var(--shalom-ink);
+    }
+    .jp-meta-leyenda {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.7rem;
+        font-weight: 800;
+        color: var(--shalom-ink-muted);
+    }
+    .jp-equipo-estado {
+        font-size: 0.9rem;
+        font-weight: 800;
+        color: var(--shalom-accent);
+    }
+    .jp-equipo-ritmo {
+        font-size: 0.82rem;
+        line-height: 1.4;
+        color: var(--shalom-ink-muted);
+    }
+    .jp-equipo-ritmo b {
+        color: var(--shalom-ink);
+    }
+    .jp-camion {
+        border-color: var(--shalom-info);
+    }
+    .jp-camion-fila {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.95rem;
+        color: var(--shalom-ink);
+    }
+    .jp-cofre-estado {
+        flex: 0 0 auto;
+        font-size: 0.8rem;
+        font-weight: 800;
+        color: var(--shalom-ink-muted);
+    }
+    .jp-cofre-abierto .jp-cofre-estado {
+        color: var(--shalom-stock-success-ink);
+    }
+    .jp-nota {
+        margin-top: 4px;
+        text-align: center;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--shalom-ink-muted);
+    }
+
+    // --- Temporada ---
+    .jp-temp-etiqueta {
+        font-size: 0.74rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--shalom-ink-muted);
+    }
+    .jp-temp-nivel {
+        font-size: 0.95rem;
+        color: var(--shalom-ink-muted);
+    }
+    .jp-temp-nivel b {
+        font-size: 2.2rem;
+        color: var(--shalom-accent);
+    }
+    .jp-temp-xp {
+        font-size: 0.95rem;
+        color: var(--shalom-ink);
+    }
+    .jp-temp-xp b {
+        font-size: 1.25rem;
+    }
+    .jp-temp-proximo,
+    .jp-temp-meta {
+        font-size: 0.82rem;
+        line-height: 1.4;
+        color: var(--shalom-ink-muted);
+    }
+    .jp-temp-proximo b {
+        color: var(--shalom-ink);
+    }
+    .jp-bono {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-stock-warning-bg);
+        color: var(--shalom-stock-warning-ink);
+        font-size: 0.82rem;
+    }
+    .jp-hito-nivel {
+        flex: 0 0 auto;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: 2px solid var(--shalom-line);
+        color: var(--shalom-ink-muted);
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .jp-hito-listo {
+        border-color: var(--shalom-completado);
+    }
+    .jp-hito-listo .jp-hito-nivel {
+        border-color: var(--shalom-completado);
+        background: var(--shalom-stock-success-bg);
+        color: var(--shalom-stock-success-ink);
+    }
+    .jp-hito-actual {
+        border-color: var(--shalom-accent);
+    }
+    .jp-hito-actual .jp-hito-nivel {
+        border-color: var(--shalom-accent);
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+    }
+}
