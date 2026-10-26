@@ -17,7 +17,7 @@ REPO = pathlib.Path(os.environ.get("SHALOM_REPO", "/home/user/shalom_route_sales
 # Versión del método ANTES del cambio de la Fase 4 (commit 502d9e8 = carteras;
 # 119863d^ = justo antes de la Fase 1). Solo cambió en 502d9e8.
 REF_PREVIA = "119863d^"
-NUEVAS = {"mi_persona_id", "tiene_cartera"}
+NUEVAS = {"mi_persona_id", "tiene_cartera", "centro_lat", "centro_lng", "pendientes_mios", "esperado_mio"}
 
 
 def metodo_previo():
@@ -87,6 +87,25 @@ class TestMisRutas(ShalomCommon):
         self.assertEqual(self._ids(self.u_b), [])
         self.assertEqual(self._ids(self.u_c), [])
         self.assertFalse(self._mis(self.u_a)[0]["tiene_cartera"])
+
+    def test_datos_del_mapa_de_rutas(self):
+        """Fase 5: centro del ciclo y lo que me toca (pendientes y valor esperado)."""
+        r = self._mis(self.u_a)[0]
+        # sin reparto: todo el ciclo es del dueño; solo cuentan clases que compran
+        self.assertGreater(r["pendientes_mios"], 0)
+        self.assertLessEqual(r["pendientes_mios"], 20)
+        self.assertGreater(r["esperado_mio"], 0)
+        total_dueno = r["esperado_mio"]
+        self.assertTrue(8.0 < r["centro_lat"] < 10.0, r["centro_lat"])
+        # con reparto A/B: cada uno ve solo lo suyo y entre los dos suman lo mismo
+        self._repartir([self.per_a, self.per_b])
+        ra = self._mis(self.u_a)[0]
+        rb = self._mis(self.u_b)[0]
+        self.assertLess(ra["esperado_mio"], total_dueno + 0.01)
+        self.assertGreater(rb["esperado_mio"], 0)
+        self.assertAlmostEqual(ra["pendientes_mios"] + rb["pendientes_mios"], r["pendientes_mios"], delta=0)
+        # un tercero sin cartera no ve la ruta
+        self.assertEqual(self._mis(self.u_c), [])
 
     def test_vendedor_sin_persona_o_admin(self):
         self.assertEqual(self.env["fsm.person"].shalom_mis_rutas_programadas(self.ds, self.de), [])  # OdooBot

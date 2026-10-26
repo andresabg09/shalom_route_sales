@@ -1,7 +1,8 @@
 /** @odoo-module **/
 
-import {Component, onMounted, onWillStart, useState} from "@odoo/owl";
+import {Component, onMounted, onWillStart, onWillUnmount, useEffect, useRef, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
+import {cargarMapboxGl, getMapboxToken} from "./mapbox_utils";
 import {TemaSelector} from "./tema_selector";
 
 /**
@@ -31,6 +32,33 @@ const ESTADO_RUTA_CLASE = {
     en_curso: "pendiente",
     completada: "completado",
 };
+
+// Color del pin de cada ruta en el mapa, por estado del ciclo (mismos
+// tonos que los pines de clientes de RutaDetalle).
+const COLOR_RUTA = {
+    por_iniciar: "#c1791d",
+    en_curso: "#b1245a",
+    completada: "#2c7a56",
+};
+
+const CLAVE_VISTA_HUB = "shalom_hub_vista";
+
+function leerVistaGuardada() {
+    try {
+        const v = localStorage.getItem(CLAVE_VISTA_HUB);
+        return v === "lista" || v === "mapa" ? v : "mapa";
+    } catch (error) {
+        return "mapa";
+    }
+}
+
+/** "$2.1k" / "$850" -- corto para caber dentro del pin. */
+function dineroCorto(valor) {
+    if (!valor) {
+        return "";
+    }
+    return valor >= 1000 ? `$${(valor / 1000).toFixed(1)}k` : `$${Math.round(valor)}`;
+}
 
 function inicioSemana(fecha) {
     const d = new Date(fecha);
@@ -79,7 +107,27 @@ export class RutasHub extends Component {
             estrategiasAbiertas: false,
             // XP / nivel del vendedor (juego) -- null si no hay datos.
             progreso: null,
+            // Mapa de rutas (Fase 5): la pestaña abre en el mapa para
+            // elegir ruta; "lista" es la vista de siempre. Se recuerda la
+            // última elegida por dispositivo.
+            vista: leerVistaGuardada(),
         });
+        this.mapaRef = useRef("mapaRutas");
+        this.mapboxMap = null;
+        this._mapaSeq = 0;
+        // Se redibuja cuando cambia la vista, termina de cargar o cambia
+        // el conjunto de rutas visibles (periodo / búsqueda).
+        useEffect(
+            () => {
+                if (this.state.vista === "mapa" && !this.state.cargando && this.mapaRef.el) {
+                    this.dibujarMapaRutas();
+                } else {
+                    this.quitarMapa();
+                }
+            },
+            () => [this.state.vista, this.state.cargando, this.schedulesFiltrados.map((s) => s.id).join(",")]
+        );
+        onWillUnmount(() => this.quitarMapa());
         onWillStart(() => this.cargar());
         onMounted(() => {
             this.cargarEstrategias();
@@ -111,6 +159,114 @@ export class RutasHub extends Component {
         } catch (error) {
             // No es crítico: sin estrategias el botón simplemente no sale.
             console.error("shalom: error al leer estrategias", error);
+        }
+    }
+
+    cambiarVista(vista) {
+        this.state.vista = vista;
+        try {
+            localStorage.setItem(CLAVE_VISTA_HUB, vista);
+        } catch (error) {
+            // sin localStorage: simplemente no se recuerda la elección
+        }
+    }
+
+    quitarMapa() {
+        this._mapaSeq += 1;
+        if (this.mapboxMap) {
+            this.mapboxMap.remove();
+            this.mapboxMap = null;
+        }
+    }
+
+    /** Rutas del filtro actual que se pueden ubicar en el mapa (tienen
+     * al menos un cliente con GPS). */
+    get rutasEnMapa() {
+        return this.schedulesFiltrados.filter((s) => s.centro_lat && s.centro_lng);
+    }
+
+    get rutasSinGps() {
+        return this.schedulesFiltrados.length - this.rutasEnMapa.length;
+    }
+
+    /** Un pin por ruta, en el centro de sus clientes con GPS: color por
+     * estado y, adentro, lo que te toca vender ahí (valor esperado de tu
+     * cartera). Tocar un pin muestra la ruta y "Abrir ruta". */
+    async dibujarMapaRutas() {
+        const seq = ++this._mapaSeq;
+        try {
+            const token = await getMapboxToken();
+            if (!token) {
+                throw new Error("sin token de Mapbox");
+            }
+            await cargarMapboxGl();
+            if (seq !== this._mapaSeq || !this.mapaRef.el) {
+                return; // cambió algo mientras cargaba
+            }
+            window.mapboxgl.accessToken = token;
+            if (this.mapboxMap) {
+                this.mapboxMap.remove();
+            }
+            const rutas = this.rutasEnMapa;
+            this.mapboxMap = new window.mapboxgl.Map({
+                container: this.mapaRef.el,
+                style: "mapbox://styles/mapbox/navigation-day-v1",
+                center: rutas.length ? [rutas[0].centro_lng, rutas[0].centro_lat] : [-79.5199, 8.9824],
+                zoom: 8,
+            });
+            const mapa = this.mapboxMap;
+            mapa.on("load", () => {
+                const bounds = new window.mapboxgl.LngLatBounds();
+                for (const s of rutas) {
+                    // Círculo cuadrado, anchor "center", sin filter/rotate: la
+                    // única forma de pin estable al hacer zoom (ver el
+                    // comentario de .shalom-marker-numero en el SCSS).
+                    const pinEl = document.createElement("div");
+                    pinEl.className = "shalom-ruta-pin";
+                    pinEl.style.setProperty("--pin-color", COLOR_RUTA[s.estado] || COLOR_RUTA.por_iniciar);
+                    const texto = document.createElement("span");
+                    texto.className = "shalom-ruta-pin-txt";
+                    texto.textContent = dineroCorto(s.esperado_mio) || String(s.cantidad_clientes);
+                    pinEl.appendChild(texto);
+
+                    const popupEl = document.createElement("div");
+                    popupEl.className = "shalom-map-popup";
+                    const nombreEl = document.createElement("div");
+                    nombreEl.className = "shalom-map-popup-name";
+                    nombreEl.textContent = s.route_name;
+                    popupEl.appendChild(nombreEl);
+                    const detalleEl = document.createElement("div");
+                    detalleEl.className = "shalom-map-popup-detalle";
+                    detalleEl.textContent =
+                        `${s.pendientes_mios} por visitar` +
+                        (s.esperado_mio ? ` · ~$${Math.round(s.esperado_mio).toLocaleString("en-US")} esperados` : "") +
+                        ` · ${this.etiquetaRangoSchedule(s)}`;
+                    popupEl.appendChild(detalleEl);
+                    const botonEl = document.createElement("button");
+                    botonEl.type = "button";
+                    botonEl.className = "shalom-map-popup-btn shalom-map-popup-btn-nav";
+                    botonEl.textContent = "Abrir ruta";
+                    botonEl.addEventListener("click", () => this.abrir(s));
+                    popupEl.appendChild(botonEl);
+
+                    new window.mapboxgl.Marker({element: pinEl, anchor: "center"})
+                        .setLngLat([s.centro_lng, s.centro_lat])
+                        .setPopup(new window.mapboxgl.Popup({offset: 26}).setDOMContent(popupEl))
+                        .addTo(mapa);
+                    bounds.extend([s.centro_lng, s.centro_lat]);
+                }
+                if (rutas.length > 1) {
+                    mapa.fitBounds(bounds, {padding: 60, maxZoom: 11});
+                } else if (rutas.length === 1) {
+                    mapa.setCenter([rutas[0].centro_lng, rutas[0].centro_lat]);
+                    mapa.setZoom(11);
+                }
+            });
+        } catch (error) {
+            // Sin mapa (token, red) la lista sigue ahí: se vuelve a ella sola.
+            console.error("shalom: error al dibujar el mapa de rutas", error);
+            this.state.vista = "lista";
+            this.notification.add("No se pudo cargar el mapa. Te muestro la lista.", {type: "warning"});
         }
     }
 

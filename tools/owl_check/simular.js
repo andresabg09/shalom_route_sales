@@ -34,6 +34,41 @@ window.confirm = () => true;
 window.requestAnimationFrame = global.requestAnimationFrame;
 global.luxon = req("luxon");
 
+// Mapbox GL falso: registra lo que se dibuja (no hay WebGL en jsdom).
+function mapboxFalso() {
+    const log = {mapas: 0, quitados: 0, marcadores: [], fitBounds: 0};
+    window.__mapboxLog = log;
+    class Popup { setDOMContent(el) { this.el = el; return this; } }
+    class Marker {
+        constructor(o) { this.element = o.element; log.marcadores.push(this); }
+        setLngLat(c) { this.lngLat = c; return this; }
+        setPopup(p) { this.popup = p; return this; }
+        addTo() { return this; }
+    }
+    class LngLatBounds { extend() { return this; } }
+    class Map {
+        constructor() {
+            if (window.__mapboxFalla) throw new Error("mapbox roto");
+            log.mapas += 1; this._on = {};
+            setTimeout(() => this._on.load && this._on.load(), 5);
+        }
+        on(ev, fn) { this._on[ev] = fn; return this; }
+        remove() { log.quitados += 1; }
+        fitBounds() { log.fitBounds += 1; }
+        setCenter() {} setZoom() {}
+        addSource() {} addLayer() {}
+    }
+    return {Map, Marker, Popup, LngLatBounds};
+}
+window.mapboxgl = mapboxFalso();
+// el CSS de Mapbox "ya está cargado" (jsdom nunca dispara onload de un <link>)
+{
+    const link = window.document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css";
+    window.document.head.appendChild(link);
+}
+
 // owl.js de Odoo es un IIFE que cuelga de `this.owl`
 const owlSandbox = {};
 vm.runInThisContext(`(function(){ ${fs.readFileSync(OWL, "utf8")} }).call(globalThis.__owlHost = {})`);
@@ -402,6 +437,49 @@ escenarios.hub = async function () {
     await sleep(100);
     ok(!q(".estrategias-btn") && !q(".progreso-juego"), "si las RPC fallan / progreso=false: la pantalla sigue sin botón ni tarjeta");
     m2.destruir();
+};
+
+// =====================================================================
+escenarios.hub_mapa = async function () {
+    console.log("\n[RutasHub] mapa de rutas (Fase 5)");
+    Object.assign(window.__mapboxLog, {mapas: 0, quitados: 0, marcadores: [], fitBounds: 0});
+    const hoy = new Date().toISOString().slice(0, 10);
+    const base = {date_start: hoy, date_end: hoy, tiempo_estimado: 1, capacidad: 20, es_visita_express: false, mi_persona_id: 9, tiene_cartera: false};
+    const scheds = [
+        {...base, id: 1, route_id: 3, route_name: "Ruta Norte", estado: "en_curso", cantidad_clientes: 10, centro_lat: 9.1, centro_lng: -79.4, pendientes_mios: 7, esperado_mio: 2150.5},
+        {...base, id: 2, route_id: 4, route_name: "Ruta Sur", estado: "por_iniciar", cantidad_clientes: 5, centro_lat: 8.6, centro_lng: -80.1, pendientes_mios: 5, esperado_mio: 640},
+        {...base, id: 3, route_id: 5, route_name: "Sin GPS", estado: "por_iniciar", cantidad_clientes: 3, centro_lat: 0, centro_lng: 0, pendientes_mios: 0, esperado_mio: 0},
+    ];
+    localStorage.removeItem("shalom_hub_vista");
+    let abierta = null;
+    const hand = {"fsm.person.shalom_mis_rutas_programadas": scheds, "shalom.estrategia.shalom_estrategias_vigentes": {empujar: [], no_ofrecer: [], productos: {}}, "shalom.juego.evento.shalom_mi_progreso": false};
+    let m = await montar(bundle.RutasHub, {onAbrirRuta(s) { abierta = s; }}, hand);
+    await esperar(() => window.__mapboxLog.marcadores.length >= 2, 3000);
+    const log = window.__mapboxLog;
+    ok(m.comp.state.vista === "mapa", "la pestaña abre en el mapa por defecto");
+    ok(log.mapas === 1 && log.marcadores.length === 2, "un pin por ruta con GPS (la de centro 0,0 no)", {mapas: log.mapas, pines: log.marcadores.length});
+    const textos = log.marcadores.map((mk) => mk.element.textContent);
+    ok(textos[0] === "$2.2k" && textos[1] === "$640", "el pin muestra el valor esperado corto", textos);
+    ok(/1 ruta\(s\) no aparecen/.test(texto(".rutas-mapa-nota")), "nota de rutas sin GPS", texto(".rutas-mapa-nota"));
+    ok(!q(".route-card"), "en vista mapa no se pinta la lista");
+    const boton = log.marcadores[0].popup.el.querySelector("button");
+    boton.click();
+    ok(abierta && abierta.id === 1, "'Abrir ruta' del popup abre esa ruta", abierta && abierta.id);
+    click(qa(".segmented button")[1]);
+    await sleep(60);
+    ok(m.comp.state.vista === "lista" && qa(".route-card").length === 3, "interruptor Lista muestra las 3 tarjetas");
+    ok(localStorage.getItem("shalom_hub_vista") === "lista", "la elección se recuerda");
+    ok(log.quitados >= 1, "al salir del mapa se destruye el mapa");
+    m.destruir();
+
+    // Mapbox roto: cae a la lista sola
+    localStorage.removeItem("shalom_hub_vista");
+    window.__mapboxFalla = true;
+    m = await montar(bundle.RutasHub, {onAbrirRuta() {}}, hand);
+    await esperar(() => m.comp.state.vista === "lista", 3000);
+    ok(m.comp.state.vista === "lista" && qa(".route-card").length === 3, "si el mapa falla, se muestra la lista");
+    window.__mapboxFalla = false;
+    m.destruir();
 };
 
 // =====================================================================

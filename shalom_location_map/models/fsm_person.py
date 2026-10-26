@@ -17,6 +17,8 @@ import logging
 from odoo import _, api, models
 from odoo.exceptions import AccessError
 
+from . import juego_utils
+
 _logger = logging.getLogger(__name__)
 
 # Mismo criterio que fsm_order.py y fsm_route_schedule.py.
@@ -94,6 +96,7 @@ class FSMPerson(models.Model):
                 ["__count"],
             ):
                 con_cartera.add(ciclo.id)
+        centros, mios = self._shalom_mapa_ciclos(persona, schedules, con_cartera)
         return [
             {
                 "id": s.id,
@@ -115,9 +118,73 @@ class FSMPerson(models.Model):
                 # filtro "Mi cartera / Toda la ruta").
                 "mi_persona_id": persona.id,
                 "tiene_cartera": s.id in con_cartera,
+                # Mapa de rutas (Fase 5): centro de los clientes con GPS y lo
+                # que me toca de este ciclo (pendientes y valor esperado).
+                "centro_lat": centros.get(s.id, (0.0, 0.0))[0],
+                "centro_lng": centros.get(s.id, (0.0, 0.0))[1],
+                "pendientes_mios": mios.get(s.id, {}).get("pendientes", 0),
+                "esperado_mio": mios.get(s.id, {}).get("esperado", 0.0),
             }
             for s in schedules
         ]
+
+    @api.model
+    def _shalom_mapa_ciclos(self, persona, schedules, con_cartera):
+        """Datos para el mapa de rutas de la pestaña Rutas.
+
+        Devuelve (centros, mios): centros = {schedule_id: (lat, lng)}
+        promedio de los clientes con GPS del ciclo; mios = {schedule_id:
+        {"pendientes", "esperado"}} con lo que le toca a `persona`: los
+        clientes de su cartera si el ciclo ya está repartido, o todo el
+        ciclo si la ruta es suya y no hay reparto. Solo cuentan clientes
+        que compran (clases A, A2, B, B2) y no son distribuidoras."""
+        centros, mios = {}, {}
+        if not schedules:
+            return centros, mios
+        Orden = self.env["fsm.order"]
+        for ciclo, lat, lng in Orden._read_group(
+            [
+                ("x_route_schedule_id", "in", schedules.ids),
+                ("x_cliente_lat", "!=", 0),
+                ("x_cliente_lng", "!=", 0),
+            ],
+            ["x_route_schedule_id"],
+            ["x_cliente_lat:avg", "x_cliente_lng:avg"],
+        ):
+            centros[ciclo.id] = (lat, lng)
+        duenio = {s.id: s.fsm_person_id.id for s in schedules}
+        abiertas = Orden.search_read(
+            [
+                ("x_route_schedule_id", "in", schedules.ids),
+                ("stage_id.is_closed", "=", False),
+            ],
+            ["x_route_schedule_id", "location_id", "x_cartera_person_id"],
+            load="",
+        )
+        mias = [
+            o for o in abiertas
+            if o["location_id"]
+            and (
+                o["x_cartera_person_id"] == persona.id
+                if o["x_route_schedule_id"] in con_cartera
+                else duenio.get(o["x_route_schedule_id"]) == persona.id
+            )
+        ]
+        locations = self.env["fsm.location"].browse({o["location_id"] for o in mias}).exists()
+        perfiles = Orden._shalom_perfiles_clientes(locations)
+        distribuidoras = set(locations.filtered("x_es_distribuidora").ids)
+        for o in mias:
+            perfil = perfiles.get(o["location_id"])
+            if (
+                not perfil
+                or perfil["clase"] not in juego_utils.CLASES_CARTERA
+                or o["location_id"] in distribuidoras
+            ):
+                continue
+            dato = mios.setdefault(o["x_route_schedule_id"], {"pendientes": 0, "esperado": 0.0})
+            dato["pendientes"] += 1
+            dato["esperado"] = round(dato["esperado"] + perfil["esperado"], 2)
+        return centros, mios
 
     @api.model
     def shalom_mis_rutas(self):

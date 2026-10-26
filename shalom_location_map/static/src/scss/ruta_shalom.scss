@@ -1968,6 +1968,63 @@
         color: var(--shalom-stock-warning-ink);
     }
 
+    // Mapa de rutas (pestaña Rutas)
+    .rutas-mapa-wrap {
+        position: relative;
+        flex: 1;
+        min-height: 320px;
+        margin: 0 14px 10px;
+        border-radius: var(--shalom-radius-md);
+        overflow: hidden;
+        border: 1.5px solid var(--shalom-line);
+    }
+    .rutas-mapa {
+        position: absolute;
+        inset: 0;
+    }
+    .rutas-mapa-nota {
+        position: absolute;
+        left: 8px;
+        right: 8px;
+        bottom: 8px;
+        padding: 6px 10px;
+        border-radius: var(--shalom-radius-sm);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink-muted);
+        font-size: 0.74rem;
+        font-weight: 700;
+        z-index: 2;
+    }
+    // Pin de ruta: círculo cuadrado, sin filter/rotate (ver .shalom-marker-numero)
+    .shalom-ruta-pin {
+        width: 46px;
+        height: 46px;
+        border-radius: 50%;
+        background: var(--pin-color, var(--shalom-accent));
+        border: 3px solid var(--shalom-surface);
+        box-shadow: 0 2px 8px rgba(20, 10, 15, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+    .shalom-ruta-pin-txt {
+        color: #fff;
+        font-weight: 800;
+        font-size: 0.7rem;
+        line-height: 1;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+    .shalom-map-popup-detalle {
+        font-size: 0.76rem;
+        margin: 2px 0 6px;
+        color: #4a3a42;
+    }
+    // Clientes de otra cartera, atenuados en "Toda la ruta"
+    .shalom-marker-numero.shalom-marker-ajeno {
+        opacity: 0.45;
+    }
+
     // Carteras: filtro Mi cartera / Toda la ruta y etiquetas por cliente
     .cartera-resumen {
         display: flex;

@@ -800,6 +800,15 @@ export class RutaDetalle extends Component {
                 const pinEl = document.createElement("div");
                 pinEl.className = "shalom-marker-numero";
                 pinEl.style.setProperty("--pin-color", COLOR_MARCADOR[v.estado]);
+                // En "Toda la ruta", los clientes de la cartera de otro
+                // vendedor se ven atenuados: la tuya resalta.
+                if (
+                    this.props.schedule.tiene_cartera &&
+                    v.carteraPersonaId &&
+                    v.carteraPersonaId !== this.props.schedule.mi_persona_id
+                ) {
+                    pinEl.classList.add("shalom-marker-ajeno");
+                }
                 if (v.orden) {
                     const numEl = document.createElement("span");
                     numEl.className = "shalom-marker-numero-txt";

@@ -84,7 +84,28 @@
                 </div>
             </div>
 
-            <div class="view">
+            <div class="segmented">
+                <button
+                    t-att-class="state.vista === 'mapa' ? 'active' : ''"
+                    t-on-click="() => this.cambiarVista('mapa')"
+                ><i class="fa fa-map-o" aria-hidden="true"/> Mapa</button>
+                <button
+                    t-att-class="state.vista === 'lista' ? 'active' : ''"
+                    t-on-click="() => this.cambiarVista('lista')"
+                >☰ Lista</button>
+            </div>
+
+            <div class="rutas-mapa-wrap" t-if="state.vista === 'mapa' and !state.cargando">
+                <div class="rutas-mapa" t-ref="mapaRutas"/>
+                <div class="rutas-mapa-nota" t-if="!rutasEnMapa.length">
+                    Ninguna ruta de este filtro tiene clientes con GPS todavía: usa la lista.
+                </div>
+                <div class="rutas-mapa-nota" t-elif="rutasSinGps">
+                    <t t-esc="rutasSinGps"/> ruta(s) no aparecen en el mapa porque sus clientes aún no tienen GPS.
+                </div>
+            </div>
+
+            <div class="view" t-if="state.vista === 'lista'">
                 <div t-if="state.cargando" class="shalom-vacio">Cargando tus rutas…</div>
                 <t t-elif="schedulesFiltrados.length === 0">
                     <div class="shalom-vacio" t-if="state.schedules.length === 0">
