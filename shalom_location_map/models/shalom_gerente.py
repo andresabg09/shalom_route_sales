@@ -141,3 +141,89 @@ class FSMRouteGerente(models.Model):
             self.env.user.login, len(a_pasar), len(con_cartera),
         )
         return resumen
+
+    # ------------------------------------------------------------------
+    # Datos compartidos: una sola pasada por todas las ubicaciones
+    # ------------------------------------------------------------------
+
+    @api.model
+    def _shalom_gerente_universo(self):
+        """Todas las ubicaciones activas con su perfil de ventas, en
+        BLOQUE (una lectura de ubicaciones y una consulta de pedidos, no
+        una por cliente): ([{id, name, fsm_route_id, x_es_distribuidora,
+        partner_latitude, partner_longitude, phone, mobile, category_id}],
+        {location_id: perfil de fsm.order._shalom_perfiles_clientes})."""
+        Ubicacion = self.env["fsm.location"].sudo()
+        filas = Ubicacion.search_read(
+            [],
+            [
+                "name", "fsm_route_id", "x_es_distribuidora", "partner_latitude",
+                "partner_longitude", "phone", "mobile", "category_id",
+            ],
+            load="",
+        )
+        perfiles = self.env["fsm.order"]._shalom_perfiles_clientes(
+            Ubicacion.browse([f["id"] for f in filas])
+        )
+        return filas, perfiles
+
+    # ------------------------------------------------------------------
+    # Reparto de rutas entre vendedores
+    # ------------------------------------------------------------------
+
+    @api.model
+    def shalom_admin_reparto_rutas(self):
+        """Tarjeta "Reparto de rutas (propuesta)": por vendedor, sus rutas
+        con el valor esperado MENSUAL (visitando una vez a cada cliente
+        que compra: suma del valor esperado de los clientes de clase A,
+        A2, B y B2 que no son distribuidoras) y los días de venta que eso
+        pide (valor / $2,000 por día, el mismo mínimo de las carteras).
+        Más las rutas sin dueño o sin ventas y los clientes buenos sin
+        ruta. Las rutas de Visita Exprés no entran.
+
+        Devuelve {"vendedores": [...], "sin_dueno_o_ventas": [...],
+        "total_mes", "sin_ruta": {"clientes", "valor", "top": [...]},
+        "personas": [{"id", "name"}] (a quién se puede pasar una ruta),
+        "por_dia"}. Ver gerente_utils.armar_reparto."""
+        self._shalom_gerente_exigir()
+        filas, perfiles = self._shalom_gerente_universo()
+        valor, clientes, sin_ruta = {}, {}, []
+        for fila in filas:
+            if fila["x_es_distribuidora"]:
+                continue
+            perfil = perfiles.get(fila["id"])
+            if not perfil or not gerente_utils.es_cliente_bueno(perfil["clase"]):
+                continue
+            ruta_id = fila["fsm_route_id"]
+            if not ruta_id:
+                sin_ruta.append({
+                    "id": fila["id"], "name": fila["name"],
+                    "clase": perfil["clase"], "valor": perfil["esperado"],
+                })
+                continue
+            valor[ruta_id] = valor.get(ruta_id, 0.0) + perfil["esperado"]
+            clientes[ruta_id] = clientes.get(ruta_id, 0) + 1
+        rutas = self.sudo().search([("x_es_visita_express", "=", False)])
+        reparto = gerente_utils.armar_reparto([
+            {
+                "id": r.id,
+                "name": r.name,
+                "person_id": r.fsm_person_id.id,
+                "person_name": r.fsm_person_id.name,
+                "valor": valor.get(r.id, 0.0),
+                "clientes": clientes.get(r.id, 0),
+                "dias_ciclo": r.x_duracion_dias,
+            }
+            for r in rutas
+        ])
+        reparto["sin_ruta"] = {
+            "clientes": len(sin_ruta),
+            "valor": round(sum(c["valor"] for c in sin_ruta), 2),
+            "top": gerente_utils.ordenar_gps_prioritario(sin_ruta, 10),
+        }
+        reparto["personas"] = [
+            {"id": p.id, "name": p.name}
+            for p in self.env["fsm.person"].sudo().search([], order="name")
+        ]
+        reparto["por_dia"] = gerente_utils.VALOR_POR_DIA
+        return reparto
