@@ -83,11 +83,11 @@
                     </div>
                 </div>
                 <!-- Margen de CADA venta: solo lo ve el administrador (el vendedor no ve márgenes). -->
-                <div t-if="state.mes.pedidos_recientes.length" class="adm-section-label adm-section-label-sep">
+                <div t-if="state.mes.pedidos_recientes and state.mes.pedidos_recientes.length" class="adm-section-label adm-section-label-sep">
                     Margen por venta (últimas <t t-esc="state.mes.pedidos_recientes.length"/>)
                     <t t-if="state.mes.margen_pct !== null"> · promedio del mes <t t-esc="state.mes.margen_pct"/>%</t>
                 </div>
-                <div t-if="state.mes.pedidos_recientes.length" class="adm-card-list">
+                <div t-if="state.mes.pedidos_recientes and state.mes.pedidos_recientes.length" class="adm-card-list">
                     <div t-foreach="state.mes.pedidos_recientes" t-as="p" t-key="p.id" class="adm-row">
                         <div class="adm-row-info">
                             <div class="adm-row-name" t-esc="p.cliente"/>

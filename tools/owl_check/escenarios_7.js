@@ -14,6 +14,7 @@ module.exports = (ctx) => {
         margen_pct: 20.2, margen_anio_pct: 21.2, piso: 60000, meta: 80000,
         pct_piso: 69.8, pct_meta: 52.4, falta_piso: 18100, falta_meta: 38100,
         oxigenta: {tintes: 300, oxigenta: 48, por_100: 16, pedidos_con_oxigenta: 5, por_100_en_pedidos_con_oxigenta: 33},
+        pedidos_recientes: [{id: 1, nombre: "S00001", cliente: "Cliente A", fecha: "2026-10-20", total: 1300, margen_pct: 37.7, vendedor: "Andrés"}],
         vendedores: [
             {persona_id: 9, persona_nombre: "Andrés", pedidos: 7, ventas: 25000, estrellas: 20, oro: 6, xp: 2300},
             {persona_id: 10, persona_nombre: "Luis", pedidos: 5, ventas: 16900, estrellas: 11, oro: 3, xp: 1700},
