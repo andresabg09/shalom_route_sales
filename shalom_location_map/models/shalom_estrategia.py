@@ -10,6 +10,8 @@ al pedido igual si el vendedor decide.
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
+from . import tz_utils
+
 
 class ShalomEstrategia(models.Model):
     _name = "shalom.estrategia"
@@ -46,7 +48,7 @@ class ShalomEstrategia(models.Model):
         sobre el modelo. Devuelve {"empujar": [...], "no_ofrecer": [...],
         "productos": {product_id: "empujar"|"no_ofrecer"}}; si un
         producto está en ambas listas, gana "no_ofrecer"."""
-        hoy = fields.Date.context_today(self)
+        hoy = tz_utils.hoy_local(self.env)
         vigentes = self.sudo().search(
             [
                 ("active", "=", True),
