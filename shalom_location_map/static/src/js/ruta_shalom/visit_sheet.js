@@ -219,7 +219,8 @@ export class VisitSheet extends Component {
                 "shalom_campos_cliente_faltantes",
                 [[this.props.orderId]]
             );
-            await this._cargarFichaJuego();
+            // Sin await: la ficha de estrellas llega cuando llegue, la hoja no espera.
+            this._cargarFichaJuego();
         } catch (error) {
             this.notification.add("No se pudo cargar la visita.", {type: "danger"});
         } finally {

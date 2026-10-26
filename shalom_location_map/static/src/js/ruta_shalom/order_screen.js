@@ -835,8 +835,9 @@ export class OrderScreen extends Component {
                 ["name", "list_price", "barcode", "default_code", "qty_available", "free_qty", "categ_id"],
                 {order: "name asc"}
             );
-            await this._sumarExistenciasBodegas(productos);
-            await this._cargarEstrategias();
+            // En paralelo (ambos tienen su propio try/catch): antes eran dos
+            // idas y vueltas seguidas en cada apertura del catálogo.
+            await Promise.all([this._sumarExistenciasBodegas(productos), this._cargarEstrategias()]);
             this.state.productos = productos;
         } catch (error) {
             if (!silencioso) {

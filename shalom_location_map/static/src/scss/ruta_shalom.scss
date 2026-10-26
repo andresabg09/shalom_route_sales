@@ -45,6 +45,10 @@
     --shalom-stock-success-ink: #7fd8a8;
     --shalom-precio: #f5e9ee;
     --shalom-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+    // Estrellas bronce / plata / oro (juego): brillantes sobre fondo oscuro
+    --shalom-estrella-1: #c98b5a;
+    --shalom-estrella-2: #c9d1db;
+    --shalom-estrella-3: #f2c14e;
 }
 
 .o_shalom_ruta_app {
@@ -88,6 +92,10 @@
     --shalom-stock-success-ink: #14633a;
     --shalom-precio: #2d2650;
     --shalom-shadow: 0 10px 30px -12px rgba(60, 20, 35, 0.28);
+    // Estrellas del juego, más oscuras para leerse al sol (contraste ~4:1)
+    --shalom-estrella-1: #a8693a;
+    --shalom-estrella-2: #6f7c8a;
+    --shalom-estrella-3: #a67c00;
     --shalom-radius-lg: 22px;
     --shalom-radius-md: 14px;
     --shalom-radius-sm: 10px;
@@ -1880,17 +1888,20 @@
         font-size: 1.35rem;
         letter-spacing: 2px;
     }
+    // Bronce / plata / oro: más oscuros en tema claro (al sol), los
+    // brillantes de siempre en oscuro. Apagada = gris legible, no invisible.
     .estrella-off {
-        color: var(--shalom-line);
+        color: var(--shalom-ink-muted);
+        opacity: 0.35;
     }
     .estrella-1 {
-        color: #c98b5a;
+        color: var(--shalom-estrella-1);
     }
     .estrella-2 {
-        color: #9aa5b1;
+        color: var(--shalom-estrella-2);
     }
     .estrella-3 {
-        color: #e0a800;
+        color: var(--shalom-estrella-3);
     }
     .medidor-margen {
         font-size: 0.78rem;
@@ -1951,7 +1962,7 @@
         color: var(--shalom-accent);
     }
     .medidor-mensaje.tono-oro {
-        color: #b88700;
+        color: var(--shalom-estrella-3);
     }
     .medidor-mensaje.tono-aviso {
         color: var(--shalom-stock-warning-ink);
