@@ -31,6 +31,14 @@ class ShalomJuegoEvento(models.Model):
     record_roto = fields.Boolean()
     xp = fields.Integer()
 
+    _sql_constraints = [
+        (
+            "sale_uniq",
+            "unique(sale_id)",
+            "Ese pedido ya tiene su resultado del juego registrado.",
+        ),
+    ]
+
     @api.model
     def _shalom_progreso_de(self, person):
         """XP total y nivel de un vendedor (fsm.person)."""

@@ -789,26 +789,45 @@ class FSMOrder(models.Model):
         y cualquier error se registra y devuelve None (la app entonces
         cierra como siempre, sin pantalla de resultado)."""
         self.ensure_one()
+        # Que un fallo PENDIENTE de la confirmación (escrituras sin volcar)
+        # salga aquí, como siempre, y no lo trague el except de abajo:
+        # entrar al savepoint hace flush y, si ese flush fallara dentro del
+        # try, el pedido se perdería con la transacción ya abortada.
+        self.env.cr.flush()
         try:
             with self.env.cr.savepoint():
                 perfil = self._shalom_perfiles_clientes(
                     self.location_id, excluir_sale_ids=[sale_order.id]
                 )[self.location_id.id]
                 refs = perfil["refs"]
-                venta = sum(sale_order.order_line.mapped("price_subtotal"))
-                costo = sum(
-                    linea.product_id.sudo().standard_price * linea.product_uom_qty
-                    for linea in sale_order.order_line
-                    if not linea.display_type
-                )
-                utilidad = venta - costo
+                # Misma base que el historial y que el medidor en vivo: venta
+                # SIN impuestos. Utilidad: la de sale_margin (misma fórmula
+                # que el historial, con UoM/moneda/empresa del pedido); sin
+                # ese módulo, costo estándar con la empresa del pedido.
+                venta = sale_order.amount_untaxed
+                if "margin" in sale_order._fields:
+                    utilidad = sale_order.margin
+                else:
+                    empresa = sale_order.company_id
+                    utilidad = venta - sum(
+                        linea.product_id.sudo().with_company(empresa).standard_price
+                        * linea.product_uom_qty
+                        for linea in sale_order.order_line
+                        if not linea.display_type
+                    )
                 margen_pct = (utilidad / venta * 100.0) if venta else 0.0
-                total = sale_order.amount_total
+                total = venta
                 n_estrellas = juego_utils.estrellas(total, refs, margen_pct)
                 record_roto = bool(refs["n"]) and total > refs["record"]
                 dia = fields.Date.context_today(self).day
                 xp = juego_utils.xp_pedido(utilidad, n_estrellas, dia)
-                persona = self.env["fsm.person"]._shalom_persona_actual()
+                # El XP es del dueño de la visita (cartera o ruta); si un
+                # administrador confirma desde "En vivo", no se le queda a él.
+                persona = (
+                    self.x_cartera_person_id
+                    or self.fsm_route_id.fsm_person_id
+                    or self.env["fsm.person"]._shalom_persona_actual()
+                )
                 Evento = self.env["shalom.juego.evento"]
                 antes = Evento._shalom_progreso_de(persona)
                 Evento.sudo().create(
@@ -1041,9 +1060,9 @@ class FSMOrder(models.Model):
         }
         por_comercial = {}
         if comercial_de:
-            campos = ["partner_id", "amount_total", "date_order"]
+            campos = ["partner_id", "amount_untaxed", "date_order"]
             if con_margen:
-                campos += ["margin", "amount_untaxed"]
+                campos += ["margin"]
             dominio = [
                 ("partner_id.commercial_partner_id", "in", list(set(comercial_de.values()))),
                 ("state", "in", list(ESTADOS_VENTA_CONFIRMADA)),
@@ -1064,7 +1083,7 @@ class FSMOrder(models.Model):
         perfiles = {}
         for loc in locations:
             ordenes = por_comercial.get(comercial_de.get(loc.id), [])
-            totales = [o["amount_total"] for o in ordenes]
+            totales = [o["amount_untaxed"] for o in ordenes]
             refs = juego_utils.referencias_estrellas(totales)
             ticket_promedio = sum(totales) / len(totales) if totales else 0.0
             margen_pct = 0.0
