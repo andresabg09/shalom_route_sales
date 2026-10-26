@@ -58,6 +58,33 @@ class FSMRouteGerente(models.Model):
         ]
 
     @api.model
+    def _shalom_pasar_visitas(self, visitas, persona):
+        """Pone a `persona` como responsable (person_id) de las `visitas`.
+
+        NO usa write(): fieldservice_route reacciona a un cambio de
+        person_id en una visita con fecha programada armando una "ruta del
+        día" (fsm.route.dayroute) y exige que la ruta corra ese día de la
+        semana (ValidationError "The route X does not run on Monday!").
+        Esta app no usa rutas del día -- las visitas llevan la fecha de
+        inicio del ciclo -- y ese error abortaría la reasignación entera.
+        Por eso se escribe la columna con _write() (igual que haría
+        `unassigning` del propio fieldservice_route) y se suelta la visita
+        de la ruta del día que pudiera tener, borrando las que queden
+        vacías."""
+        dayroutes = visitas.mapped("dayroute_id") if "dayroute_id" in visitas._fields else visitas.browse()
+        valores = {
+            "person_id": persona.id,
+            "write_uid": self.env.uid,
+            "write_date": fields.Datetime.now(),
+        }
+        if "dayroute_id" in visitas._fields:
+            valores["dayroute_id"] = False
+        visitas._write(valores)
+        visitas.invalidate_recordset(list(valores))
+        if dayroutes and hasattr(dayroutes, "_unlink_removable"):
+            dayroutes._unlink_removable()
+
+    @api.model
     def shalom_admin_reasignar_ruta(self, route_id, person_id, simular=False):
         """Pasa la ruta `route_id` al vendedor `person_id` (fsm.person).
 
@@ -126,7 +153,7 @@ class FSMRouteGerente(models.Model):
         ruta_usuario = self.browse(ruta.id)
         ruta_usuario.write({"fsm_person_id": persona.id})
         if a_pasar:
-            self.env["fsm.order"].browse(a_pasar.ids).write({"person_id": persona.id})
+            self._shalom_pasar_visitas(self.env["fsm.order"].browse(a_pasar.ids), persona)
         if con_cartera:
             self.env["fsm.order"].browse(con_cartera.ids).write({
                 "x_cartera_person_id": False,
