@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.JuegoPanel">
+        <div class="jp-overlay" role="dialog" aria-modal="true" aria-label="Panel del juego">
+            <div class="jp-cabecera">
+                <button class="icon-btn" t-on-click="cerrar" title="Volver a Rutas">←</button>
+                <div class="jp-titulo">Tu juego</div>
+            </div>
+
+            <div class="segmented jp-pestanas">
+                <button t-foreach="pestanas" t-as="p" t-key="p.id"
+                        t-att-class="state.pestana === p.id ? 'active' : ''"
+                        t-on-click="() => this.elegirPestana(p.id)"
+                        t-esc="p.etiqueta"/>
+            </div>
+
+            <div class="jp-cuerpo">
+
+                <!-- ================= LOGROS ================= -->
+                <t t-if="state.pestana === 'logros'">
+                    <div class="jp-aviso" t-if="state.logros.estado === 'cargando'">Cargando tus logros…</div>
+                    <div class="jp-aviso jp-error" t-elif="state.logros.estado === 'error'">
+                        No se pudieron cargar tus logros.
+                        <button class="jp-reintentar" t-on-click="() => this.reintentar('logros')">Reintentar</button>
+                    </div>
+                    <div class="jp-aviso" t-elif="state.logros.estado === 'vacio'">
+                        Tu usuario no tiene un vendedor vinculado todavía: pide a oficina que lo vincule.
+                    </div>
+                    <t t-else="">
+                        <t t-set="lv" t-value="logrosVista"/>
+                        <div class="jp-resumen">
+                            <div class="jp-resumen-grande">
+                                <b t-esc="lv.completos"/> <span>de <t t-esc="lv.total"/> logros</span>
+                            </div>
+                            <div class="jp-resumen-chico">
+                                este mes: <b t-esc="lv.nuevos_mes"/> <t t-esc="lv.nuevos_mes === 1 ? 'nuevo' : 'nuevos'"/>
+                                <t t-if="lv.xp_logros"> · <t t-esc="numero(lv.xp_logros)"/> XP en logros</t>
+                            </div>
+                        </div>
+                        <div class="jp-lista">
+                            <div t-foreach="lv.ordenados" t-as="l" t-key="l.codigo"
+                                 t-attf-class="jp-logro {{l.completo ? 'jp-logro-hecho' : ''}}">
+                                <span class="jp-logro-icono">
+                                    <i t-if="l.completo" class="fa fa-trophy" aria-hidden="true"/>
+                                    <i t-else="" class="fa fa-lock" aria-hidden="true"/>
+                                </span>
+                                <span class="jp-logro-texto">
+                                    <b t-esc="l.nombre"/>
+                                    <span t-esc="l.descripcion"/>
+                                    <span class="jp-barra" t-if="!l.completo">
+                                        <span class="jp-barra-relleno" t-att-style="'width:' + porcentaje(l) + '%'"/>
+                                    </span>
+                                </span>
+                                <span class="jp-logro-lado">
+                                    <span class="jp-etiqueta jp-etiqueta-hoy" t-if="l.hoy">HOY</span>
+                                    <span class="jp-progreso" t-elif="!l.completo" t-esc="textoProgreso(l)"/>
+                                    <span class="jp-xp" t-esc="'+' + l.xp + ' XP'"/>
+                                </span>
+                            </div>
+                        </div>
+                        <button class="jp-enlace" t-if="props.onRepasarTutorial" t-on-click="repasarTutorial">
+                            <i class="fa fa-graduation-cap" aria-hidden="true"/> Repasar el tutorial
+                        </button>
+                    </t>
+                </t>
+
+                <!-- ================= EQUIPO ================= -->
+                <t t-if="state.pestana === 'equipo'">
+                    <div class="jp-aviso" t-if="state.equipo.estado === 'cargando'">Cargando el equipo…</div>
+                    <div class="jp-aviso jp-error" t-elif="state.equipo.estado === 'error'">
+                        No se pudo cargar el equipo.
+                        <button class="jp-reintentar" t-on-click="() => this.reintentar('equipo')">Reintentar</button>
+                    </div>
+                    <div class="jp-aviso" t-elif="state.equipo.estado === 'vacio'">
+                        Tu usuario no tiene un vendedor vinculado todavía.
+                    </div>
+                    <t t-else="">
+                        <t t-set="eq" t-value="equipoVista"/>
+                        <div class="jp-seccion-titulo"><t t-esc="eq.mes_nombre"/> · equipo</div>
+                        <div class="jp-tarjeta">
+                            <div class="jp-equipo-total" t-esc="dinero(eq.ventas)"/>
+                            <div class="jp-equipo-faltan" t-if="!eq.piso_alcanzado">
+                                faltan <b t-esc="dinero(eq.faltan_piso)"/> para el piso
+                            </div>
+                            <div class="jp-equipo-faltan" t-elif="!eq.meta_alcanzada">
+                                faltan <b t-esc="dinero(eq.faltan_meta)"/> para el jefe final
+                            </div>
+                            <div class="jp-equipo-faltan" t-else="">¡Meta del mes superada!</div>
+                            <div class="jp-meta-barra">
+                                <div class="jp-meta-relleno" t-att-style="'width:' + eq.pctBarra + '%'"/>
+                                <div class="jp-meta-marca" t-att-style="'left:' + eq.pctPiso + '%'"/>
+                            </div>
+                            <div class="jp-meta-leyenda">
+                                <span>$0</span>
+                                <span>PISO <t t-esc="dinero(eq.piso)"/></span>
+                                <span>JEFE <t t-esc="dinero(eq.meta)"/></span>
+                            </div>
+                            <div class="jp-equipo-estado" t-esc="eq.estado"/>
+                            <div class="jp-equipo-ritmo" t-if="!eq.meta_alcanzada and eq.dias_habiles_restantes">
+                                Quedan <b t-esc="eq.diasHabilesTexto"/>:
+                                <t t-if="!eq.piso_alcanzado">para el piso hacen falta <b t-esc="dinero(eq.ritmo_piso)"/> por día.</t>
+                                <t t-else="">para el jefe final hacen falta <b t-esc="dinero(eq.ritmo_meta)"/> por día.</t>
+                            </div>
+                        </div>
+
+                        <div class="jp-tarjeta jp-camion" t-if="eq.camion">
+                            <div class="jp-seccion-titulo">CAMIÓN DE HOY</div>
+                            <div class="jp-camion-fila">
+                                <b t-esc="dinero(eq.camion.vendido)"/> de <t t-esc="dinero(eq.camion.meta)"/>
+                                <span class="jp-etiqueta jp-etiqueta-hoy" t-if="eq.camion.lleno">lleno</span>
+                            </div>
+                            <div class="jp-meta-barra">
+                                <div class="jp-meta-relleno" t-att-style="'width:' + eq.camionPct + '%'"/>
+                            </div>
+                        </div>
+
+                        <div class="jp-seccion-titulo">Cofres de equipo</div>
+                        <div t-attf-class="jp-cofre {{eq.piso_alcanzado ? 'jp-cofre-abierto' : ''}}">
+                            <span class="jp-logro-icono"><i t-attf-class="fa {{eq.piso_alcanzado ? 'fa-unlock' : 'fa-lock'}}" aria-hidden="true"/></span>
+                            <span class="jp-logro-texto">
+                                <b>Piso del mes</b>
+                                <span>Equipo en <t t-esc="dinero(eq.piso)"/></span>
+                            </span>
+                            <span class="jp-cofre-estado" t-esc="eq.piso_alcanzado ? 'abierto' : Math.round(Math.min(eq.pct_piso, 100)) + '%'"/>
+                        </div>
+                        <div t-attf-class="jp-cofre {{eq.meta_alcanzada ? 'jp-cofre-abierto' : ''}}">
+                            <span class="jp-logro-icono"><i t-attf-class="fa {{eq.meta_alcanzada ? 'fa-unlock' : 'fa-lock'}}" aria-hidden="true"/></span>
+                            <span class="jp-logro-texto">
+                                <b>Jefe final</b>
+                                <span>Equipo en <t t-esc="dinero(eq.meta)"/></span>
+                            </span>
+                            <span class="jp-cofre-estado" t-esc="eq.meta_alcanzada ? 'abierto' : (eq.piso_alcanzado ? Math.round(Math.min(eq.pct_meta, 100)) + '%' : 'bloqueado')"/>
+                        </div>
+
+                        <div class="jp-nota">En este equipo no hay tabla de posiciones. Gana el equipo.</div>
+                    </t>
+                </t>
+
+                <!-- ================= TEMPORADA ================= -->
+                <t t-if="state.pestana === 'temporada'">
+                    <div class="jp-aviso" t-if="state.temporada.estado === 'cargando'">Cargando la temporada…</div>
+                    <div class="jp-aviso jp-error" t-elif="state.temporada.estado === 'error'">
+                        No se pudo cargar la temporada.
+                        <button class="jp-reintentar" t-on-click="() => this.reintentar('temporada')">Reintentar</button>
+                    </div>
+                    <div class="jp-aviso" t-elif="state.temporada.estado === 'vacio'">
+                        Tu usuario no tiene un vendedor vinculado todavía.
+                    </div>
+                    <t t-else="">
+                        <t t-set="te" t-value="temporadaVista"/>
+                        <div class="jp-seccion-titulo">Temporada · <t t-esc="te.mes_nombre"/></div>
+                        <div class="jp-tarjeta">
+                            <div class="jp-temp-etiqueta">Tu nivel de temporada</div>
+                            <div class="jp-temp-nivel">
+                                Nivel <b t-esc="te.nivel_temporada"/> <span>de <t t-esc="te.niveles_total"/></span>
+                            </div>
+                            <div class="jp-temp-xp"><b t-esc="numero(te.xp_mes)"/> XP de la temporada</div>
+                            <div class="jp-temp-proximo" t-if="te.proximo">
+                                Faltan <b t-esc="numero(te.proximo.faltan)"/> XP para el nivel <t t-esc="te.proximo.nivel"/>
+                            </div>
+                            <div class="jp-temp-proximo" t-else="">¡Llegaste al jefe final de la temporada!</div>
+                            <div class="jp-temp-meta">
+                                Quedan <b t-esc="te.diasTexto"/> · el nivel nunca baja y la temporada reinicia cada mes
+                            </div>
+                        </div>
+                        <div class="jp-bono" t-if="te.bono_quincena.activo">
+                            <b>DÍAS 1 AL 15 · × <t t-esc="te.bono_quincena.multiplicador"/> XP</b>
+                            <span>quedan <t t-esc="te.bono_quincena.dias_restantes"/> <t t-esc="te.bono_quincena.dias_restantes === 1 ? 'día' : 'días'"/></span>
+                        </div>
+
+                        <div class="jp-seccion-titulo">Recompensas</div>
+                        <div class="jp-lista">
+                            <div t-foreach="te.hitos" t-as="h" t-key="h.nivel"
+                                 t-attf-class="jp-hito {{h.alcanzado ? 'jp-hito-listo' : ''}} {{h.actual ? 'jp-hito-actual' : ''}}">
+                                <span class="jp-hito-nivel" t-esc="h.nivel"/>
+                                <span class="jp-logro-texto">
+                                    <b t-if="h.premio" t-esc="h.premio"/>
+                                    <b t-elif="h.nivel === te.niveles_total">Jefe final de la temporada</b>
+                                    <b t-else="">Nivel <t t-esc="h.nivel"/></b>
+                                    <span><t t-esc="numero(h.xp)"/> XP del mes</span>
+                                </span>
+                                <span class="jp-etiqueta jp-etiqueta-hoy" t-if="h.alcanzado">LISTO</span>
+                                <span class="jp-etiqueta" t-elif="h.actual">SIGUIENTE</span>
+                            </div>
+                        </div>
+                    </t>
+                </t>
+            </div>
+        </div>
+    </t>
+</templates>
