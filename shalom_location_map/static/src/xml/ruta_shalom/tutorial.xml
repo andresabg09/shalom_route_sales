@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.Tutorial">
+        <div class="tut-overlay" role="dialog" aria-modal="true" aria-label="Tutorial de bienvenida">
+
+            <!-- ============ Bienvenida ============ -->
+            <div class="tut-pantalla" t-if="state.paso === 'bienvenida'">
+                <div class="tut-estrellas" aria-hidden="true">
+                    <span class="tut-estrella-chica">★</span>
+                    <span class="tut-estrella-grande">★</span>
+                    <span class="tut-estrella-chica">★</span>
+                </div>
+                <div class="tut-eyebrow">Ruta Shalom</div>
+                <div class="tut-titulo-grande">Tu ruta de siempre, ahora con estrellas.</div>
+                <div class="tut-texto">
+                    Cada día recibes tu cartera de clientes. Cada cliente tiene su récord.
+                    Tú decides cómo superarlo.
+                </div>
+                <div class="tut-puntos">
+                    <div class="tut-punto">
+                        <span class="tut-punto-icono"><i class="fa fa-map-marker" aria-hidden="true"/></span>
+                        <span><b>Tu cartera del día</b>, sin cruzarte con tu compañero</span>
+                    </div>
+                    <div class="tut-punto">
+                        <span class="tut-punto-icono tut-icono-oro">★</span>
+                        <span><b>Ganas estrellas</b> superando a cada cliente</span>
+                    </div>
+                    <div class="tut-punto">
+                        <span class="tut-punto-icono"><i class="fa fa-users" aria-hidden="true"/></span>
+                        <span><b>Suben juntos</b> el piso y el jefe final</span>
+                    </div>
+                </div>
+                <div class="tut-pie">
+                    <div class="tut-usuario" t-if="nombreCorto">
+                        <span class="tut-avatar" t-esc="inicial"/>
+                        <span class="tut-usuario-texto">
+                            <b>Entraste como <t t-esc="nombreCorto"/></b>
+                            <span>Lo sabemos por tu usuario de Odoo</span>
+                        </span>
+                        <i class="fa fa-check tut-check" aria-hidden="true"/>
+                    </div>
+                    <button class="tut-btn-principal" t-on-click="empezar">Empezar · 2 minutos</button>
+                    <button class="tut-saltar tut-saltar-centrado" t-on-click="saltar" t-att-disabled="state.guardando">
+                        Ya sé jugar, saltar tutorial
+                    </button>
+                </div>
+            </div>
+
+            <!-- ============ Pasos 1 a 3 (ejemplos de práctica) ============ -->
+            <div class="tut-pantalla" t-elif="pasoActual">
+                <div class="tut-practica-aviso">
+                    <i class="fa fa-graduation-cap" aria-hidden="true"/> Ejemplo de práctica · nada se guarda
+                </div>
+
+                <div class="tut-cliente">
+                    <div class="tut-cliente-fecha" t-esc="cliente.fecha"/>
+                    <div class="tut-cliente-nombre" t-esc="cliente.nombre"/>
+                </div>
+
+                <!-- Pasos 1 y 3: la escalera de estrellas del cliente -->
+                <div class="tut-tarjeta" t-if="state.paso !== 2">
+                    <div class="tut-tarjeta-titulo">Estrellas que puedes ganar hoy</div>
+                    <div class="tut-escalera-fila">
+                        <span class="tut-escalera-nombre"><span class="estrella-1">★</span> Bronce · 75%</span>
+                        <b t-esc="dinero(cliente.bronce)"/>
+                    </div>
+                    <div class="tut-escalera-fila">
+                        <span class="tut-escalera-nombre"><span class="estrella-2">★★</span> Plata · 100%</span>
+                        <b t-esc="dinero(cliente.tipico)"/>
+                    </div>
+                    <div class="tut-escalera-fila">
+                        <span class="tut-escalera-nombre"><span class="estrella-3">★★★</span> Oro · récord</span>
+                        <b t-esc="'> ' + dinero(cliente.record)"/>
+                    </div>
+                    <div class="tut-sugerencia">
+                        Compra tinte negro, Aliset y Skala. Nunca ha probado el polvo decolorante.
+                    </div>
+                </div>
+
+                <!-- Paso 2: pedido de práctica con botón + $500 -->
+                <div class="tut-tarjeta" t-if="state.paso === 2">
+                    <div class="tut-tarjeta-titulo">Pedido de práctica</div>
+                    <div class="tut-pedido-fila">
+                        <span class="tut-pedido-total" t-esc="dinero(state.total)"/>
+                        <span class="tut-pedido-estrellas">
+                            <span t-foreach="[1, 2, 3]" t-as="n" t-key="n"
+                                  t-att-class="practica.estrellas >= n ? 'estrella-on estrella-' + n : 'estrella-off'">★</span>
+                        </span>
+                    </div>
+                    <div class="tut-pedido-mensaje" t-esc="practica.mensaje"/>
+                    <div class="tut-pedido-botones">
+                        <button class="tut-btn-mas" t-on-click="sumarPractica">+ $500</button>
+                        <button class="tut-btn-reiniciar" t-on-click="reiniciarPractica">Reiniciar</button>
+                    </div>
+                </div>
+
+                <!-- Paso 3: el botón que empieza cada pedido, resaltado -->
+                <div class="tut-llegue" t-if="state.paso === 3" aria-hidden="true">LLEGUÉ · TOMAR PEDIDO</div>
+
+                <!-- Tarjeta clara del entrenador -->
+                <div class="tut-coach">
+                    <div class="tut-coach-paso">Paso <t t-esc="state.paso"/> de 3</div>
+                    <div class="tut-coach-titulo" t-esc="pasoActual.titulo"/>
+                    <div class="tut-coach-texto" t-if="state.paso === 1">
+                        Aquí ves quién es, cuánto compra siempre (<b t-esc="dinero(cliente.tipico)"/>)
+                        y cuánto necesitas vender para cada estrella.
+                    </div>
+                    <div class="tut-coach-texto" t-if="state.paso === 2">
+                        Toca <b>+ $500</b> y mira cómo suben. Bronce al 75% de su pedido de siempre,
+                        plata al 100%, oro si superas su récord.
+                    </div>
+                    <div class="tut-coach-texto" t-if="state.paso === 3">
+                        Cuando estés frente al cliente, toca <b>Llegué · Tomar pedido</b>.
+                        Tu primera visita real te espera en el mapa de rutas.
+                    </div>
+                    <div class="tut-coach-botones">
+                        <button class="tut-saltar" t-on-click="saltar" t-att-disabled="state.guardando">Saltar</button>
+                        <button class="tut-btn-principal tut-btn-siguiente" t-on-click="siguiente" t-att-disabled="state.guardando">
+                            <t t-esc="pasoActual.siguiente"/>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============ Tutorial terminado + 3 misiones ============ -->
+            <div class="tut-pantalla tut-fin" t-elif="state.paso === 'fin'">
+                <div class="tut-eyebrow">Tutorial terminado</div>
+                <div class="tut-titulo-grande">¡Ya sabes jugar!</div>
+                <div class="tut-texto">
+                    Tres misiones de bienvenida para tus primeros dos días. No hay tiempo límite.
+                </div>
+                <div class="tut-contador"><t t-esc="misionesHechas"/>/<t t-esc="state.misiones.length"/></div>
+                <div class="tut-premio">
+                    <span>Premio al completar las 3</span>
+                    <b>+<t t-esc="state.xpPremio"/> XP · Nivel 2</b>
+                </div>
+                <div class="tut-misiones">
+                    <div t-foreach="state.misiones" t-as="m" t-key="m.codigo"
+                         t-attf-class="tut-mision {{m.completo ? 'tut-mision-hecha' : ''}}">
+                        <span class="tut-mision-marca">
+                            <i t-if="m.completo" class="fa fa-check" aria-hidden="true"/>
+                            <t t-else="" t-esc="m_index + 1"/>
+                        </span>
+                        <span class="tut-mision-texto">
+                            <b t-esc="m.nombre"/>
+                            <span t-esc="m.descripcion"/>
+                        </span>
+                        <span class="tut-mision-xp">+<t t-esc="m.xp"/> XP</span>
+                    </div>
+                </div>
+                <div class="tut-recuerda">
+                    <b>Recuerda:</b> bronce 75%, plata 100%, oro récord del propio cliente.
+                </div>
+                <div class="tut-pie">
+                    <button class="tut-btn-principal" t-on-click="irAlMapa">Ir al mapa de rutas</button>
+                    <div class="tut-nota">Puedes repasar el tutorial cuando quieras desde el panel de juego (toca tu nivel en Rutas).</div>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>
