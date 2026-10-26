@@ -103,7 +103,7 @@ class FSMRouteGerente(models.Model):
         con_cartera = abiertas.filtered("x_cartera_person_id")
         cerradas = Visita.search_count(base + [("stage_id.is_closed", "=", True)])
         ciclos_con_cartera = sorted(
-            {v.x_route_schedule_id.display_name for v in con_cartera if v.x_route_schedule_id}
+            {self._shalom_nombre_ciclo(v.x_route_schedule_id) for v in con_cartera if v.x_route_schedule_id}
         )
         resumen = {
             "simulado": bool(simular),
@@ -331,6 +331,136 @@ class FSMRouteGerente(models.Model):
         }
         resultado.update(gerente_utils.avance_mes(ventas, piso, meta))
         return resultado
+
+    # ------------------------------------------------------------------
+    # Salud de los datos y GPS prioritario
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _shalom_nombre_ciclo(ciclo):
+        """'Ruta (26/10 - 30/10)' -- name_get de fsm.route.schedule ya no
+        alimenta display_name en Odoo 18, así que se arma aquí."""
+        rango = ""
+        if ciclo.date_start and ciclo.date_end:
+            rango = f" ({ciclo.date_start:%d/%m} - {ciclo.date_end:%d/%m})"
+        return f"{ciclo.route_id.name}{rango}"
+
+    @api.model
+    def shalom_admin_salud_datos(self):
+        """Tarjeta "Salud de los datos" y lista "GPS prioritario".
+
+        - sin_gps: ubicaciones activas sin coordenadas (vacías o en 0).
+        - gps_prioritario: los clientes BUENOS (A, A2, B, B2, que no son
+          distribuidoras: los que de verdad se visitan y compran) sin
+          GPS, de mayor a menor valor esperado, con nombre, ruta, clase y
+          valor (hasta 300). La pantalla muestra los primeros
+          `gps_n` (30) y la cobertura: qué % del valor que falta cubren.
+        - buenos_sin_ruta: clientes buenos que no están en ninguna ruta,
+          con el valor esperado que se pierde.
+        - sin_tipo (sin etiquetas de contacto: súper, farmacia...) y
+          sin_telefono (ni teléfono ni celular).
+        - distribuidoras marcadas y cuánto pesan en las ventas históricas.
+        - ciclos_sin_cartera: ciclos abiertos con visitas abiertas donde
+          no se ha repartido cartera (es normal en rutas de un solo
+          vendedor; es informativo).
+
+        Una sola pasada (ver _shalom_gerente_universo): sin consultas por
+        cliente."""
+        self._shalom_gerente_exigir()
+        filas, perfiles = self._shalom_gerente_universo()
+        nombre_ruta = {r.id: r.name for r in self.sudo().search([])}
+        total = len(filas)
+        sin_gps = sin_tipo = sin_telefono = 0
+        buenos = buenos_con_gps = 0
+        buenos_sin_ruta = []
+        prioritarios = []
+        dist = {"cantidad": 0, "ventas": 0.0, "sin_gps": 0}
+        ventas_total = 0.0
+        for fila in filas:
+            perfil = perfiles.get(fila["id"]) or {}
+            ventas = (perfil.get("n") or 0) * (perfil.get("ticket_promedio") or 0.0)
+            ventas_total += ventas
+            falta_gps = not fila["partner_latitude"] or not fila["partner_longitude"]
+            sin_gps += 1 if falta_gps else 0
+            sin_tipo += 0 if fila["category_id"] else 1
+            sin_telefono += 0 if (fila["phone"] or fila["mobile"]) else 1
+            if fila["x_es_distribuidora"]:
+                dist["cantidad"] += 1
+                dist["ventas"] += ventas
+                dist["sin_gps"] += 1 if falta_gps else 0
+                continue
+            if not gerente_utils.es_cliente_bueno(perfil.get("clase")):
+                continue
+            buenos += 1
+            ruta_id = fila["fsm_route_id"]
+            if not ruta_id:
+                buenos_sin_ruta.append(perfil["esperado"])
+            if falta_gps:
+                prioritarios.append({
+                    "id": fila["id"],
+                    "name": fila["name"],
+                    "ruta_id": ruta_id or False,
+                    "ruta": nombre_ruta.get(ruta_id, "") if ruta_id else "",
+                    "clase": perfil["clase"],
+                    "valor": perfil["esperado"],
+                    "sin_ruta": not ruta_id,
+                })
+            else:
+                buenos_con_gps += 1
+        valor_falta = sum(p["valor"] for p in prioritarios)
+        gps_n = gerente_utils.N_GPS_PRIORITARIO
+
+        # Ciclos abiertos: ¿tienen cartera repartida?
+        Visita = self.env["fsm.order"].sudo()
+        abiertas = Visita._read_group(
+            [("x_route_schedule_id", "!=", False), ("stage_id.is_closed", "=", False)],
+            ["x_route_schedule_id"], ["__count"],
+        )
+        con_cartera = {
+            ciclo.id for ciclo, _n in Visita._read_group(
+                [("x_route_schedule_id", "!=", False), ("stage_id.is_closed", "=", False),
+                 ("x_cartera_person_id", "!=", False)],
+                ["x_route_schedule_id"], ["__count"],
+            )
+        }
+        abiertos = [(c, n) for c, n in abiertas if not c.route_id.x_es_visita_express]
+        sin_cartera = sorted(
+            ((c, n) for c, n in abiertos if c.id not in con_cartera), key=lambda t: -t[1]
+        )
+        return {
+            "total_ubicaciones": total,
+            "sin_gps": sin_gps,
+            "sin_tipo": sin_tipo,
+            "sin_telefono": sin_telefono,
+            "buenos": {
+                "total": buenos,
+                "con_gps": buenos_con_gps,
+                "sin_gps": len(prioritarios),
+                "valor_sin_gps": round(valor_falta, 2),
+            },
+            "gps_n": gps_n,
+            "gps_cobertura_pct": gerente_utils.cobertura_primeros(
+                [p["valor"] for p in prioritarios], gps_n),
+            "gps_prioritario": gerente_utils.ordenar_gps_prioritario(prioritarios),
+            "buenos_sin_ruta": {
+                "total": len(buenos_sin_ruta),
+                "valor": round(sum(buenos_sin_ruta), 2),
+            },
+            "distribuidoras": {
+                "cantidad": dist["cantidad"],
+                "sin_gps": dist["sin_gps"],
+                "ventas": round(dist["ventas"], 2),
+                "pct_ventas": round(dist["ventas"] * 100.0 / ventas_total, 1) if ventas_total else 0.0,
+            },
+            "ciclos_sin_cartera": {
+                "abiertos": len(abiertos),
+                "sin_cartera": len(sin_cartera),
+                "lista": [
+                    {"id": c.id, "name": self._shalom_nombre_ciclo(c), "visitas": n}
+                    for c, n in sin_cartera[:15]
+                ],
+            },
+        }
 
     @api.model
     def _shalom_gerente_metas(self):
