@@ -9,7 +9,7 @@ import logging
 
 from odoo import api, fields, models
 
-from . import juego_utils
+from . import juego_utils, tz_utils
 
 _logger = logging.getLogger(__name__)
 
@@ -63,10 +63,9 @@ class ShalomJuegoEvento(models.Model):
         if not persona:
             return None
         progreso = self._shalom_progreso_de(persona)
-        hoy = fields.Date.context_today(self)
-        inicio_mes = hoy.replace(day=1)
+        inicio_mes = tz_utils.hoy_local(self.env).replace(day=1)
         eventos = self.sudo().search(
-            [("person_id", "=", persona.id), ("fecha", ">=", fields.Datetime.to_datetime(inicio_mes))]
+            [("person_id", "=", persona.id), ("fecha", ">=", tz_utils.inicio_de_dia_utc(self.env, inicio_mes))]
         )
         progreso.update(
             {

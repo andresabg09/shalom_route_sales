@@ -123,7 +123,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 from odoo.osv import expression
 
-from . import juego_utils
+from . import juego_utils, tz_utils
 
 _logger = logging.getLogger(__name__)
 
@@ -819,7 +819,7 @@ class FSMOrder(models.Model):
                 total = venta
                 n_estrellas = juego_utils.estrellas(total, refs, margen_pct)
                 record_roto = bool(refs["n"]) and total > refs["record"]
-                dia = fields.Date.context_today(self).day
+                dia = tz_utils.hoy_local(self.env).day
                 xp = juego_utils.xp_pedido(utilidad, n_estrellas, dia)
                 # El XP es del dueño de la visita (cartera o ruta); si un
                 # administrador confirma desde "En vivo", no se le queda a él.
@@ -1001,7 +1001,10 @@ class FSMOrder(models.Model):
                 {
                     "id": orden.id,
                     "nombre": orden.name,
-                    "fecha": fields.Date.to_string(orden.date_order.date()) if orden.date_order else False,
+                    "fecha": (
+                        fields.Date.to_string(tz_utils.a_local(self.env, orden.date_order).date())
+                        if orden.date_order else False
+                    ),
                     "total": orden.amount_total,
                     "lineas": lineas,
                 }
@@ -1079,7 +1082,7 @@ class FSMOrder(models.Model):
             for orden in ordenes:
                 comercial = comercial_de_partner.get(orden["partner_id"])
                 por_comercial.setdefault(comercial, []).append(orden)
-        hoy = fields.Date.context_today(self)
+        hoy = tz_utils.hoy_local(self.env)
         perfiles = {}
         for loc in locations:
             ordenes = por_comercial.get(comercial_de.get(loc.id), [])
@@ -1093,7 +1096,7 @@ class FSMOrder(models.Model):
             dias = 9999
             if ordenes:
                 ultima = max(o["date_order"] for o in ordenes)
-                dias = (hoy - ultima.date()).days
+                dias = (hoy - tz_utils.a_local(self.env, ultima).date()).days
             clase = juego_utils.clasificar(len(ordenes), ticket_promedio, margen_pct, dias)
             perfiles[loc.id] = {
                 "refs": refs,
