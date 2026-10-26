@@ -218,7 +218,7 @@ class FSMPersonCampo(models.Model):
         persona = self._shalom_persona_actual()
         if not persona or not order_ids:
             return []
-        ids = [int(i) for i in order_ids if isinstance(i, int) or str(i).isdigit()]
+        ids = list(dict.fromkeys(int(i) for i in order_ids if isinstance(i, int) or str(i).isdigit()))
         ordenes = self.env["fsm.order"].browse(ids).exists().filtered(
             lambda o: o.x_route_schedule_id and not o.stage_id.is_closed
         )
