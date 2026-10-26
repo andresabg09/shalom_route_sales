@@ -157,5 +157,153 @@ class TestCarteras(unittest.TestCase):
         self.assertEqual(a, b)
 
 
+class TestLogros(unittest.TestCase):
+    def _stats(self, **kw):
+        base = {"n_pedidos": 0, "n_quimico": 0, "mejor_racha": 0, "max_estrellas": 0,
+                "hay_record": False, "mayor_pedido": 0, "xp_total": 0}
+        base.update(kw)
+        return base
+
+    def _por_codigo(self, stats):
+        return {l["codigo"]: l for l in j.estado_logros(stats)}
+
+    def test_catalogo_minimo_y_bienvenida_suma_600(self):
+        codigos = {l["codigo"] for l in j.LOGROS}
+        for c in ("primer_pedido", "quimico", "ruta_sin_saltos", "primera_plata", "oro", "record_roto", "nivel_2"):
+            self.assertIn(c, codigos)
+        self.assertEqual(len(codigos), len(j.LOGROS))  # sin códigos repetidos
+        # Las 3 misiones del tutorial valen justo el nivel 2 (600 XP)
+        self.assertEqual(sum(l["xp"] for l in j.LOGROS if l["bienvenida"]), j.NIVELES[1][2])
+
+    def test_sin_actividad_nada_completo(self):
+        est = j.estado_logros(self._stats())
+        self.assertFalse(any(l["completo"] for l in est))
+        self.assertTrue(all(l["progreso"] == 0 for l in est))
+
+    def test_progreso_y_tope(self):
+        e = self._por_codigo(self._stats(n_pedidos=4, n_quimico=2, mejor_racha=9, xp_total=450))
+        self.assertTrue(e["primer_pedido"]["completo"])
+        self.assertEqual((e["quimico"]["progreso"], e["quimico"]["meta"], e["quimico"]["completo"]), (2, 3, False))
+        # el progreso nunca pasa de la meta
+        self.assertEqual((e["ruta_sin_saltos"]["progreso"], e["ruta_sin_saltos"]["completo"]), (5, True))
+        self.assertEqual((e["nivel_2"]["progreso"], e["nivel_2"]["completo"]), (450, False))
+
+    def test_estrellas_y_record(self):
+        e = self._por_codigo(self._stats(max_estrellas=2))
+        self.assertTrue(e["primera_plata"]["completo"])
+        self.assertFalse(e["oro"]["completo"])
+        e = self._por_codigo(self._stats(max_estrellas=3, hay_record=True, mayor_pedido=2000.01, xp_total=600))
+        self.assertTrue(all(e[c]["completo"] for c in ("primera_plata", "oro", "record_roto", "cazador_grandes", "nivel_2")))
+        # exactamente $2,000 no es "más de $2,000"
+        self.assertFalse(self._por_codigo(self._stats(mayor_pedido=2000.0))["cazador_grandes"]["completo"])
+
+    def test_racha(self):
+        self.assertEqual(j.racha_mas_larga([]), 0)
+        self.assertEqual(j.racha_mas_larga([1, 1, 1, 1, 1]), 5)
+        self.assertEqual(j.racha_mas_larga([1, 1, 2, 1, 1, 1]), 3)         # otra ruta en medio corta
+        self.assertEqual(j.racha_mas_larga([1, 1, False, 1, 1, 1]), 3)     # ruta desconocida corta
+        self.assertEqual(j.racha_mas_larga([None, None]), 0)
+
+    def test_tinte_y_oxigenta(self):
+        self.assertTrue(j.es_tinte("TINTE Rubio 8.0"))
+        self.assertTrue(j.es_tinte("Rubio 8.0", "Tintes"))
+        self.assertFalse(j.es_tinte("Shampoo", "Cuidado"))
+        self.assertTrue(j.es_oxigenta("Oxigenta 40 vol"))
+        self.assertTrue(j.es_oxigenta("OXÍGENTA crema"))     # tildes y mayúsculas
+        self.assertTrue(j.es_oxigenta("Agua", "Oxidantes"))
+        self.assertEqual(j.pedido_con_tinte_y_oxigenta([("Tinte A", ""), ("Oxigenta 20", "")]), (True, True))
+        self.assertEqual(j.pedido_con_tinte_y_oxigenta([("Tinte A", "")]), (True, False))
+        self.assertEqual(j.pedido_con_tinte_y_oxigenta([]), (False, False))
+
+
+class TestEquipo(unittest.TestCase):
+    def test_dias_habiles(self):
+        from datetime import date
+        # noviembre 2026: 1 nov es domingo; 30 días, 21 hábiles (lun-vie)
+        self.assertEqual(j.dias_habiles_entre(date(2026, 11, 1), date(2026, 11, 30)), 21)
+        self.assertEqual(j.dias_habiles_entre(date(2026, 11, 7), date(2026, 11, 8)), 0)  # sáb-dom
+        self.assertEqual(j.dias_habiles_entre(date(2026, 11, 5), date(2026, 11, 4)), 0)  # rango al revés
+
+    def test_ritmo_a_mitad_de_mes(self):
+        from datetime import date
+        r = j.ritmo_equipo(41900, 60000, 80000, date(2026, 11, 16))  # lunes
+        self.assertEqual(r["dias_mes"], 30)
+        self.assertEqual(r["dias_habiles_mes"], 21)
+        self.assertEqual(r["dias_habiles_pasados"], 10)       # del 2 al 13
+        self.assertEqual(r["dias_habiles_restantes"], 11)     # del 16 al 30, hoy incluido
+        self.assertEqual(r["faltan_piso"], 18100.0)
+        self.assertEqual(r["faltan_meta"], 38100.0)
+        self.assertAlmostEqual(r["ritmo_piso"], 18100 / 11, places=2)
+        self.assertAlmostEqual(r["pct_piso"], 69.8, places=1)
+        self.assertFalse(r["piso_alcanzado"])
+        self.assertAlmostEqual(r["esperado_hoy"], 60000 * 10 / 21, places=2)
+        self.assertTrue(r["en_ritmo"])                        # 41,900 >= 28,571 esperados al día 16
+        self.assertNotIn("vendedores", r)
+
+    def test_en_ritmo_y_metas_alcanzadas(self):
+        from datetime import date
+        r = j.ritmo_equipo(85000, 60000, 80000, date(2026, 11, 20))
+        self.assertTrue(r["piso_alcanzado"] and r["meta_alcanzada"] and r["en_ritmo"])
+        self.assertEqual((r["faltan_piso"], r["faltan_meta"], r["ritmo_piso"]), (0.0, 0.0, 0.0))
+
+    def test_ultimo_dia_y_fin_de_semana(self):
+        from datetime import date
+        # sábado 28 nov: quedan 1 hábil (lun 30) -> todo el faltante en un día
+        r = j.ritmo_equipo(50000, 60000, 80000, date(2026, 11, 28))
+        self.assertEqual(r["dias_habiles_restantes"], 1)
+        self.assertEqual(r["ritmo_piso"], 10000.0)
+        # domingo 31 ene 2027 sin hábiles restantes: divide entre 1, no entre 0
+        r = j.ritmo_equipo(0, 60000, 80000, date(2027, 1, 31))
+        self.assertEqual(r["dias_habiles_restantes"], 0)
+        self.assertEqual(r["ritmo_piso"], 60000.0)
+
+    def test_sin_parametros_no_revienta(self):
+        from datetime import date
+        r = j.ritmo_equipo(1000, 0, 0, date(2026, 11, 5))
+        self.assertEqual((r["pct_piso"], r["pct_meta"]), (0.0, 0.0))
+        self.assertFalse(r["piso_alcanzado"])
+
+    def test_camion(self):
+        self.assertIsNone(j.camion_del_dia(500, None))
+        self.assertIsNone(j.camion_del_dia(500, 0))
+        self.assertIsNone(j.camion_del_dia(500, "abc"))
+        self.assertIsNone(j.camion_del_dia(500, -5))
+        c = j.camion_del_dia(10500, "9000")
+        self.assertEqual((c["meta"], c["vendido"], c["lleno"]), (9000.0, 10500.0, True))
+        self.assertAlmostEqual(c["pct"], 116.7, places=1)
+        self.assertFalse(j.camion_del_dia(100, 9000)["lleno"])
+
+
+class TestTemporada(unittest.TestCase):
+    def test_hitos(self):
+        nivel, hitos = j.hitos_temporada(0)
+        self.assertEqual((nivel, len(hitos)), (0, 12))
+        self.assertTrue(hitos[0]["actual"] and not hitos[0]["alcanzado"])
+        nivel, hitos = j.hitos_temporada(j.HITOS_TEMPORADA[2])     # justo en el 3º
+        self.assertEqual(nivel, 3)
+        self.assertEqual([h["alcanzado"] for h in hitos[:4]], [True, True, True, False])
+        self.assertEqual([h["nivel"] for h in hitos if h["actual"]], [4])
+        nivel, hitos = j.hitos_temporada(10 ** 6)
+        self.assertEqual(nivel, 12)
+        self.assertFalse(any(h["actual"] for h in hitos))          # ya no hay siguiente
+        self.assertEqual(sorted(j.HITOS_TEMPORADA), j.HITOS_TEMPORADA)
+
+    def test_premios(self):
+        self.assertEqual(j.premios_de_texto(""), {})
+        self.assertEqual(j.premios_de_texto(None), {})
+        self.assertEqual(j.premios_de_texto("   "), {})
+        self.assertEqual(j.premios_de_texto("{no es json"), {})
+        self.assertEqual(j.premios_de_texto("42"), {})
+        self.assertEqual(j.premios_de_texto('{"4": "Cena", "7": " ", "99": "x", "z": "y"}'), {4: "Cena"})
+        self.assertEqual(j.premios_de_texto('[{"nivel": 6, "texto": "Marco"}, {"nivel": 1}, "raro"]'), {6: "Marco"})
+
+    def test_quincena(self):
+        from datetime import date
+        self.assertEqual(j.dias_quincena_restantes(date(2026, 11, 1)), 15)
+        self.assertEqual(j.dias_quincena_restantes(date(2026, 11, 12)), 4)
+        self.assertEqual(j.dias_quincena_restantes(date(2026, 11, 15)), 1)
+        self.assertEqual(j.dias_quincena_restantes(date(2026, 11, 16)), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
