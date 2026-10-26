@@ -4,6 +4,13 @@
 #   sudo shalom-deploy              # git pull -> copiar -> permisos -> actualizar módulo -> reiniciar
 #   sudo shalom-deploy --rollback   # vuelve al respaldo más reciente (y reinicia)
 #   sudo shalom-deploy --sin-reinicio   # todo menos el `docker service update --force`
+#   sudo shalom-deploy --rollback --sin-actualizar   # rollback SIN `odoo -u` (ver nota abajo)
+#
+# Nota sobre --rollback: el `odoo -u` con el código VIEJO borra los campos que
+# ese código ya no declara (y sus columnas, con sus datos). Si el deploy que se
+# revierte había AGREGADO campos (p. ej. x_cartera_* y x_es_distribuidora del
+# juego de ventas), usar --rollback --sin-actualizar: restaura los archivos y
+# reinicia, pero deja la base intacta (las columnas nuevas sobran, no estorban).
 #
 # Instalación (una sola vez, en la VM traspastras2-east):
 #   sudo git clone https://github.com/andresabg09/shalom_route_sales /root/shalom_route_sales
@@ -51,6 +58,10 @@ permisos() {
 }
 
 actualizar_modulo() {
+    if [ "${SIN_ACTUALIZAR:-0}" = "1" ]; then
+        paso "Actualización del módulo omitida (--sin-actualizar): la base queda intacta"
+        return
+    fi
     paso "Actualizando módulo en la base '$DB' (puede tardar)"
     local h p u pw log
     h=$(docker exec "$CID" printenv HOST)
@@ -83,6 +94,7 @@ main() {
         case "$a" in
             --rollback) modo="rollback" ;;
             --sin-reinicio) SIN_REINICIO=1 ;;
+            --sin-actualizar) SIN_ACTUALIZAR=1 ;;
             *) fallo "opción desconocida: $a" ;;
         esac
     done
