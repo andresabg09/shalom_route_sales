@@ -46,8 +46,15 @@
                         t-attf-class="adm-tab {{state.tab === 'estrategias' ? 'adm-tab-active' : ''}}"
                         t-on-click="() => this.cambiarTab('estrategias')"
                     ><i class="fa fa-lightbulb-o" aria-hidden="true"/> Estrategias</button>
+                    <button
+                        t-attf-class="adm-tab {{state.tab === 'gerente' ? 'adm-tab-active' : ''}}"
+                        t-on-click="() => this.cambiarTab('gerente')"
+                    ><i class="fa fa-line-chart" aria-hidden="true"/> Gerente</button>
                 </div>
             </div>
+
+            <!-- Pestaña Gerente: vista del dueño (Fase 7), ver admin_gerente.js -->
+            <AdminGerente t-if="state.tab === 'gerente'"/>
 
             <div class="adm-body" t-if="state.tab === 'estrategias'">
                 <!-- ============ Estrategias (qué empujar / no ofrezcas) ============ -->

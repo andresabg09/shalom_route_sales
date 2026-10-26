@@ -1,0 +1,271 @@
+// Pestaña "Gerente" de Administración (Fase 7). Mismo sistema adm-* de
+// ruta_shalom.scss (aquí solo lo propio, con prefijo adm-ger-*) y SOLO
+// variables --shalom-*: tema claro / oscuro / dispositivo salen solos.
+// Diseños de referencia: Gerente.dc.html y GpsAdmin.dc.html.
+.o_shalom_ruta_app.o_shalom_admin_screen {
+    // -- 5 pestañas en celular: sin los íconos para que quepan --
+    @media (max-width: 480px) {
+        .adm-tab .fa {
+            display: none;
+        }
+        .adm-tab {
+            padding: 0 4px;
+            font-size: 0.76rem;
+        }
+    }
+
+    .adm-ger {
+        // -- Tarjetas de cifras (Mes en curso) --
+        .adm-ger-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+            gap: 14px;
+            margin-bottom: 14px;
+        }
+        .adm-ger-grid-reparto {
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+        .adm-ger-kpi {
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+        .adm-ger-kpi-label {
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--shalom-ink-muted);
+        }
+        .adm-ger-kpi-valor {
+            font-size: 1.9rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            line-height: 1.15;
+            font-variant-numeric: tabular-nums;
+        }
+        .adm-ger-kpi-ventas .adm-ger-kpi-valor {
+            color: var(--shalom-pendiente);
+        }
+        .adm-ger-kpi-meta {
+            font-size: 0.78rem;
+            line-height: 1.45;
+            color: var(--shalom-ink-muted);
+        }
+
+        // Barra de avance: se llena hasta la meta; la marca es el piso.
+        .adm-ger-bar {
+            position: relative;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--shalom-surface-2);
+            margin: 6px 0 4px;
+            overflow: visible;
+        }
+        .adm-ger-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            background: var(--shalom-completado);
+            max-width: 100%;
+        }
+        .adm-ger-bar-mark {
+            position: absolute;
+            top: -4px;
+            bottom: -4px;
+            width: 2px;
+            margin-left: -1px;
+            background: var(--shalom-ink);
+            opacity: 0.55;
+        }
+
+        .adm-ger-equipo {
+            margin-bottom: 4px;
+            max-height: none;
+        }
+        .adm-ger-nota {
+            font-size: 0.78rem;
+            line-height: 1.5;
+            color: var(--shalom-ink-muted);
+            margin: 0 0 12px;
+        }
+
+        // -- Reparto de rutas --
+        .adm-ger-persona {
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+        .adm-ger-persona-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .adm-ger-persona-nombre {
+            color: var(--shalom-accent);
+        }
+        .adm-ger-grid-reparto .adm-ger-persona:nth-child(2) .adm-ger-persona-nombre {
+            color: var(--shalom-info);
+        }
+        .adm-ger-grid-reparto .adm-ger-persona:nth-child(3) .adm-ger-persona-nombre {
+            color: var(--shalom-completado);
+        }
+        .adm-ger-ruta {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 0;
+            border-top: 1px solid var(--shalom-surface-2);
+        }
+        .adm-ger-ruta .adm-row-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .adm-ger-pasar {
+            flex: none;
+        }
+        .adm-ger-aviso {
+            padding: 14px 16px;
+            margin-bottom: 12px;
+            background: var(--shalom-pendiente-soft);
+            border-color: var(--shalom-pendiente-soft);
+        }
+        .adm-ger-aviso-titulo {
+            font-weight: 700;
+            color: var(--shalom-pendiente);
+            margin-bottom: 4px;
+        }
+        .adm-ger-aviso .adm-ger-ruta {
+            border-top-color: var(--shalom-line);
+        }
+        .adm-ger-etiqueta {
+            display: inline-block;
+            margin: 4px 6px 0 0;
+            padding: 3px 9px;
+            border-radius: 999px;
+            background: var(--shalom-surface);
+            color: var(--shalom-ink);
+            font-size: 0.74rem;
+        }
+
+        // -- Salud de los datos --
+        .adm-ger-salud {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .adm-ger-salud-fila {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: var(--shalom-radius-sm);
+            background: var(--shalom-surface-2);
+            font-size: 0.88rem;
+        }
+        .adm-ger-salud-fila.adm-ger-warn {
+            background: var(--shalom-pendiente-soft);
+        }
+        .adm-ger-salud-fila.adm-ger-warn b {
+            color: var(--shalom-pendiente);
+        }
+
+        // -- GPS prioritario --
+        .adm-ger-gps-resumen {
+            padding: 16px 18px;
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .adm-ger-gps-cifra {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 10px;
+        }
+        .adm-ger-gps-num b {
+            font-size: 1.7rem;
+            font-weight: 800;
+        }
+        .adm-ger-gps-num small {
+            font-size: 0.82rem;
+            color: var(--shalom-ink-muted);
+        }
+        .adm-ger-gps-tabs {
+            margin-bottom: 10px;
+        }
+        .adm-ger-gps-lista {
+            margin-bottom: 12px;
+        }
+        .adm-ger-gps-rank {
+            flex: none;
+            width: 28px;
+            height: 28px;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--shalom-accent-soft);
+            color: var(--shalom-accent);
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+        .adm-ger-gps-fila .adm-row-actions {
+            flex: none;
+            display: flex;
+            gap: 6px;
+        }
+        .adm-ger-csv {
+            margin-bottom: 8px;
+        }
+
+        // -- Errores por sección y resumen del modal --
+        .adm-ger-error {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: var(--shalom-radius-sm);
+            background: var(--shalom-stock-danger-bg);
+            color: var(--shalom-stock-danger-ink);
+            font-size: 0.84rem;
+        }
+        .adm-ger-resumen {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 12px;
+        }
+        .adm-ger-resumen-aviso {
+            color: var(--shalom-pendiente);
+        }
+    }
+
+    // -- Celular: una columna, filas del GPS con botones debajo --
+    @media (max-width: 899px) {
+        .adm-ger {
+            .adm-ger-grid,
+            .adm-ger-grid-reparto {
+                grid-template-columns: 1fr;
+            }
+            .adm-ger-kpi-valor {
+                font-size: 1.6rem;
+            }
+            .adm-ger-gps-fila {
+                flex-wrap: wrap;
+            }
+            .adm-ger-gps-fila .adm-row-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+        }
+    }
+}
