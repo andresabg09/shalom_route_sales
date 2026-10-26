@@ -569,7 +569,9 @@ class FSMRouteSchedule(models.Model):
         schedule = self.browse(schedule_id).exists()
         if not schedule or not person_ids:
             raise UserError(_("Elegí un ciclo y al menos un vendedor."))
-        personas = self.env["fsm.person"].browse(person_ids).exists()
+        personas = self.env["fsm.person"].browse(list(dict.fromkeys(person_ids))).exists()
+        if not personas:
+            raise UserError(_("Los vendedores elegidos no existen."))
         # el dueño de la ruta, si participa, va primero (tiene prioridad)
         personas = personas.sorted(
             key=lambda p: 0 if p == schedule.fsm_person_id else 1
@@ -596,6 +598,12 @@ class FSMRouteSchedule(models.Model):
                 }
             )
         carteras = juego_utils.repartir_carteras(candidatos, len(personas), minimo, reserva)
+        if not carteras:
+            # No se borra el reparto anterior si el nuevo no asigna a nadie.
+            raise UserError(
+                _("Ningún cliente de este ciclo califica para una cartera "
+                  "(solo entran los que compran: clases A, A2, B y B2).")
+            )
 
         # Se limpia el reparto anterior de las visitas abiertas y se
         # escribe el nuevo.

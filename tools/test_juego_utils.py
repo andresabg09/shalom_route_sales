@@ -150,6 +150,12 @@ class TestCarteras(unittest.TestCase):
     def test_vacio(self):
         self.assertEqual(j.repartir_carteras([], 2), [])
 
+    def test_deterministico_con_orden_repetido(self):
+        cands = [{"id": i, "orden": 0, "clase": "A", "esperado": 700.0} for i in range(1, 9)]
+        a = j.repartir_carteras(cands, 2, 2000, 0)
+        b = j.repartir_carteras(list(reversed(cands)), 2, 2000, 0)
+        self.assertEqual(a, b)
+
 
 if __name__ == "__main__":
     unittest.main()

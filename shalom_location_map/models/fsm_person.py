@@ -80,6 +80,20 @@ class FSMPerson(models.Model):
             lambda s: not s.route_id.x_es_visita_express
             or s.fsm_order_ids.filtered(lambda o: not o.stage_id.is_closed)
         )
+        # Ciclos que ya tienen clientes repartidos (una sola consulta
+        # agrupada; recorrer fsm_order_ids de cada ciclo cargaba todas las
+        # columnas de miles de visitas al abrir la pestaña Rutas).
+        con_cartera = set()
+        if schedules:
+            for ciclo, _n in self.env["fsm.order"]._read_group(
+                [
+                    ("x_route_schedule_id", "in", schedules.ids),
+                    ("x_cartera_person_id", "!=", False),
+                ],
+                ["x_route_schedule_id"],
+                ["__count"],
+            ):
+                con_cartera.add(ciclo.id)
         return [
             {
                 "id": s.id,
@@ -100,9 +114,7 @@ class FSMPerson(models.Model):
                 # clientes repartidos (RutaDetalle muestra entonces el
                 # filtro "Mi cartera / Toda la ruta").
                 "mi_persona_id": persona.id,
-                "tiene_cartera": bool(
-                    s.fsm_order_ids.filtered(lambda o: o.x_cartera_person_id)
-                ),
+                "tiene_cartera": s.id in con_cartera,
             }
             for s in schedules
         ]

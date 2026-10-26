@@ -202,7 +202,7 @@ def repartir_carteras(candidatos, n_personas, minimo=MINIMO_CARTERA, reserva_n=R
     mínimo (solo puede pasar en la última)."""
     pool = sorted(
         (c for c in candidatos if c["clase"] in CLASES_CARTERA and c["esperado"] > 0),
-        key=lambda c: c["orden"],
+        key=lambda c: (c["orden"], c["id"]),
     )
     if not pool or n_personas < 1 or minimo <= 0:
         return []
@@ -237,7 +237,7 @@ def repartir_carteras(candidatos, n_personas, minimo=MINIMO_CARTERA, reserva_n=R
                 "persona": idx % usables,
                 "dia": idx // usables,
                 "items": [c["id"] for c in items],
-                "reservas": [c["id"] for c in sorted(reservas, key=lambda c: c["orden"])],
+                "reservas": [c["id"] for c in sorted(reservas, key=lambda c: (c["orden"], c["id"]))],
                 "esperado": round(valor, 2),
                 "completo": valor >= minimo,
             }
