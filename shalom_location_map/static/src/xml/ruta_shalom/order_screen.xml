@@ -406,7 +406,7 @@
                                 <button class="btn btn-primary precarga-todo-btn" t-on-click.stop="() => this.precargarPedido(pedido)">Agregar todo</button>
                             </div>
                             <div t-if="state.pedidoPrecargaAbierto === pedido.id" class="precarga-lineas">
-                                <div t-foreach="pedido.lineas" t-as="linea" t-key="linea.product_id" class="precarga-linea">
+                                <div t-foreach="pedido.lineas" t-as="linea" t-key="linea_index" class="precarga-linea">
                                     <t t-set="prodLinea" t-value="productoDeLinea(linea)"/>
                                     <div class="precarga-linea-nombre">
                                         <span t-esc="linea.nombre"/>
