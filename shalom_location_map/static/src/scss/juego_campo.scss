@@ -9,6 +9,46 @@
 
 .o_shalom_ruta_app {
     // ======================================================================
+    // Celulares: toda la pantalla se desplaza (encabezado, buscador y lista
+    // juntos) en vez de dejar el encabezado fijo y solo la lista con scroll.
+    // ======================================================================
+    @media (max-width: 767px) {
+        .shalom-screen {
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .shalom-screen > .view {
+            flex: 0 0 auto;
+            overflow: visible;
+        }
+        .shalom-screen > .rutas-mapa-wrap {
+            flex: 0 0 auto;
+            height: 62vh;
+        }
+        .topbar-row {
+            flex-wrap: wrap;
+            row-gap: 8px;
+        }
+        .topbar-title {
+            flex: 1 1 140px;
+        }
+        .progress-pill {
+            white-space: nowrap;
+        }
+        .stop-card {
+            flex-wrap: wrap;
+        }
+        .stop-info {
+            flex: 1 1 140px;
+            min-width: 140px;
+        }
+        .chip-clase,
+        .chip-cartera {
+            white-space: nowrap;
+        }
+    }
+
+    // ======================================================================
     // Botón "Avisos" de la pestaña Rutas
     // ======================================================================
     // Orbe flotante: no ocupa espacio en la lista; queda arriba de la
