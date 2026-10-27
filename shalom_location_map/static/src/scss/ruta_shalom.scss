@@ -2305,14 +2305,34 @@
         color: var(--shalom-ink-muted);
     }
     .confirm-card.precarga-card {
-        max-width: 440px;
+        max-width: 520px;
+    }
+    .precarga-foto {
+        flex: none;
+        width: 64px;
+        height: 64px;
+        border-radius: var(--shalom-radius-sm);
+        overflow: hidden;
+        background: var(--shalom-surface-2);
+    }
+    .precarga-foto img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    @media (min-width: 768px) {
+        .precarga-foto {
+            width: 84px;
+            height: 84px;
+        }
     }
     .precarga-lista {
         display: flex;
         flex-direction: column;
         gap: 8px;
         margin-top: 14px;
-        max-height: 52vh;
+        max-height: 62vh;
         overflow-y: auto;
     }
     .precarga-pedido {

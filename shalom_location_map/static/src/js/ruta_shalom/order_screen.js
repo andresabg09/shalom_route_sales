@@ -1045,6 +1045,11 @@ export class OrderScreen extends Component {
         return `/web/image/product.product/${producto.id}/image_1024`;
     }
 
+    /** Miniatura liviana (256px) para las listas; la foto grande queda para el catálogo. */
+    imagenPrecarga(linea) {
+        return `/web/image/product.product/${linea.product_id}/image_256`;
+    }
+
     onImagenError(ev) {
         // La ruta /web/image/... ya devuelve el placeholder propio de
         // Odoo cuando el producto no tiene foto (mismo mecanismo que
@@ -1245,6 +1250,8 @@ export class OrderScreen extends Component {
                 "shalom_pedidos_anteriores",
                 [this.state.locationId]
             );
+            // El pedido más reciente llega desplegado: se ven las fotos y se elige directo.
+            this.state.pedidoPrecargaAbierto = this.state.pedidosAnteriores.length ? this.state.pedidosAnteriores[0].id : null;
         } catch (error) {
             console.error("shalom: error al leer pedidos anteriores", error);
             this.state.pedidosAnteriores = [];

@@ -15,8 +15,9 @@
                 </div>
             </div>
 
-            <button class="avisos-btn" t-if="state.avisosPendientes !== null" t-on-click="abrirAvisos">
-                <i class="fa fa-whatsapp" aria-hidden="true"/> Avisos
+            <button class="avisos-btn" title="Avisos por WhatsApp" aria-label="Avisos por WhatsApp" t-if="state.avisosPendientes !== null" t-on-click="abrirAvisos">
+                <i class="fa fa-whatsapp" aria-hidden="true"/>
+                <span class="avisos-btn-txt">Avisos</span>
                 <span class="avisos-btn-cuenta" t-if="state.avisosPendientes" t-esc="state.avisosPendientes"/>
             </button>
             <Avisos t-if="state.avisosAbiertos" onCerrar.bind="cerrarAvisos"/>
@@ -81,25 +82,24 @@
                         autocomplete="off"
                     />
                 </div>
-            </div>
-
-            <div class="groupby-row">
-                <button class="groupby-btn" t-on-click="toggleMenuPeriodo">
-                    <span>Periodo: <b t-esc="etiquetaPeriodo(state.periodo)"/></span>
-                    <span class="chev">▾</span>
-                </button>
-                <div class="groupby-menu" t-if="state.menuPeriodoAbierto">
-                    <button
-                        t-att-class="state.periodo === 'todos' ? 'active' : ''"
-                        t-on-click="() => this.elegirPeriodo('todos')"
-                    >Todo el periodo</button>
-                    <t t-foreach="semanas" t-as="semana" t-key="semana.date_start">
+                <div class="groupby-row">
+                    <button class="groupby-btn" t-on-click="toggleMenuPeriodo">
+                        <span><i class="fa fa-calendar-o" aria-hidden="true"/> <b t-esc="etiquetaPeriodo(state.periodo)"/></span>
+                        <span class="chev">▾</span>
+                    </button>
+                    <div class="groupby-menu" t-if="state.menuPeriodoAbierto">
                         <button
-                            t-att-class="state.periodo === semana.date_start ? 'active' : ''"
-                            t-on-click="() => this.elegirPeriodo(semana.date_start)"
-                            t-esc="etiquetaPeriodo(semana.date_start)"
-                        />
-                    </t>
+                            t-att-class="state.periodo === 'todos' ? 'active' : ''"
+                            t-on-click="() => this.elegirPeriodo('todos')"
+                        >Todo el periodo</button>
+                        <t t-foreach="semanas" t-as="semana" t-key="semana.date_start">
+                            <button
+                                t-att-class="state.periodo === semana.date_start ? 'active' : ''"
+                                t-on-click="() => this.elegirPeriodo(semana.date_start)"
+                                t-esc="etiquetaPeriodo(semana.date_start)"
+                            />
+                        </t>
+                    </div>
                 </div>
             </div>
 
