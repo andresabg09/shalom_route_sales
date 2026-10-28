@@ -42,6 +42,8 @@ entre que se cerró el primer cliente del ciclo y que se cerró el
 se calculan solos.
 """
 import logging
+import threading
+import time
 from datetime import timedelta
 
 from odoo import _, api, fields, models
@@ -74,6 +76,8 @@ TOPE_VENTAS_PROMEDIO_CAPACIDAD = 3
 # periodicidad del ciclo desde que se TOMA el pedido, sino desde que
 # el cliente lo TIENE en mano.
 SHALOM_DIAS_ENTREGA_HABILES_BODEGA = 4
+# segundos que el cron de reposición trabaja antes de confirmar y re-dispararse
+SHALOM_CRON_PRESUPUESTO_SEG = 45
 
 
 class FSMRouteSchedule(models.Model):
@@ -477,7 +481,16 @@ class FSMRouteSchedule(models.Model):
             ("x_periodicidad_dias", ">", 0),
         ])
         generados = 0
+        pendientes_cron = False
+        inicio = time.monotonic()
         for route in rutas:
+            # Presupuesto de tiempo: un cron tiene límite de tiempo real y
+            # generar todos los ciclos juntos (cientos de visitas) lo
+            # pasaba. Cada ruta se confirma por separado; si queda
+            # trabajo, el cron se vuelve a disparar solo.
+            if time.monotonic() - inicio > SHALOM_CRON_PRESUPUESTO_SEG:
+                pendientes_cron = True
+                break
             ultima = self.search(
                 [("route_id", "=", route.id)],
                 order="date_start desc",
@@ -501,26 +514,43 @@ class FSMRouteSchedule(models.Model):
             ]):
                 continue
 
-            if ultima.estado != "completada":
-                pendientes = len(
-                    ultima.fsm_order_ids.filtered(
-                        lambda o: not o.stage_id.is_closed
-                    )
+            try:
+                with self.env.cr.savepoint():
+                    if ultima.estado != "completada":
+                        pendientes = len(
+                            ultima.fsm_order_ids.filtered(
+                                lambda o: not o.stage_id.is_closed
+                            )
+                        )
+                        ultima.write({
+                            "x_reposicion_incompleta": True,
+                            "x_visitas_pendientes_al_reponer": pendientes,
+                        })
+                        _logger.warning(
+                            "Reposición automática fsm.route id=%s ('%s'): "
+                            "el ciclo anterior (schedule id=%s) no estaba "
+                            "completado (%s visita(s) sin cerrar). Se generó "
+                            "igual el ciclo siguiente.",
+                            route.id, route.name, ultima.id, pendientes,
+                        )
+                    ultima._shalom_crear_ciclo_siguiente(date_start_nuevo=vence)
+                generados += 1
+            except Exception:  # una ruta mala no debe tumbar a las demás
+                _logger.exception(
+                    "Reposición automática: falló la ruta id=%s ('%s'); "
+                    "se sigue con las demás.", route.id, route.name,
                 )
-                ultima.write({
-                    "x_reposicion_incompleta": True,
-                    "x_visitas_pendientes_al_reponer": pendientes,
-                })
-                _logger.warning(
-                    "Reposición automática fsm.route id=%s ('%s'): "
-                    "el ciclo anterior (schedule id=%s) no estaba "
-                    "completado (%s visita(s) sin cerrar). Se generó "
-                    "igual el ciclo siguiente.",
-                    route.id, route.name, ultima.id, pendientes,
-                )
+                continue
+            if not getattr(threading.current_thread(), "testing", False):
+                self.env.cr.commit()
 
-            ultima._shalom_crear_ciclo_siguiente(date_start_nuevo=vence)
-            generados += 1
+        if pendientes_cron:
+            cron = self.env.ref(
+                "shalom_location_map.shalom_cron_reponer_rutas_vencidas",
+                raise_if_not_found=False,
+            )
+            if cron:
+                cron._trigger()
 
         _logger.info(
             "Reposición automática de rutas: %s ciclo(s) generado(s).",

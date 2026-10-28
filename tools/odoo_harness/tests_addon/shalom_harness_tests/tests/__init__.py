@@ -9,3 +9,4 @@ from . import test_70_regresion
 from . import test_85_campo
 from . import test_80_social
 from . import test_90_gerente
+from . import test_95_cron
