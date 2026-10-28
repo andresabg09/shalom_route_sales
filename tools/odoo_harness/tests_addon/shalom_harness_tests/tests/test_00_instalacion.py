@@ -23,4 +23,4 @@ class TestInstalacion(ShalomCommon):
         # cron de reposición desactivado
         cron = env.ref("shalom_location_map.shalom_cron_reponer_rutas_vencidas", raise_if_not_found=False)
         self.assertTrue(cron)
-        self.assertFalse(cron.active)
+        self.assertTrue(cron.active)  # reactivado el 27/10/2026

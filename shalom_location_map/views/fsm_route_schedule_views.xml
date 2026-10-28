@@ -16,16 +16,16 @@
         <field name="name">fsm.route.schedule.list</field>
         <field name="model">fsm.route.schedule</field>
         <field name="arch" type="xml">
-            <list string="Programación de Rutas" decoration-warning="x_reposicion_incompleta">
+            <list string="Programación de Rutas" decoration-warning="x_reposicion_incompleta" multi_edit="0">
                 <field name="route_id" />
                 <field name="fsm_person_id" />
                 <field name="date_start" />
                 <field name="date_end" />
                 <field name="cantidad_clientes" />
-                <field name="x_tiempo_estimado" widget="float_time" />
-                <field name="capacidad" widget="monetary" />
+                <field name="x_tiempo_estimado" widget="float_time" optional="show" />
+                <field name="capacidad" widget="monetary" optional="show" />
                 <field name="estado" widget="badge" decoration-info="estado == 'en_curso'" decoration-success="estado == 'completada'" />
-                <field name="x_reposicion_incompleta" string="Repuesta sin completar" />
+                <field name="x_reposicion_incompleta" string="Repuesta sin completar" optional="hide" />
             </list>
         </field>
     </record>
@@ -160,10 +160,72 @@
         </field>
     </record>
 
+    <record id="fsm_route_schedule_view_search" model="ir.ui.view">
+        <field name="name">fsm.route.schedule.search</field>
+        <field name="model">fsm.route.schedule</field>
+        <field name="arch" type="xml">
+            <search string="Programación de Rutas">
+                <field name="route_id" string="Ruta o vendedor"
+                    filter_domain="['|', ('route_id', 'ilike', self), ('fsm_person_id', 'ilike', self)]" />
+                <field name="fsm_person_id" string="Vendedor" />
+                <separator />
+                <filter name="por_iniciar" string="Por iniciar" domain="[('estado', '=', 'por_iniciar')]" />
+                <filter name="en_curso" string="En curso" domain="[('estado', '=', 'en_curso')]" />
+                <filter name="completada" string="Completadas" domain="[('estado', '=', 'completada')]" />
+                <filter name="abiertas" string="Sin completar" domain="[('estado', '!=', 'completada')]" />
+                <filter name="repuesta_incompleta" string="Repuesta sin completar" domain="[('x_reposicion_incompleta', '=', True)]" />
+                <separator />
+                <filter name="este_mes" string="Este mes"
+                    domain="[('date_start', '&gt;=', (context_today() + relativedelta(day=1)).strftime('%Y-%m-%d')),
+                             ('date_start', '&lt;=', (context_today() + relativedelta(day=31)).strftime('%Y-%m-%d'))]" />
+                <filter name="mes_pasado" string="Mes pasado"
+                    domain="[('date_start', '&gt;=', (context_today() + relativedelta(months=-1, day=1)).strftime('%Y-%m-%d')),
+                             ('date_start', '&lt;=', (context_today() + relativedelta(months=-1, day=31)).strftime('%Y-%m-%d'))]" />
+                <separator />
+                <filter name="archivadas" string="Archivadas" domain="[('active', '=', False)]" />
+                <group expand="0" string="Agrupar por">
+                    <filter name="g_vendedor" string="Vendedor" context="{'group_by': 'fsm_person_id'}" />
+                    <filter name="g_ruta" string="Ruta" context="{'group_by': 'route_id'}" />
+                    <filter name="g_estado" string="Estado" context="{'group_by': 'estado'}" />
+                    <filter name="g_mes" string="Mes de inicio" context="{'group_by': 'date_start:month'}" />
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="fsm_route_schedule_view_kanban" model="ir.ui.view">
+        <field name="name">fsm.route.schedule.kanban</field>
+        <field name="model">fsm.route.schedule</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile" default_group_by="estado" group_create="false" group_delete="false" group_edit="false" records_draggable="false">
+                <field name="estado" />
+                <field name="x_reposicion_incompleta" />
+                <templates>
+                    <t t-name="card">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <field name="route_id" class="fw-bold fs-5" />
+                            <span t-if="record.x_reposicion_incompleta.raw_value" class="badge text-bg-warning">Repuesta sin completar</span>
+                        </div>
+                        <div class="text-muted"><i class="fa fa-user me-1" /><field name="fsm_person_id" /></div>
+                        <div class="mt-1">
+                            <i class="fa fa-calendar-o me-1" />
+                            <field name="date_start" /> → <field name="date_end" />
+                        </div>
+                        <div class="d-flex flex-wrap gap-3 mt-1">
+                            <span><i class="fa fa-users me-1" /><field name="cantidad_clientes" /> clientes</span>
+                            <span><i class="fa fa-money me-1" /><field name="capacidad" widget="monetary" /></span>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
     <record id="fsm_route_schedule_action" model="ir.actions.act_window">
         <field name="name">Programación de Rutas</field>
         <field name="res_model">fsm.route.schedule</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="search_view_id" ref="fsm_route_schedule_view_search" />
         <field name="help">
             Crea una fila por cada ciclo en que se recorre una ruta (no
             todas duran una semana). Esto es lo que alimenta la pestaña

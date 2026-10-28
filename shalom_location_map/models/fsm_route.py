@@ -171,6 +171,20 @@ class FSMRoute(models.Model):
         )
         if abiertas:
             abiertas.write({"stage_id": stage_no_atendido.id})
+        if schedule:
+            # Al regenerar la MISMA ocurrencia, las visitas viejas de este
+            # cliente en ella (ya cerradas, o recién cerradas como "No
+            # atendido") se archivan: así la ruta se ve virgen, solo con
+            # las visitas nuevas por atender. El historial queda archivado.
+            previas = self.env["fsm.order"].search(
+                [
+                    ("location_id", "=", location.id),
+                    ("x_route_schedule_id", "=", schedule.id),
+                    ("stage_id.is_closed", "=", True),
+                ]
+            )
+            if previas:
+                previas.write({"active": False})
 
         vals = {
             "name": f"{self.name} - {location.name}",
