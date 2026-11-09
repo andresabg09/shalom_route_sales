@@ -1,0 +1,233 @@
+// Rediseño de Ruta Shalom (mockup aprobado): tres pantallas con tres caras.
+//   Nivel 1 "Elige tu ruta"      -> cabecera de marca (rosa suave) + mapa grande
+//   Nivel 2 "Dentro de la ruta"  -> cabecera oscura con avance y cliente SIGUIENTE
+//   Nivel 3 "Clientes"           -> directorio sobrio
+// Solo estilos y estructura: ningún botón ni acción se quita. Todo con las
+// variables --shalom-* del tema, así que sirve en claro y oscuro.
+
+// Colores de la cabecera de "Dentro de la ruta": oscura en claro; en oscuro
+// sube un escalón de superficie para que se distinga del fondo.
+.o_shalom_ruta_app {
+    --shalom-nivel2-bg: #271b22;
+    --shalom-nivel2-ink: #ffffff;
+    --shalom-nivel2-line: #5a4651;
+    &[data-shalom-tema="oscuro"] {
+        --shalom-nivel2-bg: #2e1e28;
+        --shalom-nivel2-ink: #f5e9ee;
+        --shalom-nivel2-line: #4a3540;
+    }
+    @media (prefers-color-scheme: dark) {
+        &[data-shalom-tema="dispositivo"] {
+            --shalom-nivel2-bg: #2e1e28;
+            --shalom-nivel2-ink: #f5e9ee;
+            --shalom-nivel2-line: #4a3540;
+        }
+    }
+}
+
+.o_shalom_ruta_app:not(.o_shalom_admin_screen) {
+    // -- Etiqueta de paso -------------------------------------------------
+    .paso-fila {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+    }
+    .paso-chip {
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        padding: 4px 10px;
+        border-radius: 999px;
+    }
+    .paso-camino {
+        font-size: 0.74rem;
+        font-weight: 600;
+        color: var(--shalom-ink-muted);
+    }
+    .paso-etiqueta {
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: var(--shalom-ink-muted);
+    }
+    .quien-chips {
+        margin-left: auto;
+        display: inline-flex;
+        gap: 4px;
+    }
+
+    // -- Nivel 1: Elige tu ruta ----------------------------------------
+    .topbar-nivel1 {
+        background: var(--shalom-accent-soft);
+    }
+    .topbar-nivel1 .route-name {
+        font-size: 1.5rem;
+        line-height: 1.1;
+    }
+
+    // -- Nivel 2: dentro de la ruta (cabecera oscura) --------------------
+    .topbar-nivel2 {
+        background: var(--shalom-nivel2-bg);
+        color: var(--shalom-nivel2-ink);
+        .route-name { font-size: 1.5rem; line-height: 1.1; color: var(--shalom-nivel2-ink); }
+        .paso-camino { color: var(--shalom-nivel2-ink); opacity: 0.7; }
+        .paso-chip { background: var(--shalom-accent-soft); color: var(--shalom-accent); }
+        .progress-pill { background: transparent; padding: 0; color: var(--shalom-nivel2-ink); opacity: 0.85; }
+        .icon-btn,
+        .stock-toggle-btn { color: var(--shalom-nivel2-ink); border-color: var(--shalom-nivel2-line); background: transparent; }
+        .stock-toggle-btn.active { background: var(--shalom-accent); color: var(--shalom-accent-ink); border-color: var(--shalom-accent); }
+    }
+    .avance-barra {
+        height: 8px;
+        border-radius: 999px;
+        background: var(--shalom-nivel2-line);
+        overflow: hidden;
+        margin-top: 8px;
+    }
+    .avance-relleno {
+        height: 100%;
+        background: var(--shalom-completado-soft);
+    }
+    .stop-card.stop-siguiente {
+        border: 2px solid var(--shalom-accent);
+    }
+    .stop-siguiente-tag {
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        color: var(--shalom-accent);
+    }
+    .stop-tomar {
+        flex: none;
+        height: 44px;
+        padding: 0 14px;
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        font-size: 0.82rem;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    // -- Nivel 3: Clientes (directorio sobrio) ----------------------------
+    .topbar-nivel3 {
+        background: var(--shalom-surface);
+        border-bottom: 1px solid var(--shalom-line);
+    }
+
+    // -- Tarjeta de ruta: cuadro con el número de clientes por visitar ------
+    .route-card {
+        flex-direction: row;
+        align-items: center;
+        gap: 12px;
+    }
+    .route-count {
+        flex: none;
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-pendiente);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        b { font-size: 1.15rem; font-weight: 800; line-height: 1; }
+        span { font-size: 0.6rem; font-weight: 700; }
+    }
+    .route-main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .route-chevron {
+        flex: none;
+        color: var(--shalom-ink-muted);
+    }
+
+    // -- Cuerpo del hub y del detalle ------------------------------------
+    .hub-cuerpo,
+    .detalle-cuerpo {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    // -- Tablet horizontal y computadora: mapa y lista lado a lado -----------
+    @media (min-width: 900px) {
+        .hub-cuerpo,
+        .detalle-cuerpo {
+            flex-direction: row;
+            gap: 14px;
+            padding: 0 14px 14px;
+        }
+        .hub-cuerpo .rutas-mapa-wrap {
+            flex: 1;
+            margin: 0;
+            min-height: 0;
+        }
+        .hub-cuerpo .view {
+            flex: none;
+            width: 400px;
+            padding: 0;
+        }
+        .detalle-cuerpo .view {
+            flex: 1;
+            min-width: 0;
+            padding: 0;
+        }
+        .detalle-cuerpo .map-wrap {
+            flex: 1;
+            min-width: 0;
+            min-height: 0;
+        }
+    }
+
+    // -- Computadora: la barra inferior pasa a columna lateral --------------
+    .shalom-marca {
+        display: none;
+    }
+    @media (min-width: 1100px) {
+        flex-direction: row;
+        .bottomnav {
+            order: -1;
+            width: 220px;
+            flex-direction: column;
+            gap: 6px;
+            padding: 20px 12px;
+            border-top: none;
+            border-right: 1px solid var(--shalom-line);
+        }
+        .shalom-marca {
+            display: block;
+            padding: 6px 12px 18px;
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--shalom-accent);
+        }
+        .bottomnav button {
+            flex: none;
+            flex-direction: row;
+            justify-content: flex-start;
+            gap: 12px;
+            padding: 12px 14px;
+            border-radius: 12px;
+            font-size: 0.88rem;
+        }
+        .bottomnav button.active {
+            background: var(--shalom-accent-soft);
+        }
+        .shalom-body {
+            min-width: 0;
+        }
+    }
+}

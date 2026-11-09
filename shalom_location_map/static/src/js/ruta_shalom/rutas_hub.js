@@ -7,6 +7,7 @@ import {TemaSelector} from "./tema_selector";
 import {Avisos} from "./avisos";
 import {JuegoPanel} from "./juego_panel";
 import {Tutorial} from "./tutorial";
+import {useEsAncha} from "./pantalla_utils";
 
 /**
  * Pestaña "Rutas" de la app del vendedor: lista de fsm.route.schedule
@@ -133,6 +134,7 @@ export class RutasHub extends Component {
             avisosPendientes: null,
             avisosAbiertos: false,
         });
+        this.pantalla = useEsAncha();
         this.mapaRef = useRef("mapaRutas");
         this.mapboxMap = null;
         this._mapaSeq = 0;

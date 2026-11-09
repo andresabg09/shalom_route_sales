@@ -15,6 +15,7 @@
             </div>
 
             <div class="bottomnav">
+                <div class="shalom-marca">Ruta Shalom</div>
                 <button
                     t-att-class="(state.screen === 'rutas' || state.screen === 'ruta-detalle') ? 'active' : ''"
                     t-on-click="() => this.irA('rutas')"

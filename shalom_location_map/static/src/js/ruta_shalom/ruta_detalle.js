@@ -10,6 +10,7 @@ import {
     recortarPolilineaDesde,
 } from "./navegacion_utils";
 import {ESTADO_ETIQUETA, estadoDesdeStageName} from "./stage_utils";
+import {useEsAncha} from "./pantalla_utils";
 import {abrirNivel, cerrarNivel} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
 import {VisitSheet} from "./visit_sheet";
@@ -359,6 +360,7 @@ export class RutaDetalle extends Component {
         // Modo conducción (Fase 6B): su propia vigilancia de GPS, solo mientras
         // esta pantalla está montada. No toca nada de la navegación en vivo.
         this.conduccion = useConduccion();
+        this.pantalla = useEsAncha();
 
         onWillStart(() => this.cargar());
         onMounted(() => {
@@ -388,11 +390,11 @@ export class RutaDetalle extends Component {
         // corre, mapaRef.el ya está poblado si la pestaña es "mapa".
         useEffect(
             () => {
-                if (this.state.tab === "mapa" && this.mapaRef.el && !this.state.cargando) {
+                if (this.mapaVisible && this.mapaRef.el && !this.state.cargando) {
                     this.dibujarMapa();
                 }
             },
-            () => [this.state.tab, this.state.cargando]
+            () => [this.mapaVisible, this.state.cargando]
         );
     }
 
@@ -594,7 +596,7 @@ export class RutaDetalle extends Component {
         // useEffect de dibujarMapa): se baja y se sube cargando con un
         // respiro en el medio (dos cuadros de animación: un setTimeout(0)
         // llegaba ANTES del próximo render de Owl y el mapa no se recreaba).
-        if (this.state.tab === "mapa") {
+        if (this.mapaVisible) {
             this.state.cargando = true;
             await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
             this.state.cargando = false;
@@ -690,6 +692,26 @@ export class RutaDetalle extends Component {
         this.conduccion.setCopiloto(true);
     }
 
+    /** El mapa se ve en la pestaña Mapa y, en pantalla ancha, también junto a la lista. */
+    get mapaVisible() {
+        return this.state.tab === "mapa" || this.pantalla.ancha;
+    }
+
+    /** Avance de la ruta (0-100) para la barra de la cabecera. */
+    get porcentajeAvance() {
+        const total = this.state.visitas.length;
+        if (!total) {
+            return 0;
+        }
+        return Math.round((100 * this.visitasVisitadas.length) / total);
+    }
+
+    /** Primer cliente pendiente de la lista: el "SIGUIENTE" destacado. */
+    get siguienteId() {
+        const v = this.visitasPendientes[0];
+        return v ? v.id : null;
+    }
+
     get resumen() {
         const total = this.state.visitas.length;
         const resueltas = this.state.visitas.filter((v) => v.estado !== "pendiente").length;
@@ -744,7 +766,7 @@ export class RutaDetalle extends Component {
         // -- el contenedor del mapa se desmonta (t-if en .map-wrap), así
         // que seguir escribiendo sobre el mapa/GPS desde acá no tendría
         // dónde mostrarse y solo gastaría batería/datos de más.
-        if (this.state.tab === "mapa" && tab !== "mapa") {
+        if (this.state.tab === "mapa" && tab !== "mapa" && !this.pantalla.ancha) {
             this.detenerNavegacion();
         }
         this.state.tab = tab;
@@ -788,7 +810,7 @@ export class RutaDetalle extends Component {
         // El nombre puede haber cambiado -- si el mapa está a la vista,
         // se vuelve a dibujar para que el popup/pin reflejen el dato
         // nuevo (mismo criterio que recargarVisitas() con VisitSheet).
-        if (this.state.tab === "mapa" && this.mapaRef.el) {
+        if (this.mapaVisible && this.mapaRef.el) {
             this.dibujarMapa();
         }
     }

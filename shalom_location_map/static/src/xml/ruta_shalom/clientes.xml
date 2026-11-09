@@ -2,9 +2,10 @@
 <templates xml:space="preserve">
     <t t-name="shalom_location_map.Clientes">
         <div class="shalom-screen clientes-screen">
-            <div class="topbar">
+            <div class="topbar topbar-nivel3">
                 <div class="topbar-row">
                     <div class="topbar-title">
+                        <div class="paso-etiqueta">DIRECTORIO</div>
                         <div class="route-name">Clientes</div>
                         <div class="route-sub"><span>Tu directorio</span></div>
                     </div>

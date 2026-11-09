@@ -2,7 +2,14 @@
 <templates xml:space="preserve">
     <t t-name="shalom_location_map.RutaDetalle">
         <div class="shalom-screen">
-            <div class="topbar">
+            <div class="topbar topbar-nivel2">
+                <div class="paso-fila">
+                    <span class="paso-chip">PASO 2 DE 3 · RUTA</span>
+                    <span class="paso-camino">Ruta → Clientes → Pedido</span>
+                    <span class="quien-chips">
+                        <span t-foreach="state.tomadaPor" t-as="t" t-key="t.person_id" t-attf-class="quien-chip tc-{{t.color}}" t-att-title="t.nombre" t-esc="t.inicial"/>
+                    </span>
+                </div>
                 <div class="topbar-row">
                     <button class="icon-btn" t-on-click="volver" title="Volver a Rutas">←</button>
                     <div class="topbar-title">
@@ -10,6 +17,7 @@
                         <div class="route-sub">
                             <span class="progress-pill" t-if="!state.cargando" t-esc="resumen"/>
                         </div>
+                        <div class="avance-barra" t-if="!state.cargando"><div class="avance-relleno" t-att-style="'width:' + porcentajeAvance + '%'"/></div>
                     </div>
                     <button
                         t-if="!state.cargando"
@@ -77,6 +85,7 @@
             <div t-if="state.cargando" class="shalom-vacio">Cargando visitas…</div>
 
             <t t-else="">
+                <div class="detalle-cuerpo">
                 <div class="view" t-if="state.tab === 'lista'">
                     <div t-if="state.visitas.length === 0" class="shalom-vacio">
                         Todavía no se generaron las visitas de esta semana.
@@ -92,11 +101,12 @@
                         t-foreach="visitasFiltradas"
                         t-as="visita"
                         t-key="visita.id"
-                        t-attf-class="stop-card st-{{visita.estado}}"
+                        t-attf-class="stop-card st-{{visita.estado}} {{visita.id === siguienteId ? 'stop-siguiente' : ''}}"
                         t-on-click="() => this.abrirVisita(visita)"
                     >
                         <div class="stop-num" t-esc="visita.orden"/>
                         <div class="stop-info">
+                            <div class="stop-siguiente-tag" t-if="visita.id === siguienteId">SIGUIENTE</div>
                             <div class="name" t-esc="visita.nombre"/>
                             <div class="addr" t-esc="visita.direccion"/>
                             <div class="addr" t-if="visita.direccion2" t-esc="visita.direccion2"/>
@@ -114,6 +124,11 @@
                             <div class="stop-badge" t-esc="etiquetaEstado(visita.estado)"/>
                         </div>
                         <span
+                            class="stop-tomar"
+                            t-if="visita.id === siguienteId"
+                            t-on-click.stop="() => this.abrirVisita(visita)"
+                        >Tomar pedido</span>
+                        <span
                             class="quick-icon-btn"
                             title="Ir con Waze"
                             t-on-click.stop="() => this.abrirMaps(visita)"
@@ -126,7 +141,7 @@
                     </button>
                 </div>
 
-                <div class="map-wrap" t-if="state.tab === 'mapa'">
+                <div class="map-wrap" t-if="mapaVisible">
                     <div class="shalom-mapa" t-ref="mapa"/>
 
                     <div
@@ -171,6 +186,7 @@
                             title="Centrar en mi ubicación"
                         ><i class="fa fa-crosshairs" aria-hidden="true"/></button>
                     </div>
+                </div>
                 </div>
             </t>
 

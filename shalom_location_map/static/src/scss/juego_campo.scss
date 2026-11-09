@@ -103,11 +103,15 @@
             overflow-y: auto;
             overflow-x: hidden;
         }
-        .shalom-screen > .view {
+        .shalom-screen .view {
             flex: 0 0 auto;
             overflow: visible;
         }
-        .shalom-screen > .rutas-mapa-wrap {
+        .shalom-screen .hub-cuerpo,
+        .shalom-screen .detalle-cuerpo {
+            flex: 0 0 auto;
+        }
+        .shalom-screen .rutas-mapa-wrap {
             flex: 0 0 auto;
             height: 62vh;
         }
