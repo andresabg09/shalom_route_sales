@@ -59,7 +59,7 @@
                 </div>
                 <div class="medidor-barra"><div class="medidor-relleno" t-att-style="'width:' + prog.avance + '%'"/></div>
                 <div class="progreso-juego-mes">
-                    Este mes: <t t-esc="prog.pedidos_mes"/> pedido(s) · $<t t-esc="Math.round(prog.ventas_mes).toLocaleString('en-US')"/> · ★ <t t-esc="prog.estrellas_mes"/>
+                    Este mes: <t t-esc="prog.pedidos_mes"/> pedido(s) · $<t t-esc="Math.round(prog.ventas_mes).toLocaleString('en-US')"/> · <i class="fa fa-star" aria-hidden="true"/> <t t-esc="prog.estrellas_mes"/>
                 </div>
                 <div class="progreso-juego-link">
                     Logros, equipo y temporada ›
@@ -121,10 +121,10 @@
                 <button
                     t-att-class="state.vista === 'lista' ? 'active' : ''"
                     t-on-click="() => this.cambiarVista('lista')"
-                >☰ Lista</button>
+                ><i class="fa fa-list" aria-hidden="true"/> Lista</button>
             </div>
 
-            <div class="hub-cuerpo">
+            <div t-attf-class="hub-cuerpo {{state.vista === 'lista' ? 'lista-sola' : ''}}">
             <div class="rutas-mapa-wrap" t-if="state.vista === 'mapa' and !state.cargando">
                 <div class="rutas-mapa" t-ref="mapaRutas"/>
                 <div class="mapa-leyenda">
@@ -177,10 +177,10 @@
                             />
                         </div>
                         <div class="route-card-stats">
-                            <span t-if="schedule.esperado_mio">💰 Por vender <b t-esc="'~$' + Math.round(schedule.esperado_mio).toLocaleString('en-US')"/></span>
-                            <span>👥 <b t-esc="schedule.cantidad_clientes"/> clientes</span>
-                            <span>⏱ <b t-esc="formatoHoras(schedule.tiempo_estimado)"/> estimadas</span>
-                            <span>💵 <b t-esc="'$' + schedule.capacidad.toFixed(2)"/> capacidad</span>
+                            <span t-if="schedule.esperado_mio"><i class="fa fa-line-chart" aria-hidden="true"/> Por vender <b t-esc="'~$' + Math.round(schedule.esperado_mio).toLocaleString('en-US')"/></span>
+                            <span><i class="fa fa-users" aria-hidden="true"/> <b t-esc="schedule.cantidad_clientes"/> clientes</span>
+                            <span><i class="fa fa-clock-o" aria-hidden="true"/> <b t-esc="formatoHoras(schedule.tiempo_estimado)"/> estimadas</span>
+                            <span><i class="fa fa-money" aria-hidden="true"/> <b t-esc="'$' + schedule.capacidad.toFixed(2)"/> capacidad</span>
                         </div>
                         <div class="addr" t-esc="etiquetaRangoSchedule(schedule)"/>
                         <div class="quien-fila" t-if="schedule.tomada_por and schedule.tomada_por.length">

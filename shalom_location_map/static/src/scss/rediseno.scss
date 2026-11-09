@@ -239,6 +239,19 @@
             width: 400px;
             padding: 0;
         }
+        // Solo lista: tarjetas en cuadrícula a todo el ancho.
+        .hub-cuerpo.lista-sola .view {
+            flex: 1;
+            width: auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 12px;
+            align-content: start;
+            padding: 0 0 14px;
+        }
+        .hub-cuerpo.lista-sola .route-card {
+            margin-bottom: 0;
+        }
         .detalle-cuerpo .view {
             flex: 1;
             min-width: 0;
@@ -289,4 +302,9 @@
             min-width: 0;
         }
     }
+}
+
+.o_shalom_ruta_app:not(.o_shalom_admin_screen) .route-card-stats .fa {
+    color: var(--shalom-ink-muted);
+    margin-right: 2px;
 }

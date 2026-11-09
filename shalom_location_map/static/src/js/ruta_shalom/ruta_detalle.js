@@ -770,6 +770,11 @@ export class RutaDetalle extends Component {
             this.detenerNavegacion();
         }
         this.state.tab = tab;
+        // En pantalla ancha el mapa cambia de ancho al ocultarse/mostrarse la
+        // lista: Mapbox tiene que recalcular su lienzo.
+        requestAnimationFrame(() =>
+            requestAnimationFrame(() => this.mapboxMap && this.mapboxMap.resize())
+        );
     }
 
     /** Único punto de apertura GENUINA de una visita (tap en la Lista)

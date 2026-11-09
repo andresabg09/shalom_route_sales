@@ -51,7 +51,7 @@
                                     </div>
                                 </div>
                                 <div class="av-todos-listos" t-if="!pendientes.length">
-                                    Ya avisaste a todos. 👏
+                                    Ya avisaste a todos. <i class="fa fa-thumbs-up" aria-hidden="true"/>
                                 </div>
                                 <t t-if="avisados.length">
                                     <div class="av-subtitulo">Ya avisados</div>

@@ -24,7 +24,10 @@
                         class="stock-toggle-btn visited-toggle-btn"
                         t-att-class="state.mostrarVisitados ? 'active' : ''"
                         t-on-click="toggleMostrarVisitados"
-                    ><t t-esc="state.mostrarVisitados ? '☰ Pendientes' : '✔ Visitados (' + visitasVisitadas.length + ')'"/></button>
+                    >
+                        <t t-if="state.mostrarVisitados"><i class="fa fa-list" aria-hidden="true"/> Pendientes</t>
+                        <t t-else=""><i class="fa fa-check" aria-hidden="true"/> Visitados (<t t-esc="visitasVisitadas.length"/>)</t>
+                    </button>
                     <TemaSelector/>
                 </div>
             </div>
@@ -75,7 +78,7 @@
                 <button
                     t-att-class="state.tab === 'lista' ? 'active' : ''"
                     t-on-click="() => this.cambiarTab('lista')"
-                >☰ Lista de clientes</button>
+                ><i class="fa fa-list" aria-hidden="true"/> Lista de clientes</button>
                 <button
                     t-att-class="state.tab === 'mapa' ? 'active' : ''"
                     t-on-click="() => this.cambiarTab('mapa')"
@@ -95,7 +98,7 @@
                     <div t-elif="!visitasFiltradas.length" class="shalom-vacio">
                         <t t-if="state.busquedaCliente">No se encontró ningún cliente con ese nombre/dirección.</t>
                         <t t-elif="state.mostrarVisitados">Todavía no hay clientes visitados.</t>
-                        <t t-else="">No quedan clientes pendientes. 🎉</t>
+                        <t t-else="">No quedan clientes pendientes. <i class="fa fa-check-circle" aria-hidden="true"/></t>
                     </div>
                     <button
                         t-foreach="visitasFiltradas"
