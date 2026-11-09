@@ -247,29 +247,42 @@ class FSMRouteSchedule(models.Model):
 
     @api.depends("route_id")
     def _compute_capacidad(self):
-        for rec in self:
-            locations = self.env["fsm.location"].search(
-                [("fsm_route_id", "=", rec.route_id.id)]
-            )
-            total = 0.0
-            for location in locations:
-                partner = location.partner_id
-                if not partner:
-                    continue
-                # Últimas TOPE_VENTAS_PROMEDIO_CAPACIDAD ventas
-                # confirmadas (o menos, si el cliente no tiene tantas)
-                # -- promedio en vez de solo la última, ver el
-                # comentario grande de la constante más arriba.
-                recientes = self.env["sale.order"].search(
-                    [
-                        ("partner_id", "=", partner.id),
-                        ("state", "in", list(ESTADOS_VENTA_CONFIRMADA)),
-                    ],
-                    order="date_order desc",
-                    limit=TOPE_VENTAS_PROMEDIO_CAPACIDAD,
+        # En lote: una consulta de clientes y una de pedidos para TODOS los
+        # ciclos (antes: una búsqueda de pedidos por cada cliente de cada
+        # ruta, lo que hacía lenta la pestaña Rutas).
+        locations = self.env["fsm.location"].search(
+            [("fsm_route_id", "in", self.route_id.ids)]
+        )
+        socios_por_ruta = {}
+        for location in locations:
+            if location.partner_id:
+                socios_por_ruta.setdefault(location.fsm_route_id.id, []).append(
+                    location.partner_id.id
                 )
-                if recientes:
-                    total += sum(recientes.mapped("amount_total")) / len(recientes)
+        socios = {p for ps in socios_por_ruta.values() for p in ps}
+        recientes = {}
+        if socios:
+            # Últimas TOPE_VENTAS_PROMEDIO_CAPACIDAD ventas confirmadas de
+            # cada cliente -- promedio en vez de solo la última, ver el
+            # comentario grande de la constante más arriba.
+            for pedido in self.env["sale.order"].search_read(
+                [
+                    ("partner_id", "in", list(socios)),
+                    ("state", "in", list(ESTADOS_VENTA_CONFIRMADA)),
+                ],
+                ["partner_id", "amount_total"],
+                order="date_order desc, id desc",
+                load="",
+            ):
+                lista = recientes.setdefault(pedido["partner_id"], [])
+                if len(lista) < TOPE_VENTAS_PROMEDIO_CAPACIDAD:
+                    lista.append(pedido["amount_total"])
+        for rec in self:
+            total = 0.0
+            for socio in socios_por_ruta.get(rec.route_id.id, []):
+                montos = recientes.get(socio)
+                if montos:
+                    total += sum(montos) / len(montos)
             rec.capacidad = total
 
     def action_abrir_agregar_visita_wizard(self):

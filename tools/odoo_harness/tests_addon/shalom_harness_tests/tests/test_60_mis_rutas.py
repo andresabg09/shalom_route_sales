@@ -17,7 +17,7 @@ REPO = pathlib.Path(os.environ.get("SHALOM_REPO", "/home/user/shalom_route_sales
 # Versión del método ANTES del cambio de la Fase 4 (commit 502d9e8 = carteras;
 # 119863d^ = justo antes de la Fase 1). Solo cambió en 502d9e8.
 REF_PREVIA = "119863d^"
-NUEVAS = {"es_mia", "tomada_por", "mi_persona_id", "tiene_cartera", "centro_lat", "centro_lng", "pendientes_mios", "esperado_mio", "clientes_con_ventas"}
+NUEVAS = {"pendientes_con_ventas", "es_mia", "tomada_por", "mi_persona_id", "tiene_cartera", "centro_lat", "centro_lng", "pendientes_mios", "esperado_mio", "clientes_con_ventas"}
 
 
 def metodo_previo():

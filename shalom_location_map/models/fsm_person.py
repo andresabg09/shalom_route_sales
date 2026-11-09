@@ -98,8 +98,11 @@ class FSMPerson(models.Model):
                 ["__count"],
             ):
                 con_cartera.add(ciclo.id)
-        centros, mios = self._shalom_mapa_ciclos(persona, schedules, con_cartera)
-        con_ventas = self._shalom_clientes_con_ventas_por_ciclo(schedules)
+        # Una sola pasada de visitas y de historial de ventas para el mapa
+        # y para el filtro de "sin ventas" (antes cada uno lo pedía aparte).
+        locs_por_ciclo, abiertas, perfiles = self._shalom_datos_ciclos(schedules)
+        centros, mios = self._shalom_mapa_ciclos(persona, schedules, con_cartera, abiertas, perfiles)
+        con_ventas = self._shalom_clientes_con_ventas_por_ciclo(locs_por_ciclo, abiertas, perfiles)
         tomas = self.env["shalom.ruta.toma"]._shalom_vigentes(schedules.ids, persona)
         return [
             {
@@ -114,7 +117,10 @@ class FSMPerson(models.Model):
                 "cantidad_clientes": s.cantidad_clientes,
                 # Cuántos clientes del ciclo ya compraron alguna vez: la app
                 # oculta por defecto las rutas donde son 0.
-                "clientes_con_ventas": con_ventas.get(s.id, 0),
+                "clientes_con_ventas": con_ventas.get(s.id, (0, 0))[0],
+                # Visitas por atender de clientes que ya compraron: si es 0 la
+                # ruta no tiene nada que vender y la app la oculta.
+                "pendientes_con_ventas": con_ventas.get(s.id, (0, 0))[1],
                 # Quién está trabajando esta ruta (ver shalom_ruta_toma.py).
                 "tomada_por": tomas.get(s.id, []),
                 "es_mia": s.fsm_person_id == persona,
@@ -139,13 +145,12 @@ class FSMPerson(models.Model):
         ]
 
     @api.model
-    def _shalom_clientes_con_ventas_por_ciclo(self, schedules):
-        """{schedule_id: cuántos clientes del ciclo tienen al menos un
-        pedido confirmado en el sistema} (misma regla de empresas que el
-        juego: sin la de Nevada). Una sola consulta de pedidos para todos
-        los ciclos."""
+    def _shalom_datos_ciclos(self, schedules):
+        """(locs_por_ciclo, abiertas, perfiles) de varios ciclos con pocas
+        consultas: clientes de cada ciclo, visitas abiertas y el perfil de
+        ventas de todos esos clientes (UNA consulta de pedidos)."""
         if not schedules:
-            return {}
+            return {}, [], {}
         Orden = self.env["fsm.order"]
         locs_por_ciclo = {}
         for ciclo, loc in Orden._read_group(
@@ -153,17 +158,34 @@ class FSMPerson(models.Model):
             ["x_route_schedule_id", "location_id"],
         ):
             locs_por_ciclo.setdefault(ciclo.id, set()).add(loc.id)
+        abiertas = Orden.search_read(
+            [("x_route_schedule_id", "in", schedules.ids), ("stage_id.is_closed", "=", False)],
+            ["x_route_schedule_id", "location_id", "x_cartera_person_id"],
+            load="",
+        )
         todas = set().union(*locs_por_ciclo.values()) if locs_por_ciclo else set()
         perfiles = Orden._shalom_perfiles_clientes(
             self.env["fsm.location"].browse(list(todas)).exists()
         )
-        return {
-            ciclo_id: sum(1 for loc_id in locs if perfiles.get(loc_id, {}).get("n"))
-            for ciclo_id, locs in locs_por_ciclo.items()
-        }
+        return locs_por_ciclo, abiertas, perfiles
 
     @api.model
-    def _shalom_mapa_ciclos(self, persona, schedules, con_cartera):
+    def _shalom_clientes_con_ventas_por_ciclo(self, locs_por_ciclo, abiertas, perfiles):
+        """{schedule_id: (clientes del ciclo que ya compraron, visitas por
+        atender de clientes que ya compraron)}. Ventas = pedidos confirmados
+        sin la empresa de Nevada (misma regla del juego)."""
+        con_ventas = lambda loc_id: bool(perfiles.get(loc_id, {}).get("n"))  # noqa: E731
+        resultado = {
+            ciclo_id: [sum(1 for loc_id in locs if con_ventas(loc_id)), 0]
+            for ciclo_id, locs in locs_por_ciclo.items()
+        }
+        for o in abiertas:
+            if o["location_id"] and con_ventas(o["location_id"]) and o["x_route_schedule_id"] in resultado:
+                resultado[o["x_route_schedule_id"]][1] += 1
+        return {k: tuple(v) for k, v in resultado.items()}
+
+    @api.model
+    def _shalom_mapa_ciclos(self, persona, schedules, con_cartera, abiertas, perfiles):
         """Datos para el mapa de rutas de la pestaña Rutas.
 
         Devuelve (centros, mios): centros = {schedule_id: (lat, lng)}
@@ -186,14 +208,6 @@ class FSMPerson(models.Model):
             ["x_cliente_lat:avg", "x_cliente_lng:avg"],
         ):
             centros[ciclo.id] = (lat, lng)
-        abiertas = Orden.search_read(
-            [
-                ("x_route_schedule_id", "in", schedules.ids),
-                ("stage_id.is_closed", "=", False),
-            ],
-            ["x_route_schedule_id", "location_id", "x_cartera_person_id"],
-            load="",
-        )
         mias = [
             o for o in abiertas
             if o["location_id"]
@@ -204,7 +218,6 @@ class FSMPerson(models.Model):
             )
         ]
         locations = self.env["fsm.location"].browse({o["location_id"] for o in mias}).exists()
-        perfiles = Orden._shalom_perfiles_clientes(locations)
         distribuidoras = set(locations.filtered("x_es_distribuidora").ids)
         for o in mias:
             perfil = perfiles.get(o["location_id"])

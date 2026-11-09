@@ -24,6 +24,9 @@ import {Tutorial} from "./tutorial";
 // adelante. Suficiente para que el vendedor vea el mes en curso y el
 // siguiente sin pedirle a oficina que programe con más anticipación.
 const TOMAS_REFRESCO_MS = 30000;
+// Última lista de rutas vista (se conserva al entrar y salir de una ruta).
+let CACHE_RUTAS = null;
+const CACHE_RUTAS_MS = 10 * 60 * 1000;
 const SEMANAS_VENTANA = 8;
 
 const ESTADO_RUTA_ETIQUETA = {
@@ -422,8 +425,20 @@ export class RutasHub extends Component {
         this.state.estrategiasAbiertas = !this.state.estrategiasAbiertas;
     }
 
-    async cargar() {
-        this.state.cargando = true;
+    async cargar(silencioso = false) {
+        // Al volver de una ruta se muestra al instante lo último que se vio
+        // y se refresca por detrás (antes se esperaba la consulta completa).
+        if (!silencioso && CACHE_RUTAS && Date.now() - CACHE_RUTAS.ts < CACHE_RUTAS_MS) {
+            this.state.schedules = CACHE_RUTAS.schedules;
+            this.state.periodo = CACHE_RUTAS.periodo;
+            this._ventana = CACHE_RUTAS.ventana;
+            this.state.cargando = false;
+            this.cargar(true);
+            return;
+        }
+        if (!silencioso) {
+            this.state.cargando = true;
+        }
         const hoy = new Date();
         const desde = inicioSemana(hoy);
         const hasta = new Date(desde);
@@ -437,6 +452,10 @@ export class RutasHub extends Component {
             );
             this.state.schedules = resultado;
             this._ventana = [aFechaStr(desde), aFechaStr(hasta)];
+            if (silencioso) {
+                CACHE_RUTAS = {ts: Date.now(), schedules: resultado, periodo: this.state.periodo, ventana: this._ventana};
+                return;
+            }
 
             // Por defecto, la semana calendario de HOY -- si no hay
             // ninguna ruta cuya semana de arranque sea esta, se cae a
@@ -449,7 +468,12 @@ export class RutasHub extends Component {
                 (s) => aFechaStr(inicioSemana(s.date_start + "T00:00:00")) === semanaDeHoy
             );
             this.state.periodo = hayRutasEstaSemana ? semanaDeHoy : "todos";
+            CACHE_RUTAS = {ts: Date.now(), schedules: resultado, periodo: this.state.periodo, ventana: this._ventana};
         } catch (error) {
+            if (silencioso) {
+                console.error("shalom: error al refrescar las rutas", error);
+                return;
+            }
             this.notification.add(
                 "No se pudieron cargar tus rutas. Revisá tu conexión e intentá de nuevo.",
                 {type: "danger"}
@@ -482,9 +506,10 @@ export class RutasHub extends Component {
         return [...vistas.values()].sort((a, b) => (a.date_start < b.date_start ? -1 : 1));
     }
 
-    /** Ruta sin ventas: ningún cliente ha comprado. Visita Exprés nunca. */
+    /** Ruta sin nada que vender: ningún cliente por atender ha comprado antes
+     * (sin ventas, o ya atendida entera). Visita Exprés nunca. */
     _sinVentas(s) {
-        return !s.es_visita_express && s.clientes_con_ventas === 0;
+        return !s.es_visita_express && s.pendientes_con_ventas === 0;
     }
 
     get cantidadRutasSinVentas() {
