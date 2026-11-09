@@ -103,6 +103,12 @@
                 </div>
             </div>
 
+            <button class="sin-ventas-toggle" t-if="cantidadRutasSinVentas" t-on-click="toggleSinVentas">
+                <i t-attf-class="fa {{state.verSinVentas ? 'fa-eye-slash' : 'fa-eye'}}" aria-hidden="true"/>
+                <t t-if="state.verSinVentas">Ocultar rutas sin ventas</t>
+                <t t-else="">Mostrar <t t-esc="cantidadRutasSinVentas"/> ruta(s) sin ventas</t>
+            </button>
+
             <div class="segmented">
                 <button
                     t-att-class="state.vista === 'mapa' ? 'active' : ''"

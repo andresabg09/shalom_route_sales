@@ -102,6 +102,9 @@ export class RutasHub extends Component {
             cargando: true,
             schedules: [],
             busqueda: "",
+            // Filtro permanente: las rutas donde ningún cliente ha comprado
+            // quedan ocultas; este interruptor las muestra (solo consulta).
+            verSinVentas: false,
             periodo: "todos",
             menuPeriodoAbierto: false,
             // Botón flotante "Estrategias" (qué empujar / no ofrezcas),
@@ -420,6 +423,19 @@ export class RutasHub extends Component {
         return [...vistas.values()].sort((a, b) => (a.date_start < b.date_start ? -1 : 1));
     }
 
+    /** Ruta sin ventas: ningún cliente ha comprado. Visita Exprés nunca. */
+    _sinVentas(s) {
+        return !s.es_visita_express && s.clientes_con_ventas === 0;
+    }
+
+    get cantidadRutasSinVentas() {
+        return this.state.schedules.filter((s) => this._sinVentas(s)).length;
+    }
+
+    toggleSinVentas() {
+        this.state.verSinVentas = !this.state.verSinVentas;
+    }
+
     get schedulesFiltrados() {
         const q = this.state.busqueda.trim().toLowerCase();
         const filtradas = this.state.schedules.filter((s) => {
@@ -430,6 +446,9 @@ export class RutasHub extends Component {
                 }
             }
             if (q && !s.route_name.toLowerCase().includes(q)) {
+                return false;
+            }
+            if (this._sinVentas(s) && !this.state.verSinVentas) {
                 return false;
             }
             return true;

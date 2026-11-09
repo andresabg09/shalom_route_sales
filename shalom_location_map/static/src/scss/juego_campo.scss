@@ -8,6 +8,24 @@
 // compartido.
 
 .o_shalom_ruta_app {
+    .sin-ventas-toggle {
+        flex: none;
+        align-self: flex-start;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0 18px 8px;
+        padding: 6px 12px;
+        border: 1px dashed var(--shalom-line);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--shalom-ink-muted);
+        font-family: inherit;
+        font-size: 0.78rem;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
     // ======================================================================
     // Celulares: toda la pantalla se desplaza (encabezado, buscador y lista
     // juntos) en vez de dejar el encabezado fijo y solo la lista con scroll.

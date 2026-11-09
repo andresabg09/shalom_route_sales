@@ -97,6 +97,7 @@ class FSMPerson(models.Model):
             ):
                 con_cartera.add(ciclo.id)
         centros, mios = self._shalom_mapa_ciclos(persona, schedules, con_cartera)
+        con_ventas = self._shalom_clientes_con_ventas_por_ciclo(schedules)
         return [
             {
                 "id": s.id,
@@ -108,6 +109,9 @@ class FSMPerson(models.Model):
                 "capacidad": s.capacidad,
                 "estado": s.estado,
                 "cantidad_clientes": s.cantidad_clientes,
+                # Cuántos clientes del ciclo ya compraron alguna vez: la app
+                # oculta por defecto las rutas donde son 0.
+                "clientes_con_ventas": con_ventas.get(s.id, 0),
                 # Para que la tarjeta de Visita Exprés se resalte con
                 # el halo de marca en la app del vendedor -- ver
                 # rutas_hub.js/.xml. x_es_visita_express vive en
@@ -127,6 +131,30 @@ class FSMPerson(models.Model):
             }
             for s in schedules
         ]
+
+    @api.model
+    def _shalom_clientes_con_ventas_por_ciclo(self, schedules):
+        """{schedule_id: cuántos clientes del ciclo tienen al menos un
+        pedido confirmado en el sistema} (misma regla de empresas que el
+        juego: sin la de Nevada). Una sola consulta de pedidos para todos
+        los ciclos."""
+        if not schedules:
+            return {}
+        Orden = self.env["fsm.order"]
+        locs_por_ciclo = {}
+        for ciclo, loc in Orden._read_group(
+            [("x_route_schedule_id", "in", schedules.ids), ("location_id", "!=", False)],
+            ["x_route_schedule_id", "location_id"],
+        ):
+            locs_por_ciclo.setdefault(ciclo.id, set()).add(loc.id)
+        todas = set().union(*locs_por_ciclo.values()) if locs_por_ciclo else set()
+        perfiles = Orden._shalom_perfiles_clientes(
+            self.env["fsm.location"].browse(list(todas)).exists()
+        )
+        return {
+            ciclo_id: sum(1 for loc_id in locs if perfiles.get(loc_id, {}).get("n"))
+            for ciclo_id, locs in locs_por_ciclo.items()
+        }
 
     @api.model
     def _shalom_mapa_ciclos(self, persona, schedules, con_cartera):

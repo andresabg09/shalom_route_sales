@@ -348,6 +348,9 @@ export class RutaDetalle extends Component {
             // ya tiene clientes repartidos (schedule.tiene_cartera).
             modoCartera: this.props.schedule.tiene_cartera ? "mi" : "toda",
             visitasTodas: [], // sin filtrar por cartera
+            // Filtro permanente: los clientes que nunca han comprado quedan
+            // ocultos; este interruptor los muestra (solo consulta).
+            verSinVentas: false,
         });
 
         // Modo conducción (Fase 6B): su propia vigilancia de GPS, solo mientras
@@ -482,7 +485,23 @@ export class RutaDetalle extends Component {
      * (día, luego A primero / A2 / B) y numeradas con ese orden. En
      * "Toda la ruta" (o si el ciclo no tiene reparto): todas, como
      * siempre. */
-    _vistaDeVisitas(todas) {
+    _esSinVentas(v) {
+        return !this.props.schedule.es_visita_express && v.clase === "NUEVO";
+    }
+
+    get cantidadSinVentas() {
+        return this.state.visitasTodas.filter((v) => this._esSinVentas(v)).length;
+    }
+
+    toggleSinVentas() {
+        this.state.verSinVentas = !this.state.verSinVentas;
+        this.state.visitas = this._vistaDeVisitas(this.state.visitasTodas);
+    }
+
+    _vistaDeVisitas(todasLasVisitas) {
+        const todas = this.state.verSinVentas
+            ? todasLasVisitas
+            : todasLasVisitas.filter((v) => !this._esSinVentas(v));
         if (!this.props.schedule.tiene_cartera || this.state.modoCartera !== "mi") {
             return todas;
         }
