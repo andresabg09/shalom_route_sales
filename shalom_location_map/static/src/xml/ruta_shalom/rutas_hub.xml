@@ -166,6 +166,13 @@
                             <span>💵 <b t-esc="'$' + schedule.capacidad.toFixed(2)"/> capacidad</span>
                         </div>
                         <div class="addr" t-esc="etiquetaRangoSchedule(schedule)"/>
+                        <div class="quien-fila" t-if="schedule.tomada_por and schedule.tomada_por.length">
+                            <span t-foreach="schedule.tomada_por" t-as="t" t-key="t.person_id" t-attf-class="quien-chip tc-{{t.color}}" t-esc="t.inicial"/>
+                            <span class="quien-txt">
+                                <t t-if="textoQuien(schedule)">La está atendiendo <t t-esc="textoQuien(schedule)"/></t>
+                                <t t-else="">La estás atendiendo tú</t>
+                            </span>
+                        </div>
                     </button>
                 </t>
             </div>

@@ -17,7 +17,7 @@ REPO = pathlib.Path(os.environ.get("SHALOM_REPO", "/home/user/shalom_route_sales
 # Versión del método ANTES del cambio de la Fase 4 (commit 502d9e8 = carteras;
 # 119863d^ = justo antes de la Fase 1). Solo cambió en 502d9e8.
 REF_PREVIA = "119863d^"
-NUEVAS = {"mi_persona_id", "tiene_cartera", "centro_lat", "centro_lng", "pendientes_mios", "esperado_mio", "clientes_con_ventas"}
+NUEVAS = {"es_mia", "tomada_por", "mi_persona_id", "tiene_cartera", "centro_lat", "centro_lng", "pendientes_mios", "esperado_mio", "clientes_con_ventas"}
 
 
 def metodo_previo():
@@ -59,8 +59,10 @@ class TestMisRutas(ShalomCommon):
     # ------------------------------------------------------------------
     def test_sin_carteras_solo_el_dueno(self):
         self.assertEqual(self._ids(self.u_a), [self.ciclo.id])
-        self.assertEqual(self._ids(self.u_b), [])
-        self.assertEqual(self._ids(self.u_c), [])
+        # rutas libres: todos la ven, solo A es la dueña
+        self.assertEqual(self._ids(self.u_b), [self.ciclo.id])
+        self.assertEqual(self._ids(self.u_c), [self.ciclo.id])
+        self.assertFalse(self._mis(self.u_b)[0]["es_mia"])
         r = self._mis(self.u_a)[0]
         self.assertFalse(r["tiene_cartera"])
         self.assertEqual(r["mi_persona_id"], self.per_a.id)
@@ -77,15 +79,15 @@ class TestMisRutas(ShalomCommon):
         self.assertEqual([r["id"] for r in ra], [self.ciclo.id], "sin duplicados aunque sea dueño Y tenga cartera")
         self.assertTrue(ra[0]["tiene_cartera"])
         self.assertEqual(ra[0]["mi_persona_id"], self.per_a.id)
-        self.assertEqual(self._ids(self.u_c), [], "el tercero no ve la ruta")
+        self.assertEqual(self._ids(self.u_c), [self.ciclo.id], "rutas libres: el tercero también la ve")
         # el dueño también ve la ruta si el reparto es solo de B y C
         self._repartir([self.per_b, self.per_c])
         self.assertEqual(self._ids(self.u_a), [self.ciclo.id])
         self.assertEqual(self._ids(self.u_c), [self.ciclo.id])
         # limpiar: B y C dejan de verla
         self.env["fsm.route.schedule"].with_user(self.u_mgr).shalom_admin_limpiar_cartera(self.ciclo.id)
-        self.assertEqual(self._ids(self.u_b), [])
-        self.assertEqual(self._ids(self.u_c), [])
+        self.assertFalse(self._mis(self.u_b)[0]["tiene_cartera"])
+        self.assertFalse(self._mis(self.u_c)[0]["tiene_cartera"])
         self.assertFalse(self._mis(self.u_a)[0]["tiene_cartera"])
 
     def test_datos_del_mapa_de_rutas(self):
@@ -104,12 +106,12 @@ class TestMisRutas(ShalomCommon):
         self.assertLess(ra["esperado_mio"], total_dueno + 0.01)
         self.assertGreater(rb["esperado_mio"], 0)
         self.assertAlmostEqual(ra["pendientes_mios"] + rb["pendientes_mios"], r["pendientes_mios"], delta=0)
-        # un tercero sin cartera no ve la ruta
-        self.assertEqual(self._mis(self.u_c), [])
+        # un tercero sin cartera ve la ruta (libre) pero no le toca nada
+        self.assertEqual(self._mis(self.u_c)[0]["pendientes_mios"], 0)
 
     def test_vendedor_sin_persona_o_admin(self):
         self.assertEqual(self.env["fsm.person"].shalom_mis_rutas_programadas(self.ds, self.de), [])  # OdooBot
-        self.assertEqual(self._mis(self.u_min), [])
+        self.assertTrue(all(not r["es_mia"] for r in self._mis(self.u_min)))
 
     def test_cartera_en_visitas_cerradas_sigue_viendo_ciclo(self):
         """B tiene cartera pero TODAS sus visitas ya cerraron: el ciclo
@@ -178,7 +180,7 @@ class TestMisRutas(ShalomCommon):
                 nuevo = self.env["fsm.person"].with_user(user).shalom_mis_rutas_programadas(ds, de)
                 viejo = previo(self.env["fsm.person"].with_user(user), ds, de)
                 vistos += len(viejo)
-                self.assertEqual([{k: v for k, v in r.items() if k not in NUEVAS} for r in nuevo], viejo,
+                self.assertEqual([{k: v for k, v in r.items() if k not in NUEVAS} for r in nuevo if r["es_mia"]], viejo,
                                  (user.login, ds, de))
                 for r in nuevo:
                     self.assertEqual(set(r) & NUEVAS, NUEVAS)
@@ -190,4 +192,4 @@ class TestMisRutas(ShalomCommon):
         antes = previo(self.env["fsm.person"].with_user(self.u_a), self.ds, self.de)
         self._repartir([self.per_a, self.per_b])
         despues = self._mis(self.u_a)
-        self.assertEqual([{k: v for k, v in r.items() if k not in NUEVAS} for r in despues], antes)
+        self.assertEqual([{k: v for k, v in r.items() if k not in NUEVAS} for r in despues if r["es_mia"]], antes)

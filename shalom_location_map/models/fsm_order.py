@@ -823,8 +823,14 @@ class FSMOrder(models.Model):
                 xp = juego_utils.xp_pedido(utilidad, n_estrellas, dia)
                 # El XP es del dueño de la visita (cartera o ruta); si un
                 # administrador confirma desde "En vivo", no se le queda a él.
+                # Con rutas libres, el XP es de quien vendió (el vendedor
+                # logueado); un administrador no se lo lleva por confirmar.
+                actual = self.env["fsm.person"]._shalom_persona_actual()
+                if self.env.user.has_group("fieldservice.group_fsm_manager"):
+                    actual = self.env["fsm.person"]
                 persona = (
                     self.x_cartera_person_id
+                    or actual
                     or self.fsm_route_id.fsm_person_id
                     or self.env["fsm.person"]._shalom_persona_actual()
                 )
@@ -1788,11 +1794,32 @@ class FSMOrder(models.Model):
 
         res = super().write(vals)
 
+        if "stage_id" in vals:
+            self._shalom_marcar_ruta_tomada(vals["stage_id"])
+
         if ids_a_calcular and not jornada_manual:
             for order in self.browse(ids_a_calcular):
                 order.x_jornada = order._calcular_jornada()
 
         return res
+
+    def _shalom_marcar_ruta_tomada(self, stage_id):
+        """Al resolver una visita (completada, no quiso, cancelada), el
+        vendedor que la resolvió queda como quien está trabajando esa
+        ruta. "No atendido" lo pone el sistema al regenerar un ciclo: no
+        cuenta como trabajo de nadie."""
+        stage = self.env["fsm.stage"].browse(stage_id)
+        no_atendido = self.env.ref(
+            "shalom_location_map.shalom_fsm_stage_no_atendido", raise_if_not_found=False
+        )
+        if not stage.is_closed or stage == no_atendido:
+            return
+        persona = self.env["fsm.person"]._shalom_persona_actual()
+        if not persona:
+            return
+        Toma = self.env["shalom.ruta.toma"]
+        for ciclo in self.mapped("x_route_schedule_id"):
+            Toma._shalom_tomar(ciclo, persona)
 
     def action_shalom_archivar_visita(self):
         """Botón 'Eliminar' (papelera) en la lista de 'Visitas

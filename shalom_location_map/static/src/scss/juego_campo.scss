@@ -8,6 +8,77 @@
 // compartido.
 
 .o_shalom_ruta_app {
+    // ======================================================================
+    // Rutas libres: quién está trabajando cada ruta (letra + color)
+    // ======================================================================
+    .tc-0 { background: #1d4ed8; }
+    .tc-1 { background: #b91c1c; }
+    .tc-2 { background: #15803d; }
+    .tc-3 { background: #a16207; }
+    .tc-4 { background: #7e22ce; }
+    .tc-5 { background: #0e7490; }
+    .quien-chip,
+    .shalom-ruta-pin-quien {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        color: #fff;
+        font-size: 0.72rem;
+        font-weight: 800;
+        line-height: 1;
+        flex: none;
+    }
+    .shalom-ruta-pin-quien {
+        position: absolute;
+        top: -8px;
+        border: 2px solid var(--shalom-surface, #fff);
+    }
+    .shalom-ruta-pin {
+        position: relative;
+    }
+    .quien-fila,
+    .quien-banner {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .quien-fila {
+        margin-top: 6px;
+    }
+    .quien-banner {
+        margin: 0 18px 8px;
+        padding: 8px 10px;
+        border-radius: 12px;
+        background: var(--shalom-surface-2);
+    }
+    .quien-txt {
+        flex: 1 1 140px;
+        font-size: 0.78rem;
+        color: var(--shalom-ink-muted);
+    }
+    .quien-btn {
+        flex: none;
+        margin-left: auto;
+        padding: 6px 12px;
+        border: none;
+        border-radius: 999px;
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        font-family: inherit;
+        font-size: 0.78rem;
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .quien-btn-suelta {
+        background: transparent;
+        color: var(--shalom-ink-muted);
+        border: 1px solid var(--shalom-line);
+    }
+
     .sin-ventas-toggle {
         flex: none;
         align-self: flex-start;

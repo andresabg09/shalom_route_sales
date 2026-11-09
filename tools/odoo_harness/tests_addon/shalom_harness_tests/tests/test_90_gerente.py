@@ -248,12 +248,13 @@ class TestGerente(ShalomCommon):
         res = self._R().shalom_admin_reparto_rutas()
         vendedor, _ruta = self._ruta_en(res, self.ruta.id)
         self.assertEqual(vendedor["persona_nombre"], "Persona C")
-        # y en la app del vendedor: C ve el ciclo; A (sin cartera de por medio) ya no
+        # y en la app del vendedor: C ve el ciclo como suyo (A también lo ve: rutas libres)
         hoy = fields.Date.to_string(self.hoy)
         fin = fields.Date.to_string(self.hoy + timedelta(days=6))
         P = self.env["fsm.person"]
         self.assertIn(self.ciclo.id, [x["id"] for x in P.with_user(self.u_c).shalom_mis_rutas_programadas(hoy, fin)])
-        self.assertNotIn(self.ciclo.id, [x["id"] for x in P.with_user(self.u_a).shalom_mis_rutas_programadas(hoy, fin)])
+        self.assertTrue(next(x for x in P.with_user(self.u_c).shalom_mis_rutas_programadas(hoy, fin) if x["id"] == self.ciclo.id)["es_mia"])
+        self.assertFalse(next(x for x in P.with_user(self.u_a).shalom_mis_rutas_programadas(hoy, fin) if x["id"] == self.ciclo.id)["es_mia"])
 
     # ------------------------------------------------------------------
     # cómo va el mes

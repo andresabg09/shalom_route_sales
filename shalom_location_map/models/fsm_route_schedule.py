@@ -562,6 +562,51 @@ class FSMRouteSchedule(models.Model):
     # vendedores (Fase 4 del juego de ventas)
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Rutas libres: quién la está trabajando y estado en vivo
+    # ------------------------------------------------------------------
+
+    @api.model
+    def _shalom_vendedor_y_ciclo(self, schedule_id):
+        if not self.env.user.has_group("fieldservice.group_fsm_user"):
+            raise AccessError(_("Esta acción es solo para el personal de Servicio de Campo."))
+        persona = self.env["fsm.person"]._shalom_persona_actual()
+        ciclo = self.sudo().browse(schedule_id).exists()
+        return persona, ciclo
+
+    @api.model
+    def shalom_tomar_ruta(self, schedule_id):
+        """Botón "Tomar esta ruta": avisa al otro vendedor que ya la vas a
+        atender. No la bloquea: dos vendedores pueden repartirse una ruta."""
+        persona, ciclo = self._shalom_vendedor_y_ciclo(schedule_id)
+        if persona and ciclo:
+            self.env["shalom.ruta.toma"]._shalom_tomar(ciclo, persona, manual=True)
+        return self.env["shalom.ruta.toma"]._shalom_vigentes([schedule_id], persona).get(schedule_id, [])
+
+    @api.model
+    def shalom_soltar_ruta(self, schedule_id):
+        persona, ciclo = self._shalom_vendedor_y_ciclo(schedule_id)
+        if persona and ciclo:
+            self.env["shalom.ruta.toma"]._shalom_soltar(ciclo, persona)
+        return self.env["shalom.ruta.toma"]._shalom_vigentes([schedule_id], persona).get(schedule_id, [])
+
+    @api.model
+    def shalom_estado_ruta(self, schedule_id):
+        """Consulta liviana para refrescar la ruta abierta sin recargarla:
+        {"visitas": {id: nombre de la etapa}, "tomada_por": [...]}. Solo
+        ids y etapas, nada de montos."""
+        persona, ciclo = self._shalom_vendedor_y_ciclo(schedule_id)
+        if not ciclo:
+            return {"visitas": {}, "tomada_por": []}
+        visitas = self.env["fsm.order"].sudo().search_read(
+            [("x_route_schedule_id", "=", ciclo.id)], ["stage_id"], load=""
+        )
+        etapas = {e.id: e.name for e in self.env["fsm.stage"].sudo().browse({v["stage_id"] for v in visitas if v["stage_id"]})}
+        return {
+            "visitas": {v["id"]: etapas.get(v["stage_id"], "") for v in visitas},
+            "tomada_por": self.env["shalom.ruta.toma"]._shalom_vigentes([ciclo.id], persona).get(ciclo.id, []),
+        }
+
     @api.model
     def _shalom_exigir_admin(self):
         if not self.env.user.has_group("fieldservice.group_fsm_manager"):

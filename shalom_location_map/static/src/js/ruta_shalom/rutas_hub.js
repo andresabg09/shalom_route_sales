@@ -23,6 +23,7 @@ import {Tutorial} from "./tutorial";
 // Ventana de consulta: desde el lunes de esta semana, 8 semanas hacia
 // adelante. Suficiente para que el vendedor vea el mes en curso y el
 // siguiente sin pedirle a oficina que programe con más anticipación.
+const TOMAS_REFRESCO_MS = 30000;
 const SEMANAS_VENTANA = 8;
 
 const ESTADO_RUTA_ETIQUETA = {
@@ -142,16 +143,58 @@ export class RutasHub extends Component {
                     this.quitarMapa();
                 }
             },
-            () => [this.state.vista, this.state.cargando, this.schedulesFiltrados.map((s) => s.id).join(",")]
+            () => [
+                this.state.vista,
+                this.state.cargando,
+                this.schedulesFiltrados.map((s) => s.id).join(","),
+                this.firmaTomas,
+            ]
         );
-        onWillUnmount(() => this.quitarMapa());
+        onWillUnmount(() => {
+            this.quitarMapa();
+            clearInterval(this._tomasTimer);
+        });
         onWillStart(() => this.cargar());
         onMounted(() => {
+            // Quién trabaja cada ruta cambia mientras estás en el mapa: se
+            // refresca solo cada 30 s (y al volver a la pestaña).
+            this._tomasTimer = setInterval(() => !document.hidden && this.refrescarTomas(), TOMAS_REFRESCO_MS);
             this.cargarEstrategias();
             this.cargarProgreso();
             this.cargarAvisos();
             this.cargarTutorial();
         });
+    }
+
+    /** Texto estable de quién tiene cada ruta: si cambia, el mapa se redibuja. */
+    get firmaTomas() {
+        return this.state.schedules
+            .map((s) => (s.tomada_por || []).map((t) => t.person_id).join("+"))
+            .join(",");
+    }
+
+    async refrescarTomas() {
+        if (!this._ventana || this.state.cargando) {
+            return;
+        }
+        try {
+            const nuevas = await this.orm.call("fsm.person", "shalom_mis_rutas_programadas", this._ventana);
+            const porId = new Map(nuevas.map((s) => [s.id, s]));
+            for (const s of this.state.schedules) {
+                const n = porId.get(s.id);
+                if (n) {
+                    s.tomada_por = n.tomada_por;
+                }
+            }
+        } catch (error) {
+            console.error("shalom: error al refrescar quién trabaja las rutas", error);
+        }
+    }
+
+    /** "Luis", "Luis y Milciades" -- quién la está atendiendo (sin contarme a mí). */
+    textoQuien(schedule) {
+        const otros = (schedule.tomada_por || []).filter((t) => !t.es_yo).map((t) => t.nombre.split(" ")[0]);
+        return otros.length ? otros.join(" y ") : "";
     }
 
     async cargarAvisos() {
@@ -314,6 +357,14 @@ export class RutasHub extends Component {
                     texto.className = "shalom-ruta-pin-txt";
                     texto.textContent = dineroCorto(s.esperado_mio) || String(s.cantidad_clientes);
                     pinEl.appendChild(texto);
+                    // Una letra de color por vendedor que ya la está atendiendo.
+                    (s.tomada_por || []).forEach((t, i) => {
+                        const quien = document.createElement("span");
+                        quien.className = `shalom-ruta-pin-quien tc-${t.color}`;
+                        quien.style.right = `${-6 + i * 14}px`;
+                        quien.textContent = t.inicial;
+                        pinEl.appendChild(quien);
+                    });
 
                     const popupEl = document.createElement("div");
                     popupEl.className = "shalom-map-popup";
@@ -328,6 +379,13 @@ export class RutasHub extends Component {
                         (s.esperado_mio ? ` · ~$${Math.round(s.esperado_mio).toLocaleString("en-US")} esperados` : "") +
                         ` · ${this.etiquetaRangoSchedule(s)}`;
                     popupEl.appendChild(detalleEl);
+                    const quienTxt = this.textoQuien(s);
+                    if (quienTxt) {
+                        const quienEl = document.createElement("div");
+                        quienEl.className = "shalom-map-popup-detalle";
+                        quienEl.textContent = `La está atendiendo ${quienTxt}`;
+                        popupEl.appendChild(quienEl);
+                    }
                     const botonEl = document.createElement("button");
                     botonEl.type = "button";
                     botonEl.className = "shalom-map-popup-btn shalom-map-popup-btn-nav";
@@ -378,6 +436,7 @@ export class RutasHub extends Component {
                 [aFechaStr(desde), aFechaStr(hasta)]
             );
             this.state.schedules = resultado;
+            this._ventana = [aFechaStr(desde), aFechaStr(hasta)];
 
             // Por defecto, la semana calendario de HOY -- si no hay
             // ninguna ruta cuya semana de arranque sea esta, se cae a

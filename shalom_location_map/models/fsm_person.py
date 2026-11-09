@@ -65,13 +65,12 @@ class FSMPerson(models.Model):
         persona = self._shalom_persona_actual()
         if not persona:
             return []
-        # Rutas que tengo asignadas O donde el reparto de carteras me dio
-        # clientes (dos vendedores pueden compartir una ruta).
+        # Las rutas son LIBRES: cualquier vendedor ve todas y elige cuál
+        # atender; la marca de quién la está trabajando sale en
+        # "tomada_por" (ver shalom_ruta_toma.py). La Visita Exprés sigue
+        # siendo solo de su vendedor.
         schedules = self.env["fsm.route.schedule"].search(
             [
-                "|",
-                ("fsm_person_id", "=", persona.id),
-                ("fsm_order_ids.x_cartera_person_id", "=", persona.id),
                 "|",
                 "&", ("date_start", "<=", date_end), ("date_end", ">=", date_start),
                 ("estado", "!=", "completada"),
@@ -80,7 +79,10 @@ class FSMPerson(models.Model):
         )
         schedules = schedules.filtered(
             lambda s: not s.route_id.x_es_visita_express
-            or s.fsm_order_ids.filtered(lambda o: not o.stage_id.is_closed)
+            or (
+                s.fsm_person_id == persona
+                and s.fsm_order_ids.filtered(lambda o: not o.stage_id.is_closed)
+            )
         )
         # Ciclos que ya tienen clientes repartidos (una sola consulta
         # agrupada; recorrer fsm_order_ids de cada ciclo cargaba todas las
@@ -98,6 +100,7 @@ class FSMPerson(models.Model):
                 con_cartera.add(ciclo.id)
         centros, mios = self._shalom_mapa_ciclos(persona, schedules, con_cartera)
         con_ventas = self._shalom_clientes_con_ventas_por_ciclo(schedules)
+        tomas = self.env["shalom.ruta.toma"]._shalom_vigentes(schedules.ids, persona)
         return [
             {
                 "id": s.id,
@@ -112,6 +115,9 @@ class FSMPerson(models.Model):
                 # Cuántos clientes del ciclo ya compraron alguna vez: la app
                 # oculta por defecto las rutas donde son 0.
                 "clientes_con_ventas": con_ventas.get(s.id, 0),
+                # Quién está trabajando esta ruta (ver shalom_ruta_toma.py).
+                "tomada_por": tomas.get(s.id, []),
+                "es_mia": s.fsm_person_id == persona,
                 # Para que la tarjeta de Visita Exprés se resalte con
                 # el halo de marca en la app del vendedor -- ver
                 # rutas_hub.js/.xml. x_es_visita_express vive en
@@ -180,7 +186,6 @@ class FSMPerson(models.Model):
             ["x_cliente_lat:avg", "x_cliente_lng:avg"],
         ):
             centros[ciclo.id] = (lat, lng)
-        duenio = {s.id: s.fsm_person_id.id for s in schedules}
         abiertas = Orden.search_read(
             [
                 ("x_route_schedule_id", "in", schedules.ids),
@@ -195,7 +200,7 @@ class FSMPerson(models.Model):
             and (
                 o["x_cartera_person_id"] == persona.id
                 if o["x_route_schedule_id"] in con_cartera
-                else duenio.get(o["x_route_schedule_id"]) == persona.id
+                else True  # ruta libre sin reparto: todo el ciclo está disponible
             )
         ]
         locations = self.env["fsm.location"].browse({o["location_id"] for o in mias}).exists()

@@ -10,3 +10,4 @@ from . import shalom_gerente
 from . import shalom_juego
 from . import juego_campo
 from . import juego_social
+from . import shalom_ruta_toma

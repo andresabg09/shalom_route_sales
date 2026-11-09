@@ -32,6 +32,15 @@
                 </div>
             </div>
 
+            <div class="quien-banner" t-if="!state.cargando">
+                <t t-if="otrosQuienes">
+                    <span t-foreach="state.tomadaPor" t-as="t" t-key="t.person_id" t-attf-class="quien-chip tc-{{t.color}}" t-if="!t.es_yo" t-esc="t.inicial"/>
+                    <span class="quien-txt">La está atendiendo <b t-esc="otrosQuienes"/>. Puedes entrar igual y repartirse los clientes.</span>
+                </t>
+                <button class="quien-btn" t-if="!yoLaTengo" t-on-click="tomarRuta">Tomar esta ruta</button>
+                <button class="quien-btn quien-btn-suelta" t-else="" t-on-click="soltarRuta">Soltar ruta</button>
+            </div>
+
             <button class="sin-ventas-toggle" t-if="!state.cargando &amp;&amp; cantidadSinVentas" t-on-click="toggleSinVentas">
                 <i t-attf-class="fa {{state.verSinVentas ? 'fa-eye-slash' : 'fa-eye'}}" aria-hidden="true"/>
                 <t t-if="state.verSinVentas">Ocultar clientes sin ventas</t>

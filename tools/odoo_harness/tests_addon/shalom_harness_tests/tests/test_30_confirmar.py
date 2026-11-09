@@ -308,7 +308,7 @@ class TestConfirmarPedido(ShalomCommon):
         self.assertIsNotNone(res["juego"])
         self.assertEqual(res["juego"]["refs"]["n"], 3)
         self.assertEqual(res["juego"]["estrellas"], 3)
-        self.assertEqual(self._eventos().sorted("id")[-1].person_id, self.per_a)
+        self.assertEqual(self._eventos().sorted("id")[-1].person_id, self.per_own)  # el XP es de quien vendió (rutas libres)
 
     def test_confirmar_fsm_user_sin_grupo_de_ventas(self):
         """INFORMATIVO: cuál es el comportamiento de un usuario con SOLO

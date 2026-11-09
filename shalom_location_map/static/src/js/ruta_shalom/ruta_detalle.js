@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import {Component, onWillStart, onWillUnmount, useEffect, useRef, useState} from "@odoo/owl";
+import {Component, onMounted, onWillStart, onWillUnmount, useEffect, useRef, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {cargarMapboxGl, getMapboxToken, parseWktLineString} from "./mapbox_utils";
 import {
@@ -43,6 +43,7 @@ const COLOR_MARCADOR = {
 // encima (típico de Android con "ubicación aproximada" en vez de
 // "precisa"), se descarta: un punto ausente es mejor que uno a
 // kilómetros de la posición real.
+const SONDEO_RUTA_MS = 8000; // cada cuánto se revisa si otro vendedor resolvió clientes
 const PRECISION_MAXIMA_ACEPTABLE_M = 500;
 
 // Margen (px) entre el borde real del mapa y dónde se dibuja la
@@ -351,6 +352,8 @@ export class RutaDetalle extends Component {
             // Filtro permanente: los clientes que nunca han comprado quedan
             // ocultos; este interruptor los muestra (solo consulta).
             verSinVentas: false,
+            // Quién está trabajando esta ruta (se refresca solo, ver sondearRuta).
+            tomadaPor: this.props.schedule.tomada_por || [],
         });
 
         // Modo conducción (Fase 6B): su propia vigilancia de GPS, solo mientras
@@ -358,7 +361,13 @@ export class RutaDetalle extends Component {
         this.conduccion = useConduccion();
 
         onWillStart(() => this.cargar());
+        onMounted(() => {
+            // Rutas libres: si el otro vendedor resuelve un cliente, aquí se
+            // marca solo (cada 8 s), sin salir ni refrescar la página.
+            this._sondeoTimer = setInterval(() => !document.hidden && this.sondearRuta(), SONDEO_RUTA_MS);
+        });
         onWillUnmount(() => {
+            clearInterval(this._sondeoTimer);
             this.detenerNavegacion();
             if (this.mapboxMap) {
                 this.mapboxMap.remove();
@@ -385,6 +394,65 @@ export class RutaDetalle extends Component {
             },
             () => [this.state.tab, this.state.cargando]
         );
+    }
+
+    /** Nombres de los OTROS vendedores que la atienden ("Luis y Milciades"). */
+    get otrosQuienes() {
+        return this.state.tomadaPor
+            .filter((t) => !t.es_yo)
+            .map((t) => t.nombre.split(" ")[0])
+            .join(" y ");
+    }
+
+    get yoLaTengo() {
+        return this.state.tomadaPor.some((t) => t.es_yo);
+    }
+
+    async tomarRuta() {
+        this.state.tomadaPor = await this.orm.call("fsm.route.schedule", "shalom_tomar_ruta", [this.props.schedule.id]);
+    }
+
+    async soltarRuta() {
+        this.state.tomadaPor = await this.orm.call("fsm.route.schedule", "shalom_soltar_ruta", [this.props.schedule.id]);
+    }
+
+    /** Trae el estado de las visitas de este ciclo y marca las que otro
+     * vendedor ya resolvió (completada, no quiso, cancelada). */
+    async sondearRuta() {
+        if (this.state.cargando || this._sondeando) {
+            return;
+        }
+        this._sondeando = true;
+        try {
+            const res = await this.orm.call("fsm.route.schedule", "shalom_estado_ruta", [this.props.schedule.id]);
+            this.state.tomadaPor = res.tomada_por;
+            const cambiadas = [];
+            for (const v of this.state.visitasTodas) {
+                const nombreEtapa = res.visitas[v.id];
+                if (nombreEtapa === undefined) {
+                    continue;
+                }
+                const nuevo = estadoDesdeStageName(nombreEtapa);
+                if (nuevo !== v.estado) {
+                    if (v.estado === "pendiente") {
+                        cambiadas.push(v);
+                    }
+                    v.estado = nuevo;
+                }
+            }
+            if (cambiadas.length) {
+                this.state.visitas = this._vistaDeVisitas(this.state.visitasTodas);
+                const nombres = cambiadas.slice(0, 3).map((v) => v.nombre).join(", ");
+                this.notification.add(
+                    `Ya atendieron: ${nombres}${cambiadas.length > 3 ? ` y ${cambiadas.length - 3} más` : ""}.`,
+                    {type: "info"}
+                );
+            }
+        } catch (error) {
+            console.error("shalom: error al sondear la ruta", error);
+        } finally {
+            this._sondeando = false;
+        }
     }
 
     async cargar() {
