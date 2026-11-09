@@ -69,8 +69,16 @@ class TestRegresionAdmin(ShalomCommon):
         self.assertEqual([r["name"] for r in P.with_user(self.u_a).shalom_mis_rutas()], ["R1 prueba"])
         self.assertEqual(P.with_user(self.u_b).shalom_mis_rutas(), [])
         self.assertEqual([r["name"] for r in P.with_user(self.u_mgr).shalom_mis_rutas()], ["R1 prueba", "Visita Exprés"])  # gerente: todas
+        # rutas libres: todos los vendedores ven todos los clientes
         self.assertEqual(len(P.with_user(self.u_a).shalom_mis_clientes()), 20)
-        self.assertEqual(len(P.with_user(self.u_a).shalom_mis_cotizaciones()) > 0, True)
+        self.assertEqual(len(P.with_user(self.u_b).shalom_mis_clientes()), 20)
+        # cotizaciones: solo las propias
+        socio = self.clientes["A1"].partner_id
+        propia = self.env["sale.order"].with_user(self.u_a).create({"partner_id": socio.id})
+        ajena = self.env["sale.order"].with_user(self.u_b).create({"partner_id": socio.id})
+        ids_a = [c["id"] for c in P.with_user(self.u_a).shalom_mis_cotizaciones()]
+        self.assertIn(propia.id, ids_a)
+        self.assertNotIn(ajena.id, ids_a)
         adm = P.with_user(self.u_mgr).shalom_admin_rutas_programadas()
         self.assertEqual([a["persona_nombre"] for a in adm], ["Persona A"])
         with self.assertRaises(AccessError):

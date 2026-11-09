@@ -260,23 +260,17 @@ class FSMPerson(models.Model):
 
     @api.model
     def shalom_mis_clientes(self):
-        """Directorio de fsm.location asignadas (vía la ruta que las
-        contiene) al vendedor logueado. Un mismo vendedor puede tener
-        varias rutas -- se incluye a cuál pertenece cada cliente
+        """Directorio de TODAS las fsm.location que están en una ruta (las
+        rutas son libres: ya no se limita a las asignadas al vendedor).
+        Se incluye a cuál ruta pertenece cada cliente
         (fsm_route_id/fsm_route_name) para mostrarlo en la lista y para
         el formulario ampliado de edición (RUC/celular/correo vienen
         del contacto, res.partner)."""
-        persona = self._shalom_persona_actual()
-        if not persona:
-            return []
-        rutas = self.env["fsm.route"].search([("fsm_person_id", "=", persona.id)])
-        if not rutas:
-            return []
+        # Rutas libres: todos los vendedores ven todos los clientes (no solo
+        # los de las rutas que tienen asignadas) para poder vender, llamar o
+        # corregir datos de cualquiera.
+        rutas = self.env["fsm.route"].search([])
         # Ordenados por ruta y después por posición dentro de la ruta
-        # (x_orden_ruta) -- sin esto, reordenar un cliente desde
-        # ClienteForm cambiaba bien el número pero la lista de la
-        # pestaña Clientes seguía mostrándolos en el orden de creación,
-        # sin reflejar el reordenamiento.
         locations = self.env["fsm.location"].search(
             [("fsm_route_id", "in", rutas.ids)],
             order="fsm_route_id, x_orden_ruta asc",
@@ -301,25 +295,20 @@ class FSMPerson(models.Model):
 
     @api.model
     def shalom_mis_cotizaciones(self):
-        """sale.order de todos los clientes asignados al vendedor
-        logueado (no solo los de la ruta de hoy), de más reciente a
-        más antigua. Incluye borradores y confirmadas; excluye
+        """sale.order hechas por el vendedor logueado (a su nombre), de
+        cualquier cliente, de más reciente a más antigua. Incluye borradores y confirmadas; excluye
         canceladas."""
-        persona = self._shalom_persona_actual()
-        if not persona:
-            return []
-        rutas = self.env["fsm.route"].search([("fsm_person_id", "=", persona.id)])
-        if not rutas:
-            return []
-        locations = self.env["fsm.location"].search(
-            [("fsm_route_id", "in", rutas.ids)]
-        )
-        partner_ids = locations.mapped("partner_id").ids
-        if not partner_ids:
-            return []
+        # Solo las cotizaciones del propio usuario (vendedor del pedido o quien
+        # la creó), de cualquier cliente.
         orders = self.env["sale.order"].search(
-            [("partner_id", "in", partner_ids), ("state", "!=", "cancel")],
+            [
+                ("state", "!=", "cancel"),
+                "|",
+                ("user_id", "=", self.env.uid),
+                ("create_uid", "=", self.env.uid),
+            ],
             order="date_order desc",
+            limit=300,
         )
         return [
             {
