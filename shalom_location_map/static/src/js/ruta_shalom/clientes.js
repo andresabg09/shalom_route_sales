@@ -44,6 +44,12 @@ export class Clientes extends Component {
         }
     }
 
+    /** Dos letras para el avatar del directorio ("Abarrotes Don Pepe" -> "AD"). */
+    iniciales(cliente) {
+        const partes = (cliente.name || "?").trim().split(/\s+/);
+        return ((partes[0] || "?")[0] + (partes[1] ? partes[1][0] : "")).toUpperCase();
+    }
+
     get clientesFiltrados() {
         const texto = this.state.busqueda.trim().toLowerCase();
         if (!texto) {

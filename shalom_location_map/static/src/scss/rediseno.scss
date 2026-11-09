@@ -121,6 +121,33 @@
         border-bottom: 1px solid var(--shalom-line);
     }
 
+    .cliente-avatar {
+        flex: none;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .clientes-screen .view .cliente-card {
+        border-radius: 0;
+        border-width: 0 0 1px 0;
+        margin-bottom: 0;
+        background: transparent;
+    }
+    @media (min-width: 900px) {
+        .clientes-screen .view {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+            column-gap: 24px;
+            align-content: start;
+        }
+    }
+
     // -- Tarjeta de ruta: cuadro con el número de clientes por visitar ------
     .route-card {
         flex-direction: row;
