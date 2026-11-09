@@ -308,3 +308,15 @@
     color: var(--shalom-ink-muted);
     margin-right: 2px;
 }
+
+// Botón "+" de Clientes: orbe flotante fijo en la esquina (en el celular la
+// pantalla entera se desplaza, y un botón absoluto se iba con la lista).
+.o_shalom_ruta_app:not(.o_shalom_admin_screen) .fab-add {
+    position: fixed;
+    right: 18px;
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+    z-index: 20;
+    @media (min-width: 1100px) {
+        bottom: 28px;
+    }
+}
