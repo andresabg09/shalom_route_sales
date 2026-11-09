@@ -171,6 +171,17 @@ export class RutasHub extends Component {
         });
     }
 
+    /** Vendedores que hoy tienen alguna ruta (para la leyenda del mapa). */
+    get leyendaTomas() {
+        const vistos = new Map();
+        for (const s of this.state.schedules) {
+            for (const t of s.tomada_por || []) {
+                vistos.set(t.person_id, t);
+            }
+        }
+        return [...vistos.values()];
+    }
+
     /** Texto estable de quién tiene cada ruta: si cambia, el mapa se redibuja. */
     get firmaTomas() {
         return this.state.schedules

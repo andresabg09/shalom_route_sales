@@ -148,6 +148,38 @@
         }
     }
 
+    .mapa-leyenda {
+        position: absolute;
+        left: 10px;
+        top: 10px;
+        z-index: 2;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        font-size: 0.7rem;
+        font-weight: 700;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+        pointer-events: none;
+    }
+    .mapa-leyenda-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .mapa-leyenda-punto {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+    .mapa-leyenda-libre {
+        background: var(--shalom-pendiente);
+    }
+
     // -- Tarjeta de ruta: cuadro con el número de clientes por visitar ------
     .route-card {
         flex-direction: row;
