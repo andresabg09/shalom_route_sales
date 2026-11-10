@@ -17,7 +17,7 @@ import logging
 from odoo import _, api, models
 from odoo.exceptions import AccessError
 
-from . import juego_utils
+from . import juego_utils, tz_utils
 
 _logger = logging.getLogger(__name__)
 
@@ -257,6 +257,101 @@ class FSMPerson(models.Model):
                 [("fsm_person_id", "=", persona.id)], order="name asc"
             )
         return [{"id": r.id, "name": r.name} for r in rutas]
+
+    @api.model
+    def shalom_buscar(self, texto):
+        """Búsqueda de clientes en TODAS las rutas (rutas libres): por nombre,
+        dirección, teléfono o RUC. Para cada cliente dice en qué ruta y parada
+        está, el estado de su visita en el ciclo vigente de esa ruta y quién la
+        está atendiendo, más un `schedule` listo para abrir esa ruta. Máximo 30
+        resultados."""
+        texto = (texto or "").strip()
+        if len(texto) < 2:
+            return []
+        persona = self._shalom_persona_actual()
+        hojas = [
+            ("name", "ilike", texto),
+            ("street", "ilike", texto),
+            ("street2", "ilike", texto),
+            ("phone", "ilike", texto),
+            ("partner_id.mobile", "ilike", texto),
+            ("partner_id.vat", "ilike", texto),
+        ]
+        locations = self.env["fsm.location"].search(
+            ["|"] * (len(hojas) - 1) + hojas + [("fsm_route_id", "!=", False)],
+            limit=30,
+            order="name",
+        )
+        if not locations:
+            return []
+        Ciclo = self.env["fsm.route.schedule"]
+        ciclos = Ciclo.search(
+            [("route_id", "in", locations.fsm_route_id.ids)], order="date_start desc, id desc"
+        )
+        # Ciclo vigente de cada ruta: el más reciente que no esté completado
+        # (si todos lo están, el más reciente).
+        vigente = {}
+        for c in ciclos:
+            actual = vigente.get(c.route_id.id)
+            if actual is None or (actual.estado == "completada" and c.estado != "completada"):
+                vigente[c.route_id.id] = c
+        visitas = {}
+        if vigente:
+            for o in self.env["fsm.order"].search(
+                [
+                    ("x_route_schedule_id", "in", [c.id for c in vigente.values()]),
+                    ("location_id", "in", locations.ids),
+                ],
+                order="id asc",
+            ):
+                visitas[(o.x_route_schedule_id.id, o.location_id.id)] = o
+        tomas = self.env["shalom.ruta.toma"]._shalom_vigentes([c.id for c in vigente.values()], persona)
+        hoy = tz_utils.hoy_local(self.env)
+        resultado = []
+        for loc in locations:
+            ciclo = vigente.get(loc.fsm_route_id.id)
+            orden = visitas.get((ciclo.id, loc.id)) if ciclo else None
+            atendio = ""
+            atendio_hoy = False
+            if orden and orden.stage_id.is_closed:
+                persona_orden = self.search([("user_id", "=", orden.write_uid.id)], limit=1)
+                atendio = persona_orden.name or ""
+                atendio_hoy = bool(orden.write_date) and tz_utils.a_local(self.env, orden.write_date).date() == hoy
+            resultado.append(
+                {
+                    "location_id": loc.id,
+                    "name": loc.name,
+                    "street": loc.street or "",
+                    "street2": loc.street2 or "",
+                    "phone": loc.phone or (loc.partner_id.mobile if loc.partner_id else "") or "",
+                    "route_id": loc.fsm_route_id.id,
+                    "route_name": loc.fsm_route_id.name,
+                    "parada": loc.x_orden_ruta or 0,
+                    "stage_name": orden.stage_id.name if orden else "",
+                    "cerrada": bool(orden and orden.stage_id.is_closed),
+                    "atendido_por": atendio,
+                    "atendido_hoy": atendio_hoy,
+                    "tomada_por": tomas.get(ciclo.id, []) if ciclo else [],
+                    "schedule": {
+                        "id": ciclo.id,
+                        "route_id": ciclo.route_id.id,
+                        "route_name": ciclo.route_id.name,
+                        "date_start": ciclo.date_start.isoformat() if ciclo.date_start else "",
+                        "date_end": ciclo.date_end.isoformat() if ciclo.date_end else "",
+                        "estado": ciclo.estado,
+                        "cantidad_clientes": ciclo.cantidad_clientes,
+                        "es_visita_express": False,
+                        "mi_persona_id": persona.id,
+                        "tiene_cartera": bool(
+                            self.env["fsm.order"].search_count(
+                                [("x_route_schedule_id", "=", ciclo.id), ("x_cartera_person_id", "!=", False)]
+                            )
+                        ),
+                        "tomada_por": tomas.get(ciclo.id, []),
+                    } if ciclo else False,
+                }
+            )
+        return resultado
 
     @api.model
     def shalom_mis_clientes(self):

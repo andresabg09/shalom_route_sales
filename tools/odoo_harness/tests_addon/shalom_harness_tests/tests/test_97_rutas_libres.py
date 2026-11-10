@@ -68,3 +68,25 @@ class TestRutasLibres(ShalomCommon):
                                       "stage_id": self.env.ref("shalom_location_map.shalom_fsm_stage_order_new").id})
         self.assertIn(sch.id, [r["id"] for r in self._rutas(self.u_a)])
         self.assertNotIn(sch.id, [r["id"] for r in self._rutas(self.u_b)])
+
+    def test_buscar_clientes_en_todas_las_rutas(self):
+        P = self.env["fsm.person"]
+        cli = self.clientes["A1"]
+        cli.name = "UEFA Mini Super"
+        res = P.with_user(self.u_b).shalom_buscar("uefa")
+        self.assertEqual([r["location_id"] for r in res], [cli.id])
+        r = res[0]
+        self.assertEqual(r["route_id"], self.ruta.id)
+        self.assertTrue(r["schedule"] and r["schedule"]["id"] == self.ciclo.id)
+        self.assertFalse(r["cerrada"])
+        self.assertEqual(P.with_user(self.u_b).shalom_buscar("u"), [])  # mínimo 2 letras
+        self.assertEqual(P.with_user(self.u_b).shalom_buscar("zzzz-no-existe"), [])
+        # si otro vendedor la resuelve, la búsqueda lo dice
+        orden = self.env["fsm.order"].search([("x_route_schedule_id", "=", self.ciclo.id), ("location_id", "=", cli.id)], limit=1)
+        etapa = self.env["fsm.stage"].search([("stage_type", "=", "order"), ("is_closed", "=", True),
+                                              ("id", "!=", self.env.ref("shalom_location_map.shalom_fsm_stage_no_atendido").id)], limit=1)
+        orden.with_user(self.u_a).write({"stage_id": etapa.id})
+        r = P.with_user(self.u_b).shalom_buscar("uefa")[0]
+        self.assertTrue(r["cerrada"])
+        self.assertEqual(r["atendido_por"], "Persona A")
+        self.assertTrue(r["atendido_hoy"])
