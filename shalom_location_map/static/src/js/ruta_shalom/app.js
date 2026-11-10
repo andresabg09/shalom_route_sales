@@ -109,6 +109,26 @@ export class ShalomRutaApp extends Component {
         this.state.pilaRestante = [];
     }
 
+    /** Desde la búsqueda: abre la pestaña Clientes con el texto ya escrito (y,
+     * si accion es "alta", el formulario de cliente nuevo con ese nombre). */
+    irAClientesConBusqueda(texto, accion) {
+        try {
+            window.sessionStorage.setItem("shalom_clientes_traspaso", JSON.stringify({texto, accion}));
+        } catch (error) {
+            // sin sessionStorage solo se pierde el texto ya escrito
+        }
+        if (this.state.screen === "clientes") {
+            this.state.screen = "rutas";
+        }
+        this.irA("clientes");
+    }
+
+    /** Desde la búsqueda dentro de una ruta: salta a OTRA ruta. */
+    cambiarRuta(schedule) {
+        this.volverARutas();
+        this.abrirRuta(schedule);
+    }
+
     /**
      * "←" propio de RutaDetalle. Su topbar se muestra siempre (no se
      * oculta si hay una visita/catálogo/carrito abiertos encima -- ver

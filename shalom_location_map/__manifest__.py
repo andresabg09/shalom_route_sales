@@ -96,6 +96,7 @@
             "shalom_location_map/static/src/js/ruta_shalom/tutorial.js",
             "shalom_location_map/static/src/js/ruta_shalom/juego_panel.js",
             "shalom_location_map/static/src/js/ruta_shalom/pantalla_utils.js",
+            "shalom_location_map/static/src/js/ruta_shalom/busqueda_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/rutas_hub.js",
             "shalom_location_map/static/src/js/ruta_shalom/ruta_detalle.js",
             "shalom_location_map/static/src/js/ruta_shalom/cotizaciones.js",

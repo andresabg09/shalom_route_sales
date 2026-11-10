@@ -96,7 +96,35 @@
                         Rutas".
                     </div>
                     <div t-elif="!visitasFiltradas.length" class="shalom-vacio">
-                        <t t-if="state.busquedaCliente">No se encontró ningún cliente con ese nombre/dirección.</t>
+                        <t t-if="state.busquedaCliente">
+                            <div class="busqueda-aqui">
+                                <b>No hay «<t t-esc="state.busquedaCliente.trim()"/>» en <t t-esc="props.schedule.route_name"/></b>
+                                <span t-if="state.buscandoOtras"> Buscando en las demás rutas…</span>
+                                <span t-elif="state.enOtrasRutas.length"> Pero lo encontramos en otras rutas:</span>
+                            </div>
+                            <div class="busqueda-resultado" t-foreach="state.enOtrasRutas" t-as="r" t-key="r.location_id">
+                                <t t-set="rs" t-value="resaltarTexto(r.name)"/>
+                                <t t-set="est" t-value="estadoResultado(r)"/>
+                                <div class="cliente-avatar" t-esc="(r.name || '?').slice(0, 2).toUpperCase()"/>
+                                <div class="busqueda-info">
+                                    <div class="name"><t t-esc="rs.pre"/><mark t-if="rs.hit" t-esc="rs.hit"/><t t-esc="rs.post"/></div>
+                                    <div class="busqueda-etiquetas">
+                                        <span class="route-tag" t-esc="r.route_name + (r.parada ? ' · parada ' + r.parada : '')"/>
+                                        <span t-attf-class="busqueda-estado busqueda-estado-{{est.tono}}" t-esc="est.texto"/>
+                                    </div>
+                                </div>
+                                <button class="busqueda-ir" t-on-click="() => this.irAOtraRuta(r)">Cambiar a <t t-esc="r.route_name"/> <i class="fa fa-chevron-right" aria-hidden="true"/></button>
+                            </div>
+                            <div class="busqueda-oculto" t-if="ocultosPorVentas">
+                                <i class="fa fa-eye" aria-hidden="true"/>
+                                <span><b t-esc="ocultosPorVentas"/> cliente(s) de esta ruta coinciden pero están ocultos porque aún no tienen ventas.</span>
+                                <button class="busqueda-btn" t-on-click="toggleSinVentas">Mostrar</button>
+                            </div>
+                            <div class="busqueda-salida-botones" t-if="!state.buscandoOtras">
+                                <button class="busqueda-btn" t-on-click="buscarEnTodosLosClientes"><i class="fa fa-users" aria-hidden="true"/> Buscar en todos los clientes</button>
+                                <button class="busqueda-btn busqueda-btn-fuerte" t-on-click="crearClienteDesdeBusqueda"><i class="fa fa-plus" aria-hidden="true"/> Crear cliente «<t t-esc="state.busquedaCliente.trim()"/>»</button>
+                            </div>
+                        </t>
                         <t t-elif="state.mostrarVisitados">Todavía no hay clientes visitados.</t>
                         <t t-else="">No quedan clientes pendientes. <i class="fa fa-check-circle" aria-hidden="true"/></t>
                     </div>

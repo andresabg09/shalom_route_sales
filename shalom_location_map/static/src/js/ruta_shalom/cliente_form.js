@@ -59,6 +59,8 @@ export class ClienteForm extends Component {
         // existe el registro); Owl valida el tipo si se declara, y acá
         // el valor legítimamente cambia de forma según el modo.
         locationId: {optional: true},
+        // Para "Crear cliente 'xxx'" desde la búsqueda: nombre ya escrito.
+        nombreInicial: {optional: true, type: String},
         onGuardado: Function,
         onCancelar: Function,
     };
@@ -71,7 +73,7 @@ export class ClienteForm extends Component {
             guardando: false,
             partnerId: false,
             campos: {
-                name: "",
+                name: this.props.nombreInicial || "",
                 nombreContacto: "",
                 phone: "",
                 mobile: "",

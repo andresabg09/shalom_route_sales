@@ -3,12 +3,14 @@
     <t t-name="shalom_location_map.RutaShalomApp">
         <div class="o_shalom_ruta_app">
             <div class="shalom-body">
-                <RutasHub t-if="state.screen === 'rutas'" onAbrirRuta.bind="abrirRuta"/>
+                <RutasHub t-if="state.screen === 'rutas'" onAbrirRuta.bind="abrirRuta" onIrAClientes.bind="irAClientesConBusqueda"/>
                 <RutaDetalle
                     t-if="state.screen === 'ruta-detalle'"
                     schedule="state.scheduleActivo"
                     pilaRestante="state.pilaRestante"
                     onVolver.bind="volverARutas"
+                    onCambiarRuta.bind="cambiarRuta"
+                    onIrAClientes.bind="irAClientesConBusqueda"
                 />
                 <Cotizaciones t-if="state.screen === 'cotizaciones'"/>
                 <Clientes t-if="state.screen === 'clientes'"/>

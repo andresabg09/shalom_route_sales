@@ -11,6 +11,7 @@ import {
 } from "./navegacion_utils";
 import {ESTADO_ETIQUETA, estadoDesdeStageName} from "./stage_utils";
 import {useEsAncha} from "./pantalla_utils";
+import {estadoDeResultado, resaltar} from "./busqueda_utils";
 import {abrirNivel, cerrarNivel} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
 import {VisitSheet} from "./visit_sheet";
@@ -271,6 +272,9 @@ export class RutaDetalle extends Component {
         // reconstruyendo tras un Atrás/recargado con una visita (y
         // opcionalmente más adentro) abierta.
         pilaRestante: {type: Array, optional: true},
+        // Búsqueda: saltar a otra ruta / ir a Clientes (ver app.js).
+        onCambiarRuta: {type: Function, optional: true},
+        onIrAClientes: {type: Function, optional: true},
     };
 
     setup() {
@@ -327,6 +331,9 @@ export class RutaDetalle extends Component {
             visitaAbiertaId: null,
             mostrarVisitados: false,
             busquedaCliente: "",
+            // Clientes encontrados en OTRAS rutas cuando aquí no hay coincidencia.
+            enOtrasRutas: [],
+            buscandoOtras: false,
             paletaVisible: false,
             paletaX: 0,
             paletaY: 0,
@@ -360,6 +367,33 @@ export class RutaDetalle extends Component {
         // Modo conducción (Fase 6B): su propia vigilancia de GPS, solo mientras
         // esta pantalla está montada. No toca nada de la navegación en vivo.
         this.conduccion = useConduccion();
+        // Viene de la búsqueda del hub ("Ir a la ruta"): el buscador de clientes
+        // ya trae el texto, y se muestran también los clientes sin ventas.
+        try {
+            const traspaso = JSON.parse(window.sessionStorage.getItem("shalom_detalle_traspaso") || "null");
+            window.sessionStorage.removeItem("shalom_detalle_traspaso");
+            if (traspaso && traspaso.texto) {
+                this.state.busquedaCliente = traspaso.texto;
+                this.state.verSinVentas = !!traspaso.verSinVentas;
+            }
+        } catch (error) {
+            // sin sessionStorage solo se pierde el texto ya escrito
+        }
+        // Si aquí no hay coincidencia, se busca en las demás rutas.
+        useEffect(
+            () => {
+                clearTimeout(this._otrasTimer);
+                const texto = this.state.busquedaCliente.trim();
+                if (texto.length < 2 || this.state.cargando || this.visitasFiltradas.length) {
+                    this.state.enOtrasRutas = [];
+                    this.state.buscandoOtras = false;
+                    return;
+                }
+                this.state.buscandoOtras = true;
+                this._otrasTimer = setTimeout(() => this.buscarEnOtrasRutas(texto), 250);
+            },
+            () => [this.state.busquedaCliente, this.state.cargando, this.state.mostrarVisitados, this.state.visitas.length]
+        );
         this.pantalla = useEsAncha();
 
         onWillStart(() => this.cargar());
@@ -369,6 +403,7 @@ export class RutaDetalle extends Component {
             this._sondeoTimer = setInterval(() => !document.hidden && this.sondearRuta(), SONDEO_RUTA_MS);
         });
         onWillUnmount(() => {
+            clearTimeout(this._otrasTimer);
             clearInterval(this._sondeoTimer);
             this.detenerNavegacion();
             if (this.mapboxMap) {
@@ -396,6 +431,72 @@ export class RutaDetalle extends Component {
             },
             () => [this.mapaVisible, this.state.cargando]
         );
+    }
+
+    async buscarEnOtrasRutas(texto) {
+        const seq = (this._otrasSeq = (this._otrasSeq || 0) + 1);
+        try {
+            const res = await this.orm.call("fsm.person", "shalom_buscar", [texto]);
+            if (seq === this._otrasSeq) {
+                this.state.enOtrasRutas = res.filter((r) => r.route_id !== this.props.schedule.route_id);
+            }
+        } catch (error) {
+            console.error("shalom: error al buscar en otras rutas", error);
+        } finally {
+            if (seq === this._otrasSeq) {
+                this.state.buscandoOtras = false;
+            }
+        }
+    }
+
+    resaltarTexto(texto) {
+        return resaltar(texto, this.state.busquedaCliente);
+    }
+
+    estadoResultado(r) {
+        return estadoDeResultado(r);
+    }
+
+    /** Clientes de ESTA ruta que coinciden con lo escrito pero están ocultos por no tener ventas. */
+    get ocultosPorVentas() {
+        const texto = this.state.busquedaCliente.trim().toLowerCase();
+        if (this.state.verSinVentas || texto.length < 2) {
+            return 0;
+        }
+        return this.state.visitasTodas.filter(
+            (v) =>
+                this._esSinVentas(v) &&
+                ((v.nombre || "").toLowerCase().includes(texto) ||
+                    (v.direccion || "").toLowerCase().includes(texto) ||
+                    (v.direccion2 || "").toLowerCase().includes(texto))
+        ).length;
+    }
+
+    irAOtraRuta(r) {
+        if (!r.schedule || !this.props.onCambiarRuta) {
+            return;
+        }
+        try {
+            window.sessionStorage.setItem(
+                "shalom_detalle_traspaso",
+                JSON.stringify({texto: this.state.busquedaCliente.trim(), verSinVentas: true})
+            );
+        } catch (error) {
+            // sin sessionStorage solo se pierde el texto ya escrito
+        }
+        this.props.onCambiarRuta(r.schedule);
+    }
+
+    buscarEnTodosLosClientes() {
+        if (this.props.onIrAClientes) {
+            this.props.onIrAClientes(this.state.busquedaCliente.trim(), null);
+        }
+    }
+
+    crearClienteDesdeBusqueda() {
+        if (this.props.onIrAClientes) {
+            this.props.onIrAClientes(this.state.busquedaCliente.trim(), "alta");
+        }
     }
 
     /** Nombres de los OTROS vendedores que la atienden ("Luis y Milciades"). */

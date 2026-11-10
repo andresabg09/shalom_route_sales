@@ -29,7 +29,26 @@ export class Clientes extends Component {
             formularioAbierto: false,
             modoFormulario: "crear",
             locationIdEditando: null,
+            nombreInicialAlta: "",
         });
+        // Viene de la búsqueda de Rutas ("Buscar en todos los clientes" o
+        // "Crear cliente 'xxx'"): texto ya escrito y, si pidió crear, el
+        // formulario de alta abierto con ese nombre.
+        let traspaso = null;
+        try {
+            traspaso = JSON.parse(window.sessionStorage.getItem("shalom_clientes_traspaso") || "null");
+            window.sessionStorage.removeItem("shalom_clientes_traspaso");
+        } catch (error) {
+            traspaso = null;
+        }
+        if (traspaso && traspaso.texto) {
+            this.state.busqueda = traspaso.texto;
+            if (traspaso.accion === "alta") {
+                this.state.nombreInicialAlta = traspaso.texto;
+                this.state.modoFormulario = "crear";
+                this.state.formularioAbierto = true;
+            }
+        }
         onWillStart(() => this.cargar());
     }
 
@@ -83,6 +102,7 @@ export class Clientes extends Component {
     }
 
     abrirAlta() {
+        this.state.nombreInicialAlta = "";
         this.state.modoFormulario = "crear";
         this.state.locationIdEditando = null;
         this.state.formularioAbierto = true;

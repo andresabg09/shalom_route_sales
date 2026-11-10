@@ -64,6 +64,7 @@
             t-if="state.formularioAbierto"
             modo="state.modoFormulario"
             locationId="state.locationIdEditando"
+            nombreInicial="state.nombreInicialAlta"
             onGuardado.bind="formularioGuardado"
             onCancelar.bind="cerrarFormulario"
         />

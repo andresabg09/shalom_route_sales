@@ -8,6 +8,7 @@ import {Avisos} from "./avisos";
 import {JuegoPanel} from "./juego_panel";
 import {Tutorial} from "./tutorial";
 import {useEsAncha} from "./pantalla_utils";
+import {estadoDeResultado, quienAtiende, resaltar} from "./busqueda_utils";
 
 /**
  * Pestaña "Rutas" de la app del vendedor: lista de fsm.route.schedule
@@ -98,6 +99,7 @@ export class RutasHub extends Component {
     static components = {TemaSelector, Avisos, JuegoPanel, Tutorial};
     static props = {
         onAbrirRuta: Function,
+        onIrAClientes: {type: Function, optional: true},
     };
 
     setup() {
@@ -107,6 +109,10 @@ export class RutasHub extends Component {
             cargando: true,
             schedules: [],
             busqueda: "",
+            // Búsqueda de clientes en todas las rutas (se dispara al escribir).
+            clientesEncontrados: [],
+            buscandoClientes: false,
+            filtroBusqueda: "todos", // todos | clientes | rutas
             // Filtro permanente: las rutas donde ningún cliente ha comprado
             // quedan ocultas; este interruptor las muestra (solo consulta).
             verSinVentas: false,
@@ -155,9 +161,27 @@ export class RutasHub extends Component {
                 this.firmaTomas,
             ]
         );
+        // Al escribir en el buscador también se buscan CLIENTES de todas las
+        // rutas (con una pausa corta para no consultar en cada letra).
+        useEffect(
+            () => {
+                clearTimeout(this._busquedaTimer);
+                const texto = this.state.busqueda.trim();
+                if (texto.length < 2) {
+                    this._busquedaSeq = (this._busquedaSeq || 0) + 1;
+                    this.state.clientesEncontrados = [];
+                    this.state.buscandoClientes = false;
+                    return;
+                }
+                this.state.buscandoClientes = true;
+                this._busquedaTimer = setTimeout(() => this.buscarClientes(texto), 250);
+            },
+            () => [this.state.busqueda]
+        );
         onWillUnmount(() => {
             this.quitarMapa();
             clearInterval(this._tomasTimer);
+            clearTimeout(this._busquedaTimer);
         });
         onWillStart(() => this.cargar());
         onMounted(() => {
@@ -169,6 +193,113 @@ export class RutasHub extends Component {
             this.cargarAvisos();
             this.cargarTutorial();
         });
+    }
+
+    async buscarClientes(texto) {
+        const seq = (this._busquedaSeq = (this._busquedaSeq || 0) + 1);
+        try {
+            const res = await this.orm.call("fsm.person", "shalom_buscar", [texto]);
+            if (seq === this._busquedaSeq) {
+                this.state.clientesEncontrados = res;
+            }
+        } catch (error) {
+            console.error("shalom: error al buscar clientes", error);
+            if (seq === this._busquedaSeq) {
+                this.state.clientesEncontrados = [];
+            }
+        } finally {
+            if (seq === this._busquedaSeq) {
+                this.state.buscandoClientes = false;
+            }
+        }
+    }
+
+    get textoBusqueda() {
+        return this.state.busqueda.trim();
+    }
+
+    /** Hay una búsqueda en curso (2 letras o más). */
+    get buscando() {
+        return this.textoBusqueda.length >= 2;
+    }
+
+    get mostrarResultadosClientes() {
+        return this.buscando && this.state.filtroBusqueda !== "rutas";
+    }
+
+    /** El mapa y las tarjetas de ruta se ocultan si la búsqueda es solo de clientes
+     * o si ninguna ruta coincide. */
+    get mostrarRutasEnBusqueda() {
+        if (!this.buscando) {
+            return true;
+        }
+        return this.state.filtroBusqueda !== "clientes" && this.schedulesFiltrados.length > 0;
+    }
+
+    get resumenBusqueda() {
+        const c = this.state.clientesEncontrados.length;
+        const r = this.schedulesFiltrados.length;
+        const partesC = c ? `${c} cliente${c === 1 ? "" : "s"} encontrado${c === 1 ? "" : "s"}` : "ningún cliente";
+        const partesR = r ? `${r} ruta${r === 1 ? "" : "s"}` : "ninguna ruta se llama así";
+        return `${partesC} · ${partesR}`;
+    }
+
+    setFiltroBusqueda(filtro) {
+        this.state.filtroBusqueda = filtro;
+    }
+
+    limpiarBusqueda() {
+        this.state.busqueda = "";
+        this.state.filtroBusqueda = "todos";
+    }
+
+    resaltarTexto(texto) {
+        return resaltar(texto, this.textoBusqueda);
+    }
+
+    estadoResultado(r) {
+        return estadoDeResultado(r);
+    }
+
+    quienAtiendeResultado(r) {
+        return quienAtiende(r.tomada_por);
+    }
+
+    /** "Ir a la ruta": abre esa ruta con el buscador ya escrito para ver al cliente. */
+    irARutaDeResultado(r) {
+        if (!r.schedule) {
+            this.notification.add("Esa ruta no tiene un ciclo activo todavía.", {type: "warning"});
+            return;
+        }
+        try {
+            window.sessionStorage.setItem(
+                "shalom_detalle_traspaso",
+                JSON.stringify({texto: this.textoBusqueda, verSinVentas: true})
+            );
+        } catch (error) {
+            // sin sessionStorage solo se pierde el texto ya escrito
+        }
+        this.props.onAbrirRuta(r.schedule);
+    }
+
+    llamarResultado(r) {
+        if (!r.phone) {
+            this.notification.add("Este cliente no tiene teléfono guardado.", {type: "warning"});
+            return;
+        }
+        window.open(`tel:${r.phone}`, "_self");
+    }
+
+    buscarEnTodosLosClientes() {
+        if (this.props.onIrAClientes) {
+            this.props.onIrAClientes(this.textoBusqueda, null);
+        }
+    }
+
+    crearClienteDesdeBusqueda() {
+        if (this.props.onIrAClientes) {
+            this.props.onIrAClientes(this.textoBusqueda, "alta");
+        }
     }
 
     /** Vendedores que hoy tienen alguna ruta (para la leyenda del mapa). */
