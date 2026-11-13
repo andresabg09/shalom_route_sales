@@ -1814,8 +1814,22 @@ export class OrderScreen extends Component {
      * explícito: sin esto había que borrar dígito por dígito antes de
      * poder escribir, ej. para cambiar "5" por "100").
      */
+    /** Al tocar el campo de cantidad (la primera vez Y cada vez que se
+     * vuelve a tocar) se selecciona toda la cifra: escribir reemplaza el
+     * número entero sin borrar dígito por dígito. Un instante después del
+     * toque, porque el navegador ubica el cursor justo después y si no
+     * deshacía la selección. El campo es de texto con teclado numérico
+     * (no type="number"): ahí select() funciona en todos los navegadores
+     * y la rueda del mouse ya no cambia la cantidad sola (eso era el
+     * "escribo 200 y queda 50"). */
     seleccionarTextoCantidad(ev) {
-        ev.target.select();
+        const campo = ev.target;
+        campo.select();
+        setTimeout(() => {
+            if (document.activeElement === campo) {
+                campo.setSelectionRange(0, campo.value.length);
+            }
+        }, 0);
     }
 
     /**
@@ -1834,8 +1848,13 @@ export class OrderScreen extends Component {
      * cambiarCantidadManual al salir del campo. Las promos se recalculan
      * con una pausa corta, no por cada tecla. */
     escribirCantidad(productoId, ev) {
+        // Solo dígitos (en la computadora se podría escribir cualquier cosa).
+        const limpio = ev.target.value.replace(/[^0-9]/g, "");
+        if (limpio !== ev.target.value) {
+            ev.target.value = limpio;
+        }
         const item = this.state.carrito[productoId];
-        const nueva = parseInt(ev.target.value, 10);
+        const nueva = parseInt(limpio, 10);
         if (!item || !nueva || nueva <= 0 || nueva === item.cantidad) {
             return;
         }
