@@ -81,7 +81,7 @@
                     <span class="search-icon"><i class="fa fa-search" aria-hidden="true"/></span>
                     <input
                         type="text"
-                        placeholder="Buscar ruta, cliente, dirección o teléfono…"
+                        placeholder="Buscar ruta o cliente por nombre…"
                         t-model="state.busqueda"
                         autocomplete="off"
                     />

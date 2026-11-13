@@ -260,8 +260,9 @@ class FSMPerson(models.Model):
 
     @api.model
     def shalom_buscar(self, texto):
-        """Búsqueda de clientes en TODAS las rutas (rutas libres): por nombre,
-        dirección, teléfono o RUC. Para cada cliente dice en qué ruta y parada
+        """Búsqueda de clientes en TODAS las rutas (rutas libres), solo por el
+        NOMBRE del cliente (buscar también en dirección/teléfono/RUC traía
+        demasiados resultados que no se buscaban). Para cada cliente dice en qué ruta y parada
         está, el estado de su visita en el ciclo vigente de esa ruta y quién la
         está atendiendo, más un `schedule` listo para abrir esa ruta. Máximo 30
         resultados."""
@@ -269,16 +270,8 @@ class FSMPerson(models.Model):
         if len(texto) < 2:
             return []
         persona = self._shalom_persona_actual()
-        hojas = [
-            ("name", "ilike", texto),
-            ("street", "ilike", texto),
-            ("street2", "ilike", texto),
-            ("phone", "ilike", texto),
-            ("partner_id.mobile", "ilike", texto),
-            ("partner_id.vat", "ilike", texto),
-        ]
         locations = self.env["fsm.location"].search(
-            ["|"] * (len(hojas) - 1) + hojas + [("fsm_route_id", "!=", False)],
+            [("name", "ilike", texto), ("fsm_route_id", "!=", False)],
             limit=30,
             order="name",
         )

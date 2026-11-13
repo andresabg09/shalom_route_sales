@@ -689,6 +689,20 @@ export class RutaDetalle extends Component {
         }
         this.state.seleccionadaId = visita.id;
         this.abrirVisita(visita);
+        this._llevarTarjetaArriba(visita.id);
+    }
+
+    /** Desplaza la lista hasta que la tarjeta del cliente quede arriba del
+     * todo (espera a que Owl la dibuje: unos cuadros como máximo). */
+    _llevarTarjetaArriba(visitaId, intentos = 20) {
+        requestAnimationFrame(() => {
+            const tarjeta = document.querySelector(`.stop-card[data-visita="${visitaId}"]`);
+            if (tarjeta) {
+                tarjeta.scrollIntoView({block: "start"});
+            } else if (intentos > 0) {
+                this._llevarTarjetaArriba(visitaId, intentos - 1);
+            }
+        });
     }
 
     /** Visitas a mostrar según el filtro de cartera. En "Mi cartera":
@@ -704,9 +718,15 @@ export class RutaDetalle extends Component {
         return this.state.visitasTodas.filter((v) => this._esSinVentas(v)).length;
     }
 
-    toggleSinVentas() {
+    async toggleSinVentas() {
         this.state.verSinVentas = !this.state.verSinVentas;
         this.state.visitas = this._vistaDeVisitas(this.state.visitasTodas);
+        // El mapa también: mismo redibujado que cambiarModoCartera().
+        if (this.mapaVisible) {
+            this.state.cargando = true;
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            this.state.cargando = false;
+        }
     }
 
     _vistaDeVisitas(todasLasVisitas) {
@@ -856,8 +876,9 @@ export class RutaDetalle extends Component {
     /** Cliente con borde rojo y "Tomar pedido": en tablet/computadora, el
      * que el vendedor tocó (si sigue en la lista); si no, el SIGUIENTE. */
     get destacadoId() {
+        // En el celular solo hay selección cuando se llegó desde la búsqueda.
         const sel = this.state.seleccionadaId;
-        if (this.pantalla.ancha && sel && this.visitasFiltradas.some((v) => v.id === sel)) {
+        if (sel && this.visitasFiltradas.some((v) => v.id === sel)) {
             return sel;
         }
         return this.siguienteId;
