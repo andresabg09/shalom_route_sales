@@ -1231,7 +1231,7 @@ class FSMOrder(models.Model):
         producto (reward_type='product'); "disponibles" es cuántas
         veces se completó la promo (el frontend descuenta las que el
         vendedor ya reclamó en esta sesión, ver order_screen.js)."""
-        vacio = {"mensajes": {}, "recompensas": []}
+        vacio = {"mensajes": {}, "detalle": {}, "recompensas": []}
         if not lineas:
             return vacio
         programas = self.env["loyalty.program"].search(
@@ -1292,6 +1292,9 @@ class FSMOrder(models.Model):
             )
 
         mensajes = {}
+        # Los mismos datos en números, para que el catálogo arme su
+        # versión corta ("⏳ Promo: faltan 2" / "✅ Promo completa").
+        detalle = {}
         recompensas = []
         reglas_ya_agregadas = set()
         for product_id, regla in regla_por_producto_id.items():
@@ -1306,12 +1309,14 @@ class FSMOrder(models.Model):
                     f"✅ Tienes {promos_completas} promos completas · "
                     f"Llevas {int(total_qty)} unidades válidas"
                 )
+                detalle[product_id] = {"completa": True, "completas": promos_completas, "faltan": 0}
             else:
                 faltan = int(min_qty - resto) if resto > 0 else int(min_qty)
                 mensajes[product_id] = (
                     f"⏳ Faltan {faltan} unidades · "
                     f"Llevas {int(total_qty)} unidades válidas"
                 )
+                detalle[product_id] = {"completa": False, "completas": promos_completas, "faltan": faltan}
 
             if promos_completas < 1 or regla.id in reglas_ya_agregadas:
                 continue
@@ -1333,7 +1338,7 @@ class FSMOrder(models.Model):
                 }
             )
 
-        return {"mensajes": mensajes, "recompensas": recompensas}
+        return {"mensajes": mensajes, "detalle": detalle, "recompensas": recompensas}
 
     # ------------------------------------------------------------------
     # Carrito respaldado en el servidor (punto B) + "Ver en vivo"

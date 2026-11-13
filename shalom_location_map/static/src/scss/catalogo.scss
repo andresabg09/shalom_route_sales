@@ -459,9 +459,7 @@
             order: 4;
             padding: 2px 6px;
             font-size: 0.72rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            white-space: normal;
         }
         .qty-add-btn,
         .qty-row {

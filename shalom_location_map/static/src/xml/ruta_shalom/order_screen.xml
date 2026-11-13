@@ -188,7 +188,7 @@
                                 class="promo-badge"
                                 t-att-class="promoCompleta(producto.id) ? 'promo-completa' : 'promo-pendiente'"
                                 t-att-title="etiquetaPromo(producto.id)"
-                                t-esc="etiquetaPromo(producto.id)"
+                                t-esc="etiquetaPromoCorta(producto.id)"
                             />
                         </t>
                         <button

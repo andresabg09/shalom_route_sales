@@ -266,6 +266,7 @@ export class OrderScreen extends Component {
             pedidosAnteriores: [], // [{id, nombre, fecha, total, lineas: [{product_id, nombre, cantidad}]}]
             pedidoPrecargaAbierto: null, // id del pedido con sus líneas desplegadas
             promoPorProducto: {}, // {productId: "✅ Tienes..." | "⏳ Faltan..."}
+            promoDetallePorProducto: {}, // {productId: {completa, completas, faltan}}
             recompensasDisponibles: [], // [{regla_id, programa_nombre, reward_product_id, reward_product_name, reward_qty, disponibles}]
             recompensaMenuAbierto: false,
             escaneando: false,
@@ -1428,6 +1429,20 @@ export class OrderScreen extends Component {
         return this.state.promoPorProducto[productoId] || "";
     }
 
+    /** Versión corta para la tarjeta del catálogo: dice si la promo está
+     * completa o cuánto falta, sin recortar con "…". Sin el detalle
+     * (servidor viejo) usa el texto largo de siempre. */
+    etiquetaPromoCorta(productoId) {
+        const det = this.state.promoDetallePorProducto[productoId];
+        if (!det) {
+            return this.etiquetaPromo(productoId);
+        }
+        if (det.completa) {
+            return det.completas > 1 ? `✅ ${det.completas} promos completas` : "✅ Promo completa";
+        }
+        return `⏳ Promo: faltan ${det.faltan}`;
+    }
+
     promoCompleta(productoId) {
         return this.etiquetaPromo(productoId).includes("✅");
     }
@@ -1511,6 +1526,7 @@ export class OrderScreen extends Component {
         const items = this.itemsCarritoPagos;
         if (!items.length) {
             this.state.promoPorProducto = {};
+            this.state.promoDetallePorProducto = {};
             this.state.recompensasDisponibles = [];
             return;
         }
@@ -1525,6 +1541,7 @@ export class OrderScreen extends Component {
                 [lineas]
             );
             this.state.promoPorProducto = resultado.mensajes;
+            this.state.promoDetallePorProducto = resultado.detalle || {};
             this.state.recompensasDisponibles = resultado.recompensas;
         } catch (error) {
             console.error("shalom: error al calcular promociones", error);
