@@ -107,6 +107,14 @@
             flex: 0 0 auto;
             overflow: visible;
         }
+        // Excepción: el catálogo/carrito (.order-overlay) es una capa fija
+        // a pantalla completa; el scroll de .shalom-screen no la mueve, así
+        // que su lista tiene que conservar su propio scroll.
+        .shalom-screen .order-overlay .view {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+        }
         .shalom-screen .hub-cuerpo,
         .shalom-screen .detalle-cuerpo {
             flex: 0 0 auto;
