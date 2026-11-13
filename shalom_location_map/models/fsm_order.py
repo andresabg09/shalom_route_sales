@@ -865,7 +865,7 @@ class FSMOrder(models.Model):
                     "progreso": despues,
                     "subio_nivel": despues["nivel"] > antes["nivel"],
                 }
-                return self._shalom_con_margen_si_admin(resultado, margen_pct)
+                return self._shalom_con_margen(resultado, margen_pct)
         except Exception:  # noqa: BLE001 -- jamás romper la confirmación
             _logger.exception(
                 "No se pudo calcular el resultado del juego para fsm.order id=%s", self.id
@@ -1175,13 +1175,12 @@ class FSMOrder(models.Model):
                 "utilidad": round(utilidad, 2), "margen_pct": round(margen_pct, 1)}
 
     @api.model
-    def _shalom_con_margen_si_admin(self, resultado, margen_pct):
-        """Agrega "margen_pct" a la respuesta SOLO si quien llama es
-        administrador de Servicio de Campo: el vendedor no ve márgenes (ni
-        % ni dólares); las estrellas de oro igual se calculan con el margen
-        en el servidor."""
-        if self.env.user.has_group("fieldservice.group_fsm_manager"):
-            resultado["margen_pct"] = round(margen_pct, 1)
+    def _shalom_con_margen(self, resultado, margen_pct):
+        """Agrega "margen_pct" (el %) a la respuesta, para cualquier usuario:
+        antes solo lo veía el administrador; ahora también el vendedor, a
+        pedido explícito. Los dólares de costo y utilidad siguen sin salir
+        del servidor."""
+        resultado["margen_pct"] = round(margen_pct, 1)
         return resultado
 
     @api.model
@@ -1190,8 +1189,7 @@ class FSMOrder(models.Model):
         cliente (ticket típico, 75%, récord). Informativo: no bloquea
         ni cambia nada. Devuelve {"total", "estrellas", "refs": {...},
         "siguiente": {...}|None}; el costo y la utilidad no salen del
-        servidor, y el % de margen ("margen_pct") solo se incluye para el
-        administrador (el vendedor no ve márgenes)."""
+        servidor; el % de margen ("margen_pct") sí, para todos."""
         location = self.env["fsm.location"].browse(location_id).exists()
         refs = self._shalom_referencias_cliente(location)
         eco = self._shalom_economia_pedido(lineas or [])
@@ -1201,7 +1199,7 @@ class FSMOrder(models.Model):
             "refs": refs,
             "siguiente": juego_utils.siguiente_objetivo(eco["total"], refs, eco["margen_pct"]),
         }
-        return self._shalom_con_margen_si_admin(resultado, eco["margen_pct"])
+        return self._shalom_con_margen(resultado, eco["margen_pct"])
 
     @api.model
     def shalom_estado_promociones_carrito(self, lineas):
