@@ -1,0 +1,691 @@
+// Catálogo compacto (mockup aprobado "Catálogo compacto — Ruta Shalom"):
+// cabecera chica que se esconde al bajar, barra de búsqueda/filtros en dos
+// filas, vista lista (celular) o cuadrícula (tablet) a elección del
+// vendedor, y "Pedidos anteriores" como hoja de abajo que solo suma lo que
+// falta. Carga después de ruta_shalom.scss y pisa lo de ahí con la misma
+// especificidad (o una clase más). Solo variables --shalom-* del tema.
+
+.o_shalom_ruta_app {
+    // ------------------------------------------------------------------
+    // Barra superior más baja
+    // ------------------------------------------------------------------
+    .order-topbar {
+        padding: 8px 14px;
+    }
+
+    // ------------------------------------------------------------------
+    // Cabecera que se esconde: grid 1fr -> 0fr anima la altura real sin
+    // tener que medirla. El contenido se recorta solo mientras está
+    // escondida o animando; con el menú de categorías abierto queda
+    // visible para que el desplegable no se corte.
+    // ------------------------------------------------------------------
+    .order-cabecera {
+        flex: 0 0 auto;
+        display: grid;
+        grid-template-rows: 1fr;
+        transition: grid-template-rows 0.22s ease;
+    }
+    .order-cabecera.oculta {
+        grid-template-rows: 0fr;
+    }
+    .order-cabecera-dentro {
+        min-height: 0;
+        overflow: hidden;
+    }
+    .order-cabecera.menu-abierto .order-cabecera-dentro {
+        overflow: visible;
+    }
+
+    // ------------------------------------------------------------------
+    // Aviso de datos faltantes en una sola línea
+    // ------------------------------------------------------------------
+    .nag-banner.nag-compacto {
+        align-items: center;
+        gap: 8px;
+        margin: 8px 14px 0;
+        padding: 6px 10px;
+        border-radius: var(--shalom-radius-sm);
+        font-size: 0.78rem;
+        line-height: 1.3;
+    }
+    .nag-banner.nag-compacto > .fa-exclamation-triangle {
+        margin-top: 0;
+    }
+    .nag-texto {
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .nag-link {
+        flex: 0 0 auto;
+        border: none;
+        background: none;
+        padding: 4px 2px;
+        color: var(--shalom-accent);
+        font-weight: 800;
+        font-size: 0.78rem;
+        font-family: inherit;
+        cursor: pointer;
+    }
+
+    // ------------------------------------------------------------------
+    // Medidor compacto: total, estrellas, margen y mensaje corto en una
+    // línea + barra fina. Al tocarlo se despliega leyenda y mensaje.
+    // ------------------------------------------------------------------
+    .medidor.medidor-compacto {
+        margin: 8px 14px 0;
+        padding: 8px 12px;
+        gap: 6px;
+        cursor: pointer;
+        user-select: none;
+    }
+    .medidor-compacto .medidor-fila {
+        justify-content: flex-start;
+        min-width: 0;
+    }
+    .medidor-compacto .medidor-total {
+        font-size: 1.15rem;
+        flex: 0 0 auto;
+    }
+    .medidor-compacto .medidor-estrellas {
+        font-size: 1rem;
+        letter-spacing: 1px;
+        flex: 0 0 auto;
+    }
+    .medidor-compacto .medidor-margen {
+        font-size: 0.7rem;
+        padding: 2px 7px;
+        flex: 0 0 auto;
+    }
+    .medidor-mensaje-corto {
+        flex: 1;
+        min-width: 0;
+        text-align: right;
+        font-size: 0.75rem;
+        font-weight: 800;
+        color: var(--shalom-ink-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .medidor-mensaje-corto.tono-falta {
+        color: var(--shalom-accent);
+    }
+    .medidor-mensaje-corto.tono-oro {
+        color: var(--shalom-estrella-3);
+    }
+    .medidor-mensaje-corto.tono-aviso {
+        color: var(--shalom-stock-warning-ink);
+    }
+    .medidor-chev {
+        flex: 0 0 auto;
+        color: var(--shalom-ink-muted);
+        font-size: 1rem;
+    }
+    .medidor-compacto .medidor-barra {
+        height: 6px;
+    }
+    .medidor-compacto .medidor-marca {
+        top: -2px;
+        bottom: -2px;
+        width: 2px;
+    }
+
+    // ------------------------------------------------------------------
+    // Barra del catálogo (buscador, categoría, stock, anteriores, vista)
+    // Celular:  [ buscar ··········· (cámara) ] [Anteriores]
+    //           [ Categoría ▾ ········ ] [Con stock] [≡ ▦]
+    // Tablet:   [ Categoría ▾ ] [ buscar ·········· (cámara) ]
+    //           [Con stock] 248 productos ···· [Pedidos anteriores] [≡ ▦]
+    // ------------------------------------------------------------------
+    .catalogo-barra {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-areas:
+            "buscar buscar anteriores"
+            "categ stock vista";
+        gap: 8px;
+        align-items: center;
+        padding: 8px 14px 8px;
+        border-bottom: 1px solid var(--shalom-line);
+    }
+    .catalogo-barra .categ-selector-wrap {
+        grid-area: categ;
+    }
+    .catalogo-barra .catalogo-buscar {
+        grid-area: buscar;
+    }
+    .catalogo-barra .stock-toggle-btn {
+        grid-area: stock;
+    }
+    .catalogo-cuenta {
+        grid-area: cuenta;
+        display: none;
+        font-size: 0.8rem;
+        color: var(--shalom-ink-muted);
+        white-space: nowrap;
+    }
+    .catalogo-anteriores {
+        grid-area: anteriores;
+    }
+    .vista-toggle {
+        grid-area: vista;
+    }
+
+    .catalogo-buscar {
+        min-width: 0;
+        height: 40px;
+        padding: 0 4px 0 14px;
+        background: var(--shalom-surface);
+        border: 1.5px solid var(--shalom-line);
+    }
+    .catalogo-buscar input {
+        min-width: 0;
+    }
+    .catalogo-escanear {
+        flex: 0 0 auto;
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        border: none;
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+    }
+    .catalogo-barra .categ-selector-btn,
+    .catalogo-barra .stock-toggle-btn {
+        height: 36px;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    .catalogo-anteriores {
+        height: 40px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px;
+        border: 1.5px solid var(--shalom-accent);
+        background: var(--shalom-surface);
+        color: var(--shalom-accent);
+        border-radius: 999px;
+        font-weight: 800;
+        font-size: 0.8rem;
+        font-family: inherit;
+        white-space: nowrap;
+        cursor: pointer;
+    }
+    .catalogo-anteriores .txt-largo {
+        display: none;
+    }
+    .vista-toggle {
+        display: flex;
+        padding: 2px;
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        border-radius: 999px;
+    }
+    .vista-toggle button {
+        width: 34px;
+        height: 30px;
+        border: none;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--shalom-ink-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 0.95rem;
+    }
+    .vista-toggle button.active {
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+    }
+
+    @media (min-width: 768px) {
+        .catalogo-barra {
+            grid-template-columns: 230px minmax(0, 1fr) auto auto;
+            grid-template-areas:
+                "categ buscar buscar buscar"
+                "stock cuenta anteriores vista";
+            padding: 10px 20px;
+        }
+        .catalogo-barra .stock-toggle-btn {
+            justify-self: start;
+        }
+        .catalogo-cuenta {
+            display: block;
+        }
+        .catalogo-anteriores .txt-corto {
+            display: none;
+        }
+        .catalogo-anteriores .txt-largo {
+            display: inline;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Lista del catálogo: nada de desplazamiento lateral
+    // ------------------------------------------------------------------
+    .catalog-list {
+        overflow-x: hidden;
+        padding-top: 10px;
+    }
+    .catalog-list .product-card .stock-badge {
+        white-space: normal;
+        font-size: 0.72rem;
+        padding: 1px 6px;
+    }
+    .catalog-list .product-card .estrategia-marca {
+        margin: 0;
+    }
+    .catalog-list .product-card .qty-stepper {
+        min-width: 0;
+    }
+    .catalog-list .product-card .qty-input {
+        flex: 1 1 0;
+        width: 0;
+        min-width: 0;
+    }
+
+    // ---------- Vista LISTA: filas de ~100 px, foto 76x88 ----------
+    .catalog-list.vista-lista .product-card {
+        grid-template-columns: 76px minmax(0, 1fr) auto;
+        grid-template-areas:
+            "foto nombre accion"
+            "foto lado accion"
+            "foto promo promo"
+            "foto cant cant";
+        grid-template-rows: min-content min-content min-content auto;
+        align-content: start;
+        column-gap: 10px;
+        row-gap: 3px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+        border-radius: var(--shalom-radius-md);
+
+        .name {
+            grid-area: nombre;
+            font-size: 0.9rem;
+            line-height: 1.25;
+        }
+        .product-thumb-wrap {
+            grid-area: foto;
+            width: 76px;
+            height: 88px;
+            margin: 0;
+        }
+        .product-side {
+            grid-area: lado;
+            flex-direction: row;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 3px 6px;
+        }
+        .price-label {
+            display: none;
+        }
+        .price {
+            order: 1;
+            font-size: 1.05rem;
+            margin: 0;
+        }
+        .estrategia-marca {
+            order: 2;
+        }
+        .stock-chips,
+        .stock-badge {
+            order: 3;
+        }
+        .stock-chips {
+            flex-basis: 100%;
+            gap: 3px;
+        }
+        .reservados {
+            order: 4;
+            flex-basis: 100%;
+            font-size: 0.72rem;
+            margin: 0;
+        }
+        .promo-badge {
+            grid-area: promo;
+            align-self: start;
+            padding: 2px 6px;
+            font-size: 0.72rem;
+        }
+        .qty-add-btn {
+            grid-area: accion;
+            align-self: center;
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            border-radius: 999px;
+            font-size: 1.1rem;
+        }
+        .qty-add-txt {
+            display: none;
+        }
+        .qty-row {
+            grid-area: cant;
+            margin-top: 4px;
+        }
+        .qty-stepper {
+            flex: 1;
+            padding: 2px;
+        }
+        .qty-stepper button {
+            min-width: 40px;
+            height: 36px;
+            font-size: 1.1rem;
+        }
+        .qty-input {
+            font-size: 1rem;
+        }
+        .qty-trash-btn {
+            width: 38px;
+            height: 38px;
+        }
+    }
+
+    // ---------- Vista CUADRÍCULA: tarjetas con foto arriba ----------
+    .catalog-list.vista-cuadricula {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+        gap: 10px;
+        align-content: start;
+
+        > .paginador,
+        > .shalom-vacio {
+            grid-column: 1 / -1;
+        }
+    }
+    .catalog-list.vista-cuadricula .product-card {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+        margin: 0;
+        padding: 8px;
+        border-radius: var(--shalom-radius-md);
+
+        .product-thumb-wrap {
+            order: 1;
+            width: 100%;
+            height: 104px;
+            margin: 0;
+        }
+        .name {
+            order: 2;
+            font-size: 0.8rem;
+            line-height: 1.25;
+            min-height: 2.5em;
+        }
+        .product-side {
+            order: 3;
+            gap: 3px;
+        }
+        .price-label {
+            display: none;
+        }
+        .price {
+            font-size: 1rem;
+            margin: 0;
+        }
+        // EMPUJAR / NO OFRECER sobre la foto
+        .estrategia-marca {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            z-index: 1;
+        }
+        .stock-chips {
+            gap: 3px;
+        }
+        .stock-badge {
+            font-size: 0.66rem;
+            padding: 1px 5px;
+        }
+        .reservados {
+            font-size: 0.72rem;
+            margin: 0;
+        }
+        .promo-badge {
+            order: 4;
+            padding: 2px 6px;
+            font-size: 0.72rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .qty-add-btn,
+        .qty-row {
+            order: 5;
+            margin-top: auto;
+        }
+        .qty-add-btn {
+            height: 38px;
+            font-size: 0.88rem;
+        }
+        .qty-stepper {
+            padding: 2px;
+            gap: 2px;
+        }
+        .qty-stepper button {
+            min-width: 34px;
+            height: 34px;
+            font-size: 1.05rem;
+        }
+        .qty-input {
+            font-size: 0.95rem;
+        }
+        .qty-trash-btn {
+            width: 36px;
+            height: 36px;
+            font-size: 0.9rem;
+        }
+    }
+    @media (min-width: 768px) {
+        .catalog-list.vista-cuadricula {
+            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+            gap: 12px;
+        }
+        .catalog-list.vista-cuadricula .product-card .product-thumb-wrap {
+            height: 150px;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Pedidos anteriores: hoja de abajo (centrada en tablet)
+    // ------------------------------------------------------------------
+    .precarga-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 95;
+        background: rgba(20, 10, 15, 0.42);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        animation: shalom-fondo-in 0.15s ease both;
+    }
+    .precarga-hoja {
+        width: 100%;
+        max-width: 560px;
+        max-height: 86vh;
+        display: flex;
+        flex-direction: column;
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        border-radius: 24px 24px 0 0;
+        box-shadow: 0 -12px 30px -10px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+    }
+    @media (min-width: 768px) {
+        .precarga-overlay {
+            align-items: center;
+            padding: 20px;
+        }
+        .precarga-hoja {
+            border-radius: var(--shalom-radius-lg);
+        }
+    }
+    .precarga-cab {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 16px 18px 10px;
+    }
+    .precarga-cab-texto {
+        flex: 1;
+        min-width: 0;
+    }
+    .precarga-cab h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 800;
+    }
+    .precarga-cab p {
+        margin: 2px 0 0;
+        font-size: 0.8rem;
+        color: var(--shalom-ink-muted);
+    }
+    .precarga-pestanas {
+        flex: 0 0 auto;
+        display: flex;
+        gap: 8px;
+        padding: 0 18px 12px;
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    .precarga-pestana {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1px;
+        padding: 7px 12px;
+        border-radius: var(--shalom-radius-sm);
+        border: 1.5px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        font-family: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .precarga-pestana b {
+        font-size: 0.82rem;
+    }
+    .precarga-pestana span {
+        font-size: 0.72rem;
+        color: var(--shalom-ink-muted);
+        white-space: nowrap;
+    }
+    .precarga-pestana.active {
+        border-color: var(--shalom-accent);
+        background: var(--shalom-accent-soft);
+    }
+    .precarga-pestana.active b {
+        color: var(--shalom-accent);
+    }
+    .precarga-hoja .precarga-lista {
+        flex: 1;
+        min-height: 0;
+        max-height: none;
+        margin: 0;
+        gap: 0;
+        overflow-y: auto;
+        padding: 0 18px;
+        border-top: 1px solid var(--shalom-line);
+    }
+    .precarga-hoja .precarga-linea {
+        padding: 8px 0;
+        border-bottom: 1px solid var(--shalom-line);
+    }
+    .precarga-hoja .precarga-linea.ya-en-pedido {
+        opacity: 0.6;
+    }
+    .precarga-hoja .precarga-foto {
+        width: 48px;
+        height: 56px;
+    }
+    .precarga-hoja .precarga-foto img {
+        object-fit: contain;
+    }
+    .precarga-linea-titulo {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .precarga-linea-detalle {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 3px 6px;
+        font-weight: 400;
+    }
+    .precarga-linea-detalle .stock-badge {
+        font-size: 0.7rem;
+        padding: 1px 6px;
+        white-space: normal;
+    }
+    .precarga-pidio {
+        font-size: 0.75rem;
+        color: var(--shalom-ink-muted);
+    }
+    .precarga-estado {
+        flex: 0 0 auto;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--shalom-ink-muted);
+        max-width: 96px;
+        text-align: right;
+    }
+    .precarga-estado.precarga-ya {
+        color: var(--shalom-completado);
+        font-weight: 800;
+        white-space: nowrap;
+        max-width: none;
+    }
+    .precarga-hoja .precarga-linea-btn {
+        flex: 0 0 auto;
+        min-width: 58px;
+        height: 40px;
+        padding: 0 12px;
+        border: none;
+        border-radius: 999px;
+        background: var(--shalom-accent-soft);
+        color: var(--shalom-accent);
+        font-weight: 800;
+        font-size: 0.9rem;
+        font-family: inherit;
+        cursor: pointer;
+    }
+    .precarga-pie {
+        flex: 0 0 auto;
+        padding: 12px 18px 18px;
+        border-top: 1px solid var(--shalom-line);
+    }
+    .precarga-faltan-btn {
+        width: 100%;
+        height: 50px;
+        border: none;
+        border-radius: var(--shalom-radius-md);
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        font-weight: 800;
+        font-size: 0.95rem;
+        font-family: inherit;
+        cursor: pointer;
+    }
+    .precarga-faltan-btn[disabled] {
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
+        cursor: default;
+    }
+}

@@ -11,108 +11,138 @@
                 <TemaSelector/>
             </div>
 
-            <div
-                class="nag-banner"
-                t-if="!state.cargando and state.datosFaltantes.length and !state.avisoDatosFaltantesCerrado"
-            >
-                <i class="fa fa-exclamation-triangle" aria-hidden="true"/>
-                <div class="nag-banner-body">
-                    <b><t t-esc="'A este cliente le faltan datos: ' + state.datosFaltantes.join(', ') + '.'"/></b>
-                    Podés seguir armando el pedido igual.
-                    <div class="nag-banner-actions">
-                        <button class="nag-btn nag-btn-primary" t-on-click="abrirEdicionCliente">Completar ahora</button>
-                        <button class="nag-btn" t-on-click="cerrarAvisoDatosFaltantes">Ahora no</button>
+            <!-- Cabecera compacta: se esconde al bajar por el catálogo y
+                 vuelve al subir (ver onScrollCatalogo en order_screen.js). -->
+            <t t-set="med" t-value="medidor"/>
+            <div class="order-cabecera" t-att-class="clasesCabecera">
+                <div class="order-cabecera-dentro">
+                    <div
+                        class="nag-banner nag-compacto"
+                        t-if="!state.cargando and state.datosFaltantes.length and !state.avisoDatosFaltantesCerrado"
+                        t-att-title="'A este cliente le faltan datos: ' + state.datosFaltantes.join(', ') + '. Podés seguir armando el pedido igual.'"
+                    >
+                        <i class="fa fa-exclamation-triangle" aria-hidden="true"/>
+                        <span class="nag-texto"><b>Faltan datos:</b> <t t-esc="state.datosFaltantes.join(', ')"/></span>
+                        <button class="nag-link" t-on-click="abrirEdicionCliente">Completar</button>
+                        <button class="nag-banner-close" t-on-click="cerrarAvisoDatosFaltantes" title="Cerrar" aria-label="Cerrar aviso">✕</button>
+                    </div>
+
+                    <div
+                        class="medidor medidor-compacto"
+                        t-if="med and !state.cargando"
+                        t-att-class="state.medidorAbierto ? 'abierto' : ''"
+                        t-on-click="toggleMedidor"
+                        role="button"
+                        t-att-aria-expanded="state.medidorAbierto ? 'true' : 'false'"
+                    >
+                        <div class="medidor-fila">
+                            <b class="medidor-total" t-esc="'$' + total.toFixed(2)"/>
+                            <span class="medidor-estrellas" t-if="med.tiene" t-att-title="med.estrellas + ' de 3 estrellas'">
+                                <span t-foreach="[1, 2, 3]" t-as="n" t-key="n" t-att-class="med.estrellas >= n ? 'estrella-on estrella-' + n : 'estrella-off'">★</span>
+                            </span>
+                            <span class="medidor-margen" t-if="med.verMargen" t-att-class="med.margenBajo ? 'margen-bajo' : 'margen-ok'" title="Margen del pedido" t-esc="Math.round(med.margen) + '%'"/>
+                            <span class="medidor-mensaje-corto" t-att-class="'tono-' + med.tono" t-esc="med.mensajeCorto"/>
+                            <i class="fa medidor-chev" t-att-class="state.medidorAbierto ? 'fa-angle-up' : 'fa-angle-down'" aria-hidden="true"/>
+                        </div>
+                        <div class="medidor-barra" t-if="med.tiene">
+                            <div class="medidor-relleno" t-att-style="'width:' + med.relleno + '%'"/>
+                            <span
+                                t-foreach="med.marcas" t-as="marca" t-key="marca.clase"
+                                class="medidor-marca" t-att-class="'marca-' + marca.clase"
+                                t-att-style="'left:' + marca.pos + '%'"
+                            />
+                        </div>
+                        <t t-if="state.medidorAbierto">
+                            <div class="medidor-leyenda" t-if="med.tiene">
+                                <span t-foreach="med.marcas" t-as="marca" t-key="marca.clase" t-att-class="'leyenda-' + marca.clase">
+                                    <t t-esc="marca.clase === 'bronce' ? '★ ' : (marca.clase === 'plata' ? '★★ ' : '★★★ ')"/><t t-esc="marca.texto"/>
+                                </span>
+                            </div>
+                            <div class="medidor-mensaje" t-att-class="'tono-' + med.tono" t-esc="med.mensaje"/>
+                        </t>
+                    </div>
+
+                    <!-- Barra del catálogo. Celular: buscador + Anteriores arriba,
+                         categoría + stock + vista abajo. Tablet: categoría a la
+                         izquierda y buscador a lo ancho; abajo stock y cuenta a
+                         la izquierda, Pedidos anteriores y vista a la derecha. -->
+                    <div class="catalogo-barra" t-if="!state.cargando and state.pantalla === 'catalogo'">
+                        <div class="categ-selector-wrap">
+                            <button class="categ-selector-btn" t-on-click="toggleCategMenu">
+                                <span t-esc="etiquetaCategoriaActual"/>
+                                <span class="chev">▾</span>
+                            </button>
+                            <div class="categ-menu" t-if="state.categMenuAbierto">
+                                <input
+                                    type="text"
+                                    class="categ-menu-search"
+                                    placeholder="Buscar categoría…"
+                                    t-model="state.busquedaCategoria"
+                                />
+                                <div class="categ-menu-list">
+                                    <button
+                                        t-att-class="state.categoriaSeleccionada === 'todas' ? 'categ-menu-item active' : 'categ-menu-item'"
+                                        t-on-click="() => this.elegirCategoria('todas')"
+                                    >Todas las categorías</button>
+                                    <button
+                                        t-foreach="categoriasFiltradas"
+                                        t-as="categoria"
+                                        t-key="categoria.id"
+                                        t-att-class="state.categoriaSeleccionada === categoria.id ? 'categ-menu-item active' : 'categ-menu-item'"
+                                        t-on-click="() => this.elegirCategoria(categoria.id)"
+                                    ><t t-esc="categoria.nombre"/></button>
+                                    <div t-if="!categoriasFiltradas.length" class="shalom-vacio">Sin resultados.</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="search-box-live catalogo-buscar">
+                            <span><i class="fa fa-search" aria-hidden="true"/></span>
+                            <input
+                                type="text"
+                                placeholder="Buscar producto, código o barcode…"
+                                aria-label="Buscar producto"
+                                t-model="state.busqueda"
+                                t-on-input="onBusquedaInput"
+                            />
+                            <button class="catalogo-escanear" t-on-click="iniciarEscaneo" title="Escanear código de barras" aria-label="Escanear código de barras"><i class="fa fa-camera" aria-hidden="true"/></button>
+                        </div>
+                        <button
+                            class="stock-toggle-btn"
+                            t-att-class="state.soloConStock ? 'active' : ''"
+                            t-on-click="toggleSoloConStock"
+                        >Con stock</button>
+                        <span class="catalogo-cuenta" t-esc="productosFiltrados.length + ' productos'"/>
+                        <button class="catalogo-anteriores" t-on-click="abrirPrecarga" title="Precargar de pedidos anteriores">
+                            <i class="fa fa-history" aria-hidden="true"/>
+                            <span class="txt-corto">Anteriores</span><span class="txt-largo">Pedidos anteriores</span>
+                        </button>
+                        <div class="vista-toggle" role="group" aria-label="Vista del catálogo">
+                            <button
+                                t-att-class="state.vistaCatalogo === 'lista' ? 'active' : ''"
+                                t-on-click="() => this.cambiarVistaCatalogo('lista')"
+                                title="Ver como lista"
+                                aria-label="Ver como lista"
+                            ><i class="fa fa-list" aria-hidden="true"/></button>
+                            <button
+                                t-att-class="state.vistaCatalogo === 'cuadricula' ? 'active' : ''"
+                                t-on-click="() => this.cambiarVistaCatalogo('cuadricula')"
+                                title="Ver como cuadrícula"
+                                aria-label="Ver como cuadrícula"
+                            ><i class="fa fa-th-large" aria-hidden="true"/></button>
+                        </div>
                     </div>
                 </div>
-                <button class="nag-banner-close" t-on-click="cerrarAvisoDatosFaltantes" title="Cerrar">✕</button>
-            </div>
-
-            <t t-set="med" t-value="medidor"/>
-            <div class="medidor" t-if="med and !state.cargando">
-                <div class="medidor-fila">
-                    <b class="medidor-total" t-esc="'$' + total.toFixed(2)"/>
-                    <span class="medidor-estrellas" t-if="med.tiene" t-att-title="med.estrellas + ' de 3 estrellas'">
-                        <span t-foreach="[1, 2, 3]" t-as="n" t-key="n" t-att-class="med.estrellas >= n ? 'estrella-on estrella-' + n : 'estrella-off'">★</span>
-                    </span>
-                    <span class="medidor-margen" t-if="med.verMargen" t-att-class="med.margenBajo ? 'margen-bajo' : 'margen-ok'" t-esc="'Margen ' + Math.round(med.margen) + '%'"/>
-                </div>
-                <div class="medidor-barra" t-if="med.tiene">
-                    <div class="medidor-relleno" t-att-style="'width:' + med.relleno + '%'"/>
-                    <span
-                        t-foreach="med.marcas" t-as="marca" t-key="marca.clase"
-                        class="medidor-marca" t-att-class="'marca-' + marca.clase"
-                        t-att-style="'left:' + marca.pos + '%'"
-                    />
-                </div>
-                <div class="medidor-leyenda" t-if="med.tiene">
-                    <span t-foreach="med.marcas" t-as="marca" t-key="marca.clase" t-att-class="'leyenda-' + marca.clase">
-                        <t t-esc="marca.clase === 'bronce' ? '★ ' : (marca.clase === 'plata' ? '★★ ' : '★★★ ')"/><t t-esc="marca.texto"/>
-                    </span>
-                </div>
-                <div class="medidor-mensaje" t-att-class="'tono-' + med.tono" t-esc="med.mensaje"/>
             </div>
 
             <div t-if="state.cargando" class="shalom-vacio">Cargando catálogo…</div>
 
             <t t-elif="state.pantalla === 'catalogo'">
-                <div class="search-row">
-                    <div class="search-box-live">
-                        <span><i class="fa fa-search" aria-hidden="true"/></span>
-                        <input
-                            type="text"
-                            placeholder="Buscar producto, código o barcode…"
-                            t-model="state.busqueda"
-                            t-on-input="onBusquedaInput"
-                        />
-                    </div>
-                    <button class="icon-btn" t-on-click="iniciarEscaneo" title="Escanear código de barras"><i class="fa fa-camera" aria-hidden="true"/></button>
-                </div>
 
-                <button class="precarga-btn" t-on-click="abrirPrecarga">
-                    <span>
-                        <b>Precargar de pedidos anteriores</b>
-                        <small>Un pedido completo o productos sueltos</small>
-                    </span>
-                    <i class="fa fa-angle-right" aria-hidden="true"/>
-                </button>
-
-                <div class="categ-bar">
-                    <div class="categ-selector-wrap">
-                        <button class="categ-selector-btn" t-on-click="toggleCategMenu">
-                            <span t-esc="etiquetaCategoriaActual"/>
-                            <span class="chev">▾</span>
-                        </button>
-                        <div class="categ-menu" t-if="state.categMenuAbierto">
-                            <input
-                                type="text"
-                                class="categ-menu-search"
-                                placeholder="Buscar categoría…"
-                                t-model="state.busquedaCategoria"
-                            />
-                            <div class="categ-menu-list">
-                                <button
-                                    t-att-class="state.categoriaSeleccionada === 'todas' ? 'categ-menu-item active' : 'categ-menu-item'"
-                                    t-on-click="() => this.elegirCategoria('todas')"
-                                >Todas las categorías</button>
-                                <button
-                                    t-foreach="categoriasFiltradas"
-                                    t-as="categoria"
-                                    t-key="categoria.id"
-                                    t-att-class="state.categoriaSeleccionada === categoria.id ? 'categ-menu-item active' : 'categ-menu-item'"
-                                    t-on-click="() => this.elegirCategoria(categoria.id)"
-                                ><t t-esc="categoria.nombre"/></button>
-                                <div t-if="!categoriasFiltradas.length" class="shalom-vacio">Sin resultados.</div>
-                            </div>
-                        </div>
-                    </div>
-                    <button
-                        class="stock-toggle-btn"
-                        t-att-class="state.soloConStock ? 'active' : ''"
-                        t-on-click="toggleSoloConStock"
-                    >Con stock</button>
-                </div>
-
-                <div class="view catalog-list">
+                <div
+                    class="view catalog-list"
+                    t-att-class="'vista-' + state.vistaCatalogo"
+                    t-on-scroll="onScrollCatalogo"
+                >
                     <div class="paginador" t-if="totalPaginas > 1">
                         <button class="btn btn-ghost" t-on-click="paginaAnterior" t-att-disabled="state.paginaActual === 1">‹ Anterior</button>
                         <span class="paginador-info" t-esc="'Página ' + state.paginaActual + ' de ' + totalPaginas"/>
@@ -157,6 +187,7 @@
                             <div
                                 class="promo-badge"
                                 t-att-class="promoCompleta(producto.id) ? 'promo-completa' : 'promo-pendiente'"
+                                t-att-title="etiquetaPromo(producto.id)"
                                 t-esc="etiquetaPromo(producto.id)"
                             />
                         </t>
@@ -164,7 +195,7 @@
                             t-if="!cantidadEnCarrito(producto.id)"
                             class="qty-add-btn"
                             t-on-click="() => this.agregarProducto(producto)"
-                        >+ Agregar</button>
+                        ><i class="fa fa-plus" aria-hidden="true"/><span class="qty-add-txt"> Agregar</span></button>
                         <div t-else="" class="qty-row">
                             <div class="qty-stepper">
                                 <button t-on-click="() => this.cambiarCantidad(producto.id, -1)">−</button>
@@ -390,47 +421,68 @@
                 </div>
             </div>
 
-            <div class="confirm-overlay" t-if="state.precargaAbierta">
-                <div class="confirm-card precarga-card">
-                    <h3>Precargar de pedidos anteriores</h3>
-                    <p>Se suma al carrito lo que elijas; nada se bloquea por existencia.</p>
+            <!-- Pedidos anteriores: hoja de abajo (centrada en tablet). Lo
+                 que ya está en el carrito sale marcado; el botón de abajo
+                 suma SOLO lo que falta, sin duplicar cantidades. -->
+            <div class="precarga-overlay" t-if="state.precargaAbierta" t-on-click.self="cerrarPrecarga">
+                <div class="precarga-hoja" role="dialog" aria-label="Pedidos anteriores">
+                    <div class="precarga-cab">
+                        <div class="precarga-cab-texto">
+                            <h3>Pedidos anteriores</h3>
+                            <p>Lo que ya está en este pedido aparece marcado.</p>
+                        </div>
+                        <button class="icon-btn" t-on-click="cerrarPrecarga" title="Cerrar" aria-label="Cerrar">✕</button>
+                    </div>
                     <div t-if="state.cargandoPrecarga" class="shalom-vacio">Cargando…</div>
                     <div t-elif="!state.pedidosAnteriores.length" class="shalom-vacio">Este cliente no tiene pedidos anteriores.</div>
-                    <div t-else="" class="precarga-lista">
-                        <div t-foreach="state.pedidosAnteriores" t-as="pedido" t-key="pedido.id" class="precarga-pedido">
-                            <div class="precarga-pedido-cab" t-on-click="() => this.togglePedidoPrecarga(pedido.id)">
-                                <div class="precarga-pedido-info">
-                                    <div class="reward-option-nombre" t-esc="(pedido.fecha || '') + ' · ' + pedido.nombre"/>
-                                    <div class="reward-option-detalle" t-esc="pedido.lineas.length + ' producto(s) · $' + pedido.total.toFixed(2)"/>
+                    <t t-else="">
+                        <div class="precarga-pestanas">
+                            <button
+                                t-foreach="state.pedidosAnteriores"
+                                t-as="pedido"
+                                t-key="pedido.id"
+                                class="precarga-pestana"
+                                t-att-class="state.pedidoPrecargaAbierto === pedido.id ? 'active' : ''"
+                                t-on-click="() => this.seleccionarPedidoPrecarga(pedido.id)"
+                            >
+                                <b t-esc="pedido.fecha || pedido.nombre"/>
+                                <span t-esc="pedido.lineas.length + ' prod. · $' + pedido.total.toFixed(2)"/>
+                            </button>
+                        </div>
+                        <t t-set="pedidoSel" t-value="pedidoPrecargaSeleccionado"/>
+                        <div class="precarga-lista" t-if="pedidoSel">
+                            <div t-foreach="pedidoSel.lineas" t-as="linea" t-key="linea_index" class="precarga-linea" t-att-class="lineaEnCarrito(linea) ? 'ya-en-pedido' : ''">
+                                <t t-set="prodLinea" t-value="productoDeLinea(linea)"/>
+                                <div class="precarga-foto">
+                                    <img t-att-src="imagenPrecarga(linea)" alt="" loading="lazy" t-on-error="onImagenError"/>
                                 </div>
-                                <button class="btn btn-primary precarga-todo-btn" t-on-click.stop="() => this.precargarPedido(pedido)">Agregar todo</button>
-                            </div>
-                            <div t-if="state.pedidoPrecargaAbierto === pedido.id" class="precarga-lineas">
-                                <div t-foreach="pedido.lineas" t-as="linea" t-key="linea_index" class="precarga-linea">
-                                    <t t-set="prodLinea" t-value="productoDeLinea(linea)"/>
-                                    <div class="precarga-foto">
-                                        <img t-att-src="imagenPrecarga(linea)" alt="" loading="lazy" t-on-error="onImagenError"/>
-                                    </div>
-                                    <div class="precarga-linea-nombre">
-                                        <span t-esc="linea.nombre"/>
+                                <div class="precarga-linea-nombre">
+                                    <span class="precarga-linea-titulo" t-esc="linea.nombre"/>
+                                    <div class="precarga-linea-detalle">
+                                        <span class="precarga-pidio" t-esc="'Pidió ' + linea.cantidad"/>
                                         <t t-if="prodLinea">
                                             <t t-set="chipsLinea" t-value="chipsBodegas(prodLinea)"/>
-                                            <div class="stock-chips" t-if="chipsLinea">
+                                            <t t-if="chipsLinea">
                                                 <span class="stock-badge" t-att-class="'tono-' + chipsLinea.dianke.tono" t-esc="chipsLinea.dianke.texto"/>
                                                 <span class="stock-badge" t-att-class="'tono-' + chipsLinea.nevada.tono" t-esc="chipsLinea.nevada.texto"/>
-                                            </div>
+                                            </t>
                                         </t>
                                     </div>
-                                    <button class="btn btn-secondary precarga-linea-btn" t-on-click="() => this.precargarLinea(linea)">
-                                        <t t-esc="'+ ' + linea.cantidad"/>
-                                    </button>
                                 </div>
+                                <span t-if="!prodLinea" class="precarga-estado">Ya no está en el catálogo</span>
+                                <span t-elif="lineaEnCarrito(linea)" class="precarga-estado precarga-ya"><i class="fa fa-check" aria-hidden="true"/> Ya en el pedido</span>
+                                <button t-else="" class="precarga-linea-btn" t-on-click="() => this.precargarLinea(linea)" t-att-title="'Agregar ' + linea.cantidad">
+                                    <t t-esc="'+' + linea.cantidad"/>
+                                </button>
                             </div>
                         </div>
-                    </div>
-                    <div class="edit-actions">
-                        <button class="btn btn-ghost" t-on-click="cerrarPrecarga">Cerrar</button>
-                    </div>
+                        <div class="precarga-pie" t-if="pedidoSel">
+                            <t t-set="faltan" t-value="lineasFaltantes(pedidoSel).length"/>
+                            <button class="precarga-faltan-btn" t-att-disabled="!faltan" t-on-click="() => this.agregarFaltantes(pedidoSel)">
+                                <t t-esc="!faltan ? 'Todo ya está en el pedido' : (faltan === 1 ? 'Agregar el que falta' : 'Agregar los ' + faltan + ' que faltan')"/>
+                            </button>
+                        </div>
+                    </t>
                 </div>
             </div>
 

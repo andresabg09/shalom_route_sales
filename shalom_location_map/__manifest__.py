@@ -79,6 +79,7 @@
             "shalom_location_map/static/src/scss/juego_campo.scss",
             "shalom_location_map/static/src/scss/juego_social.scss",
             "shalom_location_map/static/src/scss/rediseno.scss",
+            "shalom_location_map/static/src/scss/catalogo.scss",
             "shalom_location_map/static/src/js/ruta_shalom/mapbox_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/navegacion_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/stage_utils.js",

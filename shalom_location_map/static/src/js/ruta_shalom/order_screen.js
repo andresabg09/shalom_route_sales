@@ -169,6 +169,23 @@ function shalomFechaServidorAMs(fechaServidor) {
     return Date.parse(fechaServidor.replace(" ", "T") + "Z") || 0;
 }
 
+// Vista del catálogo (lista compacta o cuadrícula): cada aparato recuerda
+// la última que eligió el vendedor; la primera vez, cuadrícula en tablet y
+// lista en celular. localStorage puede fallar (modo privado): nunca rompe.
+const CLAVE_VISTA_CATALOGO = "shalom_catalogo_vista";
+
+function shalomVistaCatalogoInicial() {
+    try {
+        const guardada = window.localStorage.getItem(CLAVE_VISTA_CATALOGO);
+        if (guardada === "lista" || guardada === "cuadricula") {
+            return guardada;
+        }
+    } catch {
+        // sin almacenamiento: se usa el valor según el ancho
+    }
+    return window.matchMedia && window.matchMedia("(min-width: 768px)").matches ? "cuadricula" : "lista";
+}
+
 export class OrderScreen extends Component {
     static template = "shalom_location_map.OrderScreen";
     static components = {ClienteForm, DateTimeInput, TemaSelector};
@@ -226,6 +243,11 @@ export class OrderScreen extends Component {
             busquedaCategoria: "",
             soloConStock: false,
             paginaActual: 1,
+            vistaCatalogo: shalomVistaCatalogoInicial(),
+            // Cabecera compacta: el medidor se despliega al tocarlo, y toda
+            // la cabecera se esconde al bajar por el catálogo (vuelve al subir).
+            medidorAbierto: false,
+            cabeceraOculta: false,
             carrito: {}, // {productId: {producto, cantidad}}
             // "Precargar de pedidos anteriores" (Fase 1 del juego de
             // ventas): hoja con los últimos pedidos del cliente, para
@@ -1020,6 +1042,56 @@ export class OrderScreen extends Component {
         return this.productosFiltrados.slice(inicio, inicio + PRODUCTOS_POR_PAGINA);
     }
 
+    cambiarVistaCatalogo(vista) {
+        this.state.vistaCatalogo = vista;
+        try {
+            window.localStorage.setItem(CLAVE_VISTA_CATALOGO, vista);
+        } catch {
+            // sin almacenamiento: la elección dura solo esta pantalla
+        }
+    }
+
+    toggleMedidor() {
+        this.state.medidorAbierto = !this.state.medidorAbierto;
+    }
+
+    get clasesCabecera() {
+        const clases = [];
+        if (this.state.cabeceraOculta && this.state.pantalla === "catalogo" && !this.state.categMenuAbierto) {
+            clases.push("oculta");
+        }
+        if (this.state.categMenuAbierto) {
+            clases.push("menu-abierto");
+        }
+        return clases.join(" ");
+    }
+
+    /** Bajar por la lista esconde la cabecera; subir (o volver arriba)
+     * la muestra. Umbrales para no parpadear con movimientos chicos, y
+     * una pausa tras cada cambio: al esconderse/mostrarse cambia el alto
+     * de la lista, y eso mismo dispara eventos de scroll. */
+    onScrollCatalogo(ev) {
+        const lista = ev.currentTarget;
+        const actual = lista.scrollTop;
+        const anterior = this._ultimoScrollCatalogo || 0;
+        this._ultimoScrollCatalogo = actual;
+        if (Date.now() < (this._pausaCabeceraHasta || 0)) {
+            return;
+        }
+        let oculta = this.state.cabeceraOculta;
+        if (actual < 24) {
+            oculta = false;
+        } else if (actual - anterior > 6 && lista.scrollHeight - lista.clientHeight > 240) {
+            oculta = true;
+        } else if (anterior - actual > 6) {
+            oculta = false;
+        }
+        if (oculta !== this.state.cabeceraOculta) {
+            this.state.cabeceraOculta = oculta;
+            this._pausaCabeceraHasta = Date.now() + 280;
+        }
+    }
+
     paginaAnterior() {
         if (this.state.paginaActual > 1) {
             this.state.paginaActual -= 1;
@@ -1200,29 +1272,33 @@ export class OrderScreen extends Component {
         const tope = tiene ? Math.max(refs.record * 1.1, this.total) : 0;
         const pct = (valor) => (tope ? Math.min(100, (valor / tope) * 100) : 0);
         let mensaje = "Cliente sin historial de compras: todavía no hay estrellas que medir.";
+        let mensajeCorto = "Sin historial";
         let tono = "neutral";
         if (tiene) {
             const sig = ev.siguiente;
             if (!sig) {
                 mensaje = "¡Oro! Superaste su récord con buen margen.";
+                mensajeCorto = "¡Oro!";
                 tono = "oro";
             } else if (sig.margen_bajo) {
                 mensaje = "Superaste su récord, pero el margen es menor a 20%: el oro no cuenta.";
+                mensajeCorto = "Margen bajo: sin oro";
                 tono = "aviso";
             } else {
                 const nombres = {1: "bronce (75%)", 2: "plata (100%)", 3: "oro (récord)"};
                 mensaje = `Te faltan $${sig.faltan.toFixed(0)} para ${nombres[sig.estrellas]}`;
+                mensajeCorto = `Faltan $${sig.faltan.toFixed(0)} → ${"★".repeat(sig.estrellas)}`;
                 tono = "falta";
             }
         }
         return {
             tiene,
             estrellas: ev.estrellas,
-            // El % de margen solo llega al administrador; al vendedor no se le muestra.
-            verMargen: ev.margen_pct !== undefined,
+            verMargen: ev.margen_pct !== undefined && ev.margen_pct !== null,
             margen: ev.margen_pct,
             margenBajo: ev.margen_pct < 20,
             mensaje,
+            mensajeCorto,
             tono,
             relleno: pct(this.total),
             marcas: tiene
@@ -1265,8 +1341,23 @@ export class OrderScreen extends Component {
         this.state.precargaAbierta = false;
     }
 
-    togglePedidoPrecarga(pedidoId) {
-        this.state.pedidoPrecargaAbierto = this.state.pedidoPrecargaAbierto === pedidoId ? null : pedidoId;
+    seleccionarPedidoPrecarga(pedidoId) {
+        this.state.pedidoPrecargaAbierto = pedidoId;
+    }
+
+    get pedidoPrecargaSeleccionado() {
+        return this.state.pedidosAnteriores.find((pedido) => pedido.id === this.state.pedidoPrecargaAbierto) || null;
+    }
+
+    /** ¿El producto de esta línea ya está en el carrito actual? */
+    lineaEnCarrito(linea) {
+        return !!this.state.carrito[linea.product_id];
+    }
+
+    /** Líneas de un pedido anterior que todavía no están en el carrito
+     * (y siguen en el catálogo). */
+    lineasFaltantes(pedido) {
+        return pedido.lineas.filter((linea) => !this.lineaEnCarrito(linea) && this.productoDeLinea(linea));
     }
 
     /** Producto del catálogo cargado para una línea de pedido anterior
@@ -1300,8 +1391,15 @@ export class OrderScreen extends Component {
         return agregados;
     }
 
-    precargarPedido(pedido) {
-        const agregados = this._precargarLineas(pedido.lineas);
+    /** Suma al carrito solo lo que falta del pedido anterior: lo que
+     * ya está no se toca (antes "Agregar todo" volvía a sumar todo y
+     * duplicaba cantidades). */
+    agregarFaltantes(pedido) {
+        const faltantes = this.lineasFaltantes(pedido);
+        if (!faltantes.length) {
+            return;
+        }
+        const agregados = this._precargarLineas(faltantes);
         this.notification.add(
             agregados ? `Se agregaron ${agregados} producto(s) del pedido ${pedido.nombre}.` : "Esos productos ya no están en el catálogo.",
             {type: agregados ? "success" : "warning"}
