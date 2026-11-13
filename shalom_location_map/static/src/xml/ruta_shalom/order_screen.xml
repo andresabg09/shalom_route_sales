@@ -205,7 +205,9 @@
                                     min="1"
                                     class="qty-input"
                                     t-att-value="cantidadEnCarrito(producto.id)"
+                                    t-on-input="(ev) => this.escribirCantidad(producto.id, ev)"
                                     t-on-change="(ev) => this.cambiarCantidadManual(producto.id, ev)"
+                                    t-on-keydown="(ev) => this.enterCierraTeclado(ev)"
                                     t-on-focus="seleccionarTextoCantidad"
                                 />
                                 <button t-on-click="() => this.cambiarCantidad(producto.id, 1)">+</button>
@@ -269,7 +271,9 @@
                                             min="1"
                                             class="qty-input"
                                             t-att-value="item.cantidad"
+                                            t-on-input="(ev) => this.escribirCantidad(item.producto.id, ev)"
                                             t-on-change="(ev) => this.cambiarCantidadManual(item.producto.id, ev)"
+                                            t-on-keydown="(ev) => this.enterCierraTeclado(ev)"
                                             t-on-focus="seleccionarTextoCantidad"
                                         />
                                         <button t-on-click="() => this.cambiarCantidad(item.producto.id, 1)">+</button>

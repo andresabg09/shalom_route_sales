@@ -1824,6 +1824,39 @@ export class OrderScreen extends Component {
      * unidades). Cualquier valor inválido o menor a 1 se trata como
      * "quitar del carrito", igual que bajar el stepper hasta 0.
      */
+    /** Cantidad escrita a mano: se guarda MIENTRAS se escribe, tecla por
+     * tecla, sin esperar a que el campo pierda el foco. Antes solo se
+     * guardaba en el "change" (al salir del campo), que en el celular no
+     * siempre llega (desplazarse con el teclado abierto, algunos
+     * teclados al tocar "Listo"): la app seguía con la cantidad vieja y
+     * la volvía a poner (reportado: "escribo 96 y vuelve al 12").
+     * Vacío o 0 a mitad de escribir no quita nada; eso lo resuelve
+     * cambiarCantidadManual al salir del campo. Las promos se recalculan
+     * con una pausa corta, no por cada tecla. */
+    escribirCantidad(productoId, ev) {
+        const item = this.state.carrito[productoId];
+        const nueva = parseInt(ev.target.value, 10);
+        if (!item || !nueva || nueva <= 0 || nueva === item.cantidad) {
+            return;
+        }
+        item.cantidad = nueva;
+        this._guardarBorradorCarrito();
+        this._marcarCambioPendienteCarrito(productoId);
+        clearTimeout(this._promosTimer);
+        this._promosTimer = setTimeout(() => {
+            if (!this._destruido) {
+                this.actualizarPromos();
+            }
+        }, 500);
+    }
+
+    /** Enter / "Ir" del teclado: cierra el teclado (y confirma la cantidad). */
+    enterCierraTeclado(ev) {
+        if (ev.key === "Enter") {
+            ev.target.blur();
+        }
+    }
+
     cambiarCantidadManual(productoId, ev) {
         const item = this.state.carrito[productoId];
         if (!item) {
