@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <templates xml:space="preserve">
     <t t-name="shalom_location_map.RutaDetalle">
-        <div class="shalom-screen">
+        <div class="shalom-screen" t-ref="raiz">
             <div class="topbar topbar-nivel2">
                 <div class="paso-fila">
                     <span class="paso-chip">PASO 2 DE 3 · RUTA</span>
@@ -28,6 +28,7 @@
                         <t t-if="state.mostrarVisitados"><i class="fa fa-list" aria-hidden="true"/> Pendientes</t>
                         <t t-else=""><i class="fa fa-check" aria-hidden="true"/> Visitados (<t t-esc="visitasVisitadas.length"/>)</t>
                     </button>
+                    <button class="icon-btn recorrido-ayuda-btn" t-on-click="abrirRecorrido" title="Ayuda de esta pantalla" aria-label="Ver la ayuda de esta pantalla"><i class="fa fa-question" aria-hidden="true"/></button>
                     <TemaSelector/>
                 </div>
             </div>
@@ -242,6 +243,14 @@
                 t-if="mostrarConduccion"
                 kmh="conduccion.kmh"
                 onCopiloto.bind="activarCopiloto"
+            />
+
+            <RecorridoGuiado
+                t-if="state.recorridoAbierto"
+                pasos="pasosRecorrido"
+                titulo="'DENTRO DE LA RUTA'"
+                raiz.bind="raizRecorrido"
+                onCerrar.bind="cerrarRecorrido"
             />
         </div>
     </t>

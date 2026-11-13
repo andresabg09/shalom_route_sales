@@ -78,6 +78,39 @@ class FSMPersonJuegoSocial(models.Model):
         help="Se marca al terminar o saltar el tutorial de bienvenida; "
         "mientras esté apagado, la app lo muestra al abrir Rutas.",
     )
+    x_recorridos_vistos = fields.Char(
+        string="Recorridos guiados vistos",
+        default="",
+        help="Códigos de los recorridos guiados (flechita + texto sobre cada "
+        "botón) que el vendedor ya terminó o saltó, separados por coma: "
+        "'ruta' (dentro de una ruta) y 'catalogo' (Tomar pedido). La app "
+        "muestra solo los que faltan; el botón ? los repite cuando quiera.",
+    )
+
+    @api.model
+    def shalom_recorridos_vistos(self):
+        """{"disponible", "vistos": [códigos]} del vendedor logueado. Sin
+        fsm.person (p. ej. un administrador sin perfil de vendedor) no se
+        muestra ninguno solo; el botón ? igual funciona."""
+        persona = self._shalom_persona_actual()
+        if not persona:
+            return {"disponible": False, "vistos": []}
+        vistos = [c for c in (persona.sudo().x_recorridos_vistos or "").split(",") if c]
+        return {"disponible": True, "vistos": vistos}
+
+    @api.model
+    def shalom_marcar_recorrido(self, codigo):
+        """Marca un recorrido como visto (al terminarlo o saltarlo). Cada
+        vendedor solo toca el suyo. Idempotente."""
+        codigo = str(codigo or "").strip()[:32]
+        persona = self._shalom_persona_actual()
+        if not persona or not codigo or "," in codigo:
+            return False
+        vistos = {c for c in (persona.sudo().x_recorridos_vistos or "").split(",") if c}
+        if codigo not in vistos:
+            vistos.add(codigo)
+            persona.sudo().write({"x_recorridos_vistos": ",".join(sorted(vistos))})
+        return True
 
 
 class ShalomJuegoEventoSocial(models.Model):

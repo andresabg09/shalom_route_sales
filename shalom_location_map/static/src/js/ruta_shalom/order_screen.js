@@ -8,6 +8,7 @@ import {cerrarConAnimacion} from "./animacion_utils";
 import {abrirNivel, cerrarNivel, marcarRetorno} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
 import {TemaSelector} from "./tema_selector";
+import {PASOS_CATALOGO, RecorridoGuiado, marcarRecorrido, recorridoPendiente} from "./recorrido";
 
 const {DateTime} = luxon;
 
@@ -174,6 +175,13 @@ function shalomFechaServidorAMs(fechaServidor) {
 // lista en celular. localStorage puede fallar (modo privado): nunca rompe.
 const CLAVE_VISTA_CATALOGO = "shalom_catalogo_vista";
 
+// Catálogo ya descargado (productos + existencias + estrategias): al
+// volver a abrir "Tomar pedido" se muestra al instante y se refresca por
+// detrás. Más de 700 productos con existencias de dos bodegas tardaban
+// varios segundos en cada apertura.
+let CACHE_CATALOGO = null; // {ts, productos, estrategias}
+const CACHE_CATALOGO_MS = 15 * 60 * 1000;
+
 function shalomVistaCatalogoInicial() {
     try {
         const guardada = window.localStorage.getItem(CLAVE_VISTA_CATALOGO);
@@ -188,7 +196,7 @@ function shalomVistaCatalogoInicial() {
 
 export class OrderScreen extends Component {
     static template = "shalom_location_map.OrderScreen";
-    static components = {ClienteForm, DateTimeInput, TemaSelector};
+    static components = {ClienteForm, DateTimeInput, TemaSelector, RecorridoGuiado};
     static props = {
         orderId: Number,
         // Lo que sigue en la pila de navegación guardada después de
@@ -208,6 +216,8 @@ export class OrderScreen extends Component {
         this.notification = useService("notification");
         this.action = useService("action");
         this.videoRef = useRef("video");
+        this.raizRef = useRef("raiz");
+        this.pasosRecorrido = PASOS_CATALOGO;
         this.fotoLienzoRef = useRef("fotoLienzo");
         this.fotoImgRef = useRef("fotoAmpliadaImg");
         this.stream = null;
@@ -252,6 +262,7 @@ export class OrderScreen extends Component {
             cabeceraOculta: false,
             // Foto en grande: {url, nombre} | null.
             fotoAmpliada: null,
+            recorridoAbierto: false,
             carrito: {}, // {productId: {producto, cantidad}}
             // "Precargar de pedidos anteriores" (Fase 1 del juego de
             // ventas): hoja con los últimos pedidos del cliente, para
@@ -332,13 +343,10 @@ export class OrderScreen extends Component {
 
         this._restaurarBorradorCarritoSiCorresponde();
 
-        onWillStart(async () => {
-            // cargarProductos() primero (o junto, pero resuelto antes de
-            // reconciliar): _reconciliarCarritoServidorInicial() necesita
-            // this.state.productos ya cargado para poder buscarle el
-            // qty_available a cada línea que traiga del servidor.
-            await Promise.all([this.cargarProductos(), this._cargarDatosFaltantes()]);
-            await this._reconciliarCarritoServidorInicial();
+        // La pantalla aparece YA (con "Cargando catálogo…") y la carga
+        // corre por detrás: antes no se veía nada hasta tener todo.
+        onWillStart(() => {
+            this._cargarInicial();
         });
 
         // El nivel de navegación de ESTA pantalla (el catálogo en sí)
@@ -847,11 +855,74 @@ export class OrderScreen extends Component {
         await this._confirmarPedidoDeVerdad();
     }
 
+    /** Arranque del catálogo. cargarProductos() se resuelve ANTES de
+     * reconciliar: _reconciliarCarritoServidorInicial() necesita
+     * this.state.productos para buscarle el qty_available a cada línea
+     * del servidor. Con catálogo en caché se usa ese al instante y se
+     * refresca en silencio. Al final se piden por detrás los pedidos
+     * anteriores, para que "Anteriores" abra sin espera. */
+    async _cargarInicial() {
+        const cache =
+            CACHE_CATALOGO && Date.now() - CACHE_CATALOGO.ts < CACHE_CATALOGO_MS ? CACHE_CATALOGO : null;
+        if (cache) {
+            this.state.productos = cache.productos;
+            this.state.estrategiaPorProducto = cache.estrategias;
+        }
+        try {
+            await Promise.all([
+                cache ? Promise.resolve() : this.cargarProductos(true, true),
+                this._cargarDatosFaltantes(),
+            ]);
+            if (this._destruido) {
+                return;
+            }
+            await this._reconciliarCarritoServidorInicial();
+        } finally {
+            if (!this._destruido) {
+                this.state.cargando = false;
+            }
+        }
+        if (this._destruido) {
+            return;
+        }
+        if (cache) {
+            this.cargarProductos(true);
+        }
+        this._precargarPedidosAnteriores();
+        // Recorrido guiado: la primera vez que el vendedor toma un pedido.
+        if (this.state.pantalla === "catalogo" && (await recorridoPendiente(this.orm, "catalogo"))) {
+            if (!this._destruido && this.state.pantalla === "catalogo") {
+                this.state.recorridoAbierto = true;
+            }
+        }
+    }
+
+    abrirRecorrido() {
+        // La cabecera tiene que estar a la vista (sus botones son parte
+        // del recorrido): se muestra y se espera a que termine de abrirse.
+        this.state.cabeceraOculta = false;
+        this.state.medidorAbierto = false;
+        setTimeout(() => {
+            if (!this._destruido) {
+                this.state.recorridoAbierto = true;
+            }
+        }, 260);
+    }
+
+    cerrarRecorrido() {
+        this.state.recorridoAbierto = false;
+        marcarRecorrido(this.orm, "catalogo");
+    }
+
+    raizRecorrido() {
+        return this.raizRef.el;
+    }
+
     /** `silencioso`: refresco en segundo plano (sin spinner) -- conserva
      * la búsqueda, filtros, página y scroll, porque solo reemplaza los
      * datos de state.productos. Se usa al volver del carrito para que
      * "libres" y "reservados" reflejen lo que se acaba de prometer. */
-    async cargarProductos(silencioso = false) {
+    async cargarProductos(silencioso = false, avisarError = false) {
         if (!silencioso) {
             this.state.cargando = true;
         }
@@ -866,8 +937,9 @@ export class OrderScreen extends Component {
             // idas y vueltas seguidas en cada apertura del catálogo.
             await Promise.all([this._sumarExistenciasBodegas(productos), this._cargarEstrategias()]);
             this.state.productos = productos;
+            CACHE_CATALOGO = {ts: Date.now(), productos, estrategias: this.state.estrategiaPorProducto};
         } catch (error) {
-            if (!silencioso) {
+            if (!silencioso || avisarError) {
                 this.notification.add("No se pudo cargar el catálogo de productos.", {
                     type: "danger",
                 });
@@ -1015,7 +1087,24 @@ export class OrderScreen extends Component {
         this.state.paginaActual = 1;
     }
 
+    /** Se recalcula solo si cambió algo que lo afecta: el template lo
+     * pide varias veces por dibujado (páginas, cuenta, lista) y filtrar
+     * 700+ productos en cada uno se notaba al desplazarse. */
     get productosFiltrados() {
+        const clave = [
+            this.state.busqueda,
+            this.state.categoriaSeleccionada,
+            this.state.soloConStock,
+        ].join("\u0001");
+        if (this._memoFiltro && this._memoFiltro.productos === this.state.productos && this._memoFiltro.clave === clave) {
+            return this._memoFiltro.resultado;
+        }
+        const resultado = this._filtrarProductos();
+        this._memoFiltro = {productos: this.state.productos, clave, resultado};
+        return resultado;
+    }
+
+    _filtrarProductos() {
         const texto = this.state.busqueda.trim().toLowerCase();
         return this.state.productos.filter((producto) => {
             if (
@@ -1288,6 +1377,9 @@ export class OrderScreen extends Component {
      * una pausa tras cada cambio: al esconderse/mostrarse cambia el alto
      * de la lista, y eso mismo dispara eventos de scroll. */
     onScrollCatalogo(ev) {
+        if (this.state.recorridoAbierto) {
+            return;
+        }
         const lista = ev.currentTarget;
         const actual = lista.scrollTop;
         const anterior = this._ultimoScrollCatalogo || 0;
@@ -1530,6 +1622,23 @@ export class OrderScreen extends Component {
 
     // -- Precargar de pedidos anteriores --
 
+    /** Pide los pedidos anteriores por detrás (al terminar de cargar el
+     * catálogo), para que "Anteriores" abra sin espera. */
+    _precargarPedidosAnteriores() {
+        if (!this.state.locationId || this._pedidosAnterioresPromesa) {
+            return this._pedidosAnterioresPromesa;
+        }
+        this._pedidosAnterioresPromesa = this.orm
+            .call("fsm.order", "shalom_pedidos_anteriores", [this.state.locationId])
+            .catch((error) => {
+                this._pedidosAnterioresPromesa = null;
+                throw error;
+            });
+        // un fallo aquí se reintenta al tocar "Anteriores"
+        this._pedidosAnterioresPromesa.catch(() => {});
+        return this._pedidosAnterioresPromesa;
+    }
+
     async abrirPrecarga() {
         this.state.precargaAbierta = true;
         this.state.pedidoPrecargaAbierto = null;
@@ -1538,11 +1647,7 @@ export class OrderScreen extends Component {
         }
         this.state.cargandoPrecarga = true;
         try {
-            this.state.pedidosAnteriores = await this.orm.call(
-                "fsm.order",
-                "shalom_pedidos_anteriores",
-                [this.state.locationId]
-            );
+            this.state.pedidosAnteriores = await this._precargarPedidosAnteriores();
             // El pedido más reciente llega desplegado: se ven las fotos y se elige directo.
             this.state.pedidoPrecargaAbierto = this.state.pedidosAnteriores.length ? this.state.pedidosAnteriores[0].id : null;
         } catch (error) {
@@ -1580,7 +1685,13 @@ export class OrderScreen extends Component {
     /** Producto del catálogo cargado para una línea de pedido anterior
      * (null si ya no está en el catálogo vendible). */
     productoDeLinea(linea) {
-        return this.state.productos.find((producto) => producto.id === linea.product_id) || null;
+        if (!this._indiceProductos || this._indiceProductos.productos !== this.state.productos) {
+            this._indiceProductos = {
+                productos: this.state.productos,
+                porId: new Map(this.state.productos.map((producto) => [producto.id, producto])),
+            };
+        }
+        return this._indiceProductos.porId.get(linea.product_id) || null;
     }
 
     /** Suma las cantidades al carrito (no reemplaza lo que ya hay) y

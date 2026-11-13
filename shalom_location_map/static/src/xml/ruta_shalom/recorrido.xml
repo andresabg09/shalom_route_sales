@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.RecorridoGuiado">
+        <!-- La capa absorbe los toques: durante el recorrido solo se usan
+             "Saltar" y "Siguiente". -->
+        <div class="recorrido-capa">
+            <div class="recorrido-foco" t-if="state.caja" t-att-style="estiloFoco"/>
+            <div
+                class="recorrido-globo"
+                t-if="state.globo and paso"
+                t-att-class="state.arriba ? 'arriba' : ''"
+                t-att-style="estiloGlobo"
+                role="dialog"
+                aria-live="polite"
+            >
+                <span class="recorrido-flecha" t-att-style="'left:' + state.flecha + 'px'"/>
+                <div class="recorrido-etapa" t-esc="'PASO ' + (state.indice + 1) + ' DE ' + state.visibles.length + ' · ' + props.titulo"/>
+                <div class="recorrido-titulo" t-esc="paso.titulo"/>
+                <p class="recorrido-texto" t-esc="paso.texto"/>
+                <div class="recorrido-pie">
+                    <span class="recorrido-puntos">
+                        <span t-foreach="state.visibles" t-as="p" t-key="p_index" t-att-class="p_index === state.indice ? 'activo' : ''"/>
+                    </span>
+                    <span class="recorrido-espacio"/>
+                    <button type="button" class="recorrido-saltar" t-if="!esUltimo" t-on-click="saltar">Saltar</button>
+                    <button type="button" class="recorrido-siguiente" t-on-click="siguiente" t-esc="esUltimo ? 'Entendido' : 'Siguiente'"/>
+                </div>
+            </div>
+        </div>
+    </t>
+</templates>

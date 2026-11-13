@@ -18,6 +18,7 @@ import {VisitSheet} from "./visit_sheet";
 import {TemaSelector} from "./tema_selector";
 import {ConduccionOverlay} from "./conduccion_overlay";
 import {useConduccion} from "./conduccion_utils";
+import {PASOS_RUTA, RecorridoGuiado, marcarRecorrido, recorridoPendiente} from "./recorrido";
 
 /**
  * Detalle de una ruta (una fsm.route.schedule): tabs Lista/Mapa.
@@ -261,7 +262,7 @@ function posicionEnBorde(anguloDeg, ancho, alto, margen) {
 
 export class RutaDetalle extends Component {
     static template = "shalom_location_map.RutaDetalle";
-    static components = {VisitSheet, ClienteForm, TemaSelector, ConduccionOverlay};
+    static components = {VisitSheet, ClienteForm, TemaSelector, ConduccionOverlay, RecorridoGuiado};
     static props = {
         schedule: Object,
         onVolver: Function,
@@ -281,6 +282,8 @@ export class RutaDetalle extends Component {
         this.orm = useService("orm");
         this.notification = useService("notification");
         this.mapaRef = useRef("mapa");
+        this.raizRef = useRef("raiz");
+        this.pasosRecorrido = PASOS_RUTA;
         this.mapboxMap = null;
         // Datos "vivos" del mapa que no necesitan disparar un re-render
         // de Owl por sí solos (se usan desde callbacks de Mapbox) --
@@ -332,6 +335,7 @@ export class RutaDetalle extends Component {
             // Tablet/computadora: cliente marcado en la lista (borde y
             // "Tomar pedido") y resaltado en el mapa. null = el SIGUIENTE.
             seleccionadaId: null,
+            recorridoAbierto: false,
             mostrarVisitados: false,
             busquedaCliente: "",
             // Clientes encontrados en OTRAS rutas cuando aquí no hay coincidencia.
@@ -414,6 +418,13 @@ export class RutaDetalle extends Component {
             // Rutas libres: si el otro vendedor resuelve un cliente, aquí se
             // marca solo (cada 8 s), sin salir ni refrescar la página.
             this._sondeoTimer = setInterval(() => !document.hidden && this.sondearRuta(), SONDEO_RUTA_MS);
+            // Recorrido guiado: la primera vez que el vendedor entra a una
+            // ruta. No si llegó desde la búsqueda (se abre su cliente).
+            recorridoPendiente(this.orm, "ruta").then((pendiente) => {
+                if (pendiente && !this.state.seleccionadaId && !this.state.visitaAbiertaId) {
+                    this.state.recorridoAbierto = true;
+                }
+            });
         });
         onWillUnmount(() => {
             clearTimeout(this._otrasTimer);
@@ -605,27 +616,23 @@ export class RutaDetalle extends Component {
             const locationIds = ordenes
                 .map((o) => o.location_id && o.location_id[0])
                 .filter(Boolean);
-            let datosPorLocation = {};
-            if (locationIds.length) {
-                const locaciones = await this.orm.read("fsm.location", locationIds, [
-                    "phone",
-                    "street",
-                    "street2",
-                    "x_venta_mas_alta",
-                ]);
-                datosPorLocation = Object.fromEntries(locaciones.map((l) => [l.id, l]));
-            }
-
-            // Clase (A/A2/B...) y valor esperado de cada cliente, de una
-            // sola consulta; si falla, la lista sale sin esas etiquetas.
-            let perfiles = {};
-            if (locationIds.length) {
-                try {
-                    perfiles = await this.orm.call("fsm.order", "shalom_perfiles_ruta", [locationIds]);
-                } catch (error) {
-                    console.error("shalom: error al leer perfiles de la ruta", error);
-                }
-            }
+            // Datos de los clientes, sus perfiles (clase A/A2/B... y valor
+            // esperado; si fallan, la lista sale sin esas etiquetas) y el
+            // trazado de la ruta: las tres consultas A LA VEZ (antes iban
+            // una tras otra y con datos móviles cada espera se sumaba).
+            const [locaciones, perfiles, ruta] = await Promise.all([
+                locationIds.length
+                    ? this.orm.read("fsm.location", locationIds, ["phone", "street", "street2", "x_venta_mas_alta"])
+                    : Promise.resolve([]),
+                locationIds.length
+                    ? this.orm.call("fsm.order", "shalom_perfiles_ruta", [locationIds]).catch((error) => {
+                          console.error("shalom: error al leer perfiles de la ruta", error);
+                          return {};
+                      })
+                    : Promise.resolve({}),
+                this.orm.read("fsm.route", [this.props.schedule.route_id], ["x_ruta_trazado"]),
+            ]);
+            const datosPorLocation = Object.fromEntries(locaciones.map((l) => [l.id, l]));
 
             const todas = ordenes.map((o) => {
                 const loc = o.location_id ? datosPorLocation[o.location_id[0]] : null;
@@ -653,10 +660,6 @@ export class RutaDetalle extends Component {
             });
             this.state.visitasTodas = todas;
             this.state.visitas = this._vistaDeVisitas(todas);
-
-            const ruta = await this.orm.read("fsm.route", [this.props.schedule.route_id], [
-                "x_ruta_trazado",
-            ]);
             this.state.trazadoWkt = ruta.length ? ruta[0].x_ruta_trazado : false;
         } catch (error) {
             this.notification.add("No se pudieron cargar las visitas de esta ruta.", {
@@ -886,6 +889,19 @@ export class RutaDetalle extends Component {
     }
 
     /** Primer cliente pendiente de la lista: el "SIGUIENTE" destacado. */
+    abrirRecorrido() {
+        this.state.recorridoAbierto = true;
+    }
+
+    cerrarRecorrido() {
+        this.state.recorridoAbierto = false;
+        marcarRecorrido(this.orm, "ruta");
+    }
+
+    raizRecorrido() {
+        return this.raizRef.el;
+    }
+
     get siguienteId() {
         const v = this.visitasPendientes[0];
         return v ? v.id : null;

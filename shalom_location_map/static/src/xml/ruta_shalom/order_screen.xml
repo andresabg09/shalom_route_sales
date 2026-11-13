@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <templates xml:space="preserve">
     <t t-name="shalom_location_map.OrderScreen">
-        <div class="order-overlay" t-att-class="state.cerrando ? 'closing' : ''">
+        <div class="order-overlay" t-att-class="state.cerrando ? 'closing' : ''" t-ref="raiz">
             <div class="order-topbar">
                 <button class="icon-btn" t-on-click="atras" title="Atrás">←</button>
                 <div class="order-topbar-title">
                     <div class="route-name" t-esc="state.pantalla === 'carrito' ? 'Carrito' : 'Tomar pedido'"/>
                     <div class="route-sub" t-esc="props.clienteNombre"/>
                 </div>
+                <button t-if="state.pantalla === 'catalogo'" class="icon-btn recorrido-ayuda-btn" t-on-click="abrirRecorrido" title="Ayuda de esta pantalla" aria-label="Ver la ayuda de esta pantalla"><i class="fa fa-question" aria-hidden="true"/></button>
                 <TemaSelector/>
             </div>
 
@@ -582,6 +583,14 @@
                     </div>
                 </div>
             </div>
+
+            <RecorridoGuiado
+                t-if="state.recorridoAbierto and state.pantalla === 'catalogo' and !state.cargando"
+                pasos="pasosRecorrido"
+                titulo="'TOMAR PEDIDO'"
+                raiz.bind="raizRecorrido"
+                onCerrar.bind="cerrarRecorrido"
+            />
         </div>
 
         <ClienteForm

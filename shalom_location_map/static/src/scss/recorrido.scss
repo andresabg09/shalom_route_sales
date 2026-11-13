@@ -1,0 +1,111 @@
+// Recorrido guiado (ver recorrido.js): pantalla oscurecida, el botón
+// resaltado con un borde y un globo con flechita. Solo variables --shalom-*.
+
+.o_shalom_ruta_app {
+    .recorrido-capa {
+        position: fixed;
+        inset: 0;
+        z-index: 120;
+    }
+    .recorrido-foco {
+        position: fixed;
+        border-radius: 14px;
+        box-shadow:
+            0 0 0 4px var(--shalom-surface),
+            0 0 0 7px var(--shalom-accent),
+            0 0 0 9999px rgba(20, 10, 15, 0.62);
+        pointer-events: none;
+        transition: left 0.2s ease, top 0.2s ease, width 0.2s ease, height 0.2s ease;
+    }
+    .recorrido-globo {
+        position: fixed;
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        border-radius: 18px;
+        padding: 16px;
+        box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.5);
+        animation: shalom-fondo-in 0.15s ease both;
+    }
+    .recorrido-flecha {
+        position: absolute;
+        top: -10px;
+        width: 0;
+        height: 0;
+        border-left: 11px solid transparent;
+        border-right: 11px solid transparent;
+        border-bottom: 11px solid var(--shalom-surface);
+    }
+    .recorrido-globo.arriba .recorrido-flecha {
+        top: auto;
+        bottom: -10px;
+        border-bottom: none;
+        border-top: 11px solid var(--shalom-surface);
+    }
+    .recorrido-etapa {
+        font-size: 0.68rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        color: var(--shalom-accent);
+    }
+    .recorrido-titulo {
+        margin-top: 4px;
+        font-size: 1.05rem;
+        font-weight: 800;
+    }
+    .recorrido-texto {
+        margin: 6px 0 0;
+        font-size: 0.88rem;
+        line-height: 1.45;
+    }
+    .recorrido-pie {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 14px;
+    }
+    .recorrido-puntos {
+        display: flex;
+        gap: 5px;
+    }
+    .recorrido-puntos span {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: var(--shalom-line);
+    }
+    .recorrido-puntos span.activo {
+        width: 18px;
+        background: var(--shalom-accent);
+    }
+    .recorrido-espacio {
+        flex: 1;
+    }
+    .recorrido-saltar,
+    .recorrido-siguiente {
+        height: 40px;
+        border: none;
+        border-radius: 999px;
+        font-weight: 800;
+        font-size: 0.88rem;
+        font-family: inherit;
+        cursor: pointer;
+    }
+    .recorrido-saltar {
+        padding: 0 14px;
+        background: transparent;
+        color: var(--shalom-ink-muted);
+    }
+    .recorrido-siguiente {
+        padding: 0 18px;
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+    }
+
+    // Botón ? en la barra de la ruta (celular): junto al tema, arriba a la
+    // derecha (ver la regla del selector de tema en rediseno.scss).
+    @media (max-width: 767px) {
+        .topbar-nivel2 .topbar-row .recorrido-ayuda-btn {
+            order: 2;
+        }
+    }
+}
