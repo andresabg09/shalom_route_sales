@@ -571,8 +571,12 @@ export class RutaDetalle extends Component {
         }
     }
 
-    async cargar() {
-        this.state.cargando = true;
+    /** silencioso: actualiza los datos sin pasar por "Cargando visitas…"
+     * (la lista no se desmonta y no se pierde el lugar donde estaba). */
+    async cargar({silencioso = false} = {}) {
+        if (!silencioso) {
+            this.state.cargando = true;
+        }
         try {
             // Ordenado por x_cliente_orden_ruta (posición actual del
             // cliente en la ruta), no por "sequence" -- sequence queda
@@ -687,20 +691,30 @@ export class RutaDetalle extends Component {
         if (visita.estado !== "pendiente") {
             this.state.mostrarVisitados = true;
         }
+        // Primero la lista se desliza hasta el cliente (queda arriba del
+        // todo, marcado y con un destello) y enseguida se abre su hoja.
         this.state.seleccionadaId = visita.id;
-        this.abrirVisita(visita);
-        this._llevarTarjetaArriba(visita.id);
+        this._llevarTarjetaArriba(visita.id, () => {
+            if (!this.state.visitaAbiertaId) {
+                this.abrirVisita(visita);
+            }
+        });
     }
 
     /** Desplaza la lista hasta que la tarjeta del cliente quede arriba del
-     * todo (espera a que Owl la dibuje: unos cuadros como máximo). */
-    _llevarTarjetaArriba(visitaId, intentos = 20) {
+     * todo (espera a que Owl la dibuje) y llama a `luego` al terminar. */
+    _llevarTarjetaArriba(visitaId, luego, intentos = 20) {
         requestAnimationFrame(() => {
             const tarjeta = document.querySelector(`.stop-card[data-visita="${visitaId}"]`);
             if (tarjeta) {
-                tarjeta.scrollIntoView({block: "start"});
+                tarjeta.scrollIntoView({block: "start", behavior: "smooth"});
+                tarjeta.classList.add("stop-recien-elegida");
+                setTimeout(() => tarjeta.classList.remove("stop-recien-elegida"), 1200);
+                setTimeout(luego, 450);
             } else if (intentos > 0) {
-                this._llevarTarjetaArriba(visitaId, intentos - 1);
+                this._llevarTarjetaArriba(visitaId, luego, intentos - 1);
+            } else {
+                luego();
             }
         });
     }
@@ -1031,8 +1045,13 @@ export class RutaDetalle extends Component {
      * sin cerrar la hoja, para que el vendedor siga viendo el dato
      * actualizado sin perder su lugar.
      */
-    recargarVisitas() {
-        this.cargar();
+    async recargarVisitas() {
+        // Sin "Cargando visitas…": antes la lista se volvía a armar desde
+        // cero y saltaba al primer cliente (se perdía el elegido).
+        await this.cargar({silencioso: true});
+        if (this.mapaVisible && this.mapaRef.el) {
+            this.dibujarMapa();
+        }
     }
 
     abrirMaps(visita) {
