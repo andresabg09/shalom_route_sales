@@ -132,12 +132,13 @@
                         t-foreach="visitasFiltradas"
                         t-as="visita"
                         t-key="visita.id"
-                        t-attf-class="stop-card st-{{visita.estado}} {{visita.id === siguienteId ? 'stop-siguiente' : ''}}"
-                        t-on-click="() => this.abrirVisita(visita)"
+                        t-attf-class="stop-card st-{{visita.estado}} {{visita.id === destacadoId ? 'stop-siguiente' : ''}}"
+                        t-att-data-visita="visita.id"
+                        t-on-click="() => this.tocarVisita(visita)"
                     >
                         <div class="stop-num" t-esc="visita.orden"/>
                         <div class="stop-info">
-                            <div class="stop-siguiente-tag" t-if="visita.id === siguienteId">SIGUIENTE</div>
+                            <div class="stop-siguiente-tag" t-if="visita.id === destacadoId" t-esc="visita.id === siguienteId ? 'SIGUIENTE' : 'SELECCIONADO'"/>
                             <div class="name" t-esc="visita.nombre"/>
                             <div class="addr" t-esc="visita.direccion"/>
                             <div class="addr" t-if="visita.direccion2" t-esc="visita.direccion2"/>
@@ -156,7 +157,7 @@
                         </div>
                         <span
                             class="stop-tomar"
-                            t-if="visita.id === siguienteId"
+                            t-if="visita.id === destacadoId"
                             t-on-click.stop="() => this.abrirVisita(visita)"
                         >Tomar pedido</span>
                         <span

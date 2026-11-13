@@ -329,6 +329,9 @@ export class RutaDetalle extends Component {
             trazadoWkt: false,
             tab: "lista",
             visitaAbiertaId: null,
+            // Tablet/computadora: cliente marcado en la lista (borde y
+            // "Tomar pedido") y resaltado en el mapa. null = el SIGUIENTE.
+            seleccionadaId: null,
             mostrarVisitados: false,
             busquedaCliente: "",
             // Clientes encontrados en OTRAS rutas cuando aquí no hay coincidencia.
@@ -372,7 +375,13 @@ export class RutaDetalle extends Component {
         try {
             const traspaso = JSON.parse(window.sessionStorage.getItem("shalom_detalle_traspaso") || "null");
             window.sessionStorage.removeItem("shalom_detalle_traspaso");
-            if (traspaso && traspaso.texto) {
+            if (traspaso && traspaso.locationId) {
+                // Se eligió un cliente puntual: se abre su visita al cargar
+                // (ver _abrirClienteDeTraspaso), sin dejar el buscador escrito.
+                this._traspasoLocationId = traspaso.locationId;
+                this._traspasoTexto = traspaso.texto || "";
+                this.state.verSinVentas = true;
+            } else if (traspaso && traspaso.texto) {
                 this.state.busquedaCliente = traspaso.texto;
                 this.state.verSinVentas = !!traspaso.verSinVentas;
             }
@@ -395,6 +404,10 @@ export class RutaDetalle extends Component {
             () => [this.state.busquedaCliente, this.state.cargando, this.state.mostrarVisitados, this.state.visitas.length]
         );
         this.pantalla = useEsAncha();
+        useEffect(
+            () => this._resaltarEnMapa(this._visitaDestacada(), false),
+            () => [this.destacadoId, this.pantalla.ancha]
+        );
 
         onWillStart(() => this.cargar());
         onMounted(() => {
@@ -479,7 +492,7 @@ export class RutaDetalle extends Component {
         try {
             window.sessionStorage.setItem(
                 "shalom_detalle_traspaso",
-                JSON.stringify({texto: this.state.busquedaCliente.trim(), verSinVentas: true})
+                JSON.stringify({texto: r.name || this.state.busquedaCliente.trim(), verSinVentas: true, locationId: r.location_id})
             );
         } catch (error) {
             // sin sessionStorage solo se pierde el texto ya escrito
@@ -649,6 +662,33 @@ export class RutaDetalle extends Component {
             this.state.cargando = false;
         }
         this._abrirVisitaInicialSiCorresponde();
+        this._abrirClienteDeTraspaso();
+    }
+
+    /** Llegada desde una búsqueda con un cliente elegido ("Ir a la ruta" /
+     * "Cambiar a ..."): abre directo la visita de ese cliente en esta ruta.
+     * Si aquí no tiene visita, se deja su nombre en el buscador. */
+    _abrirClienteDeTraspaso() {
+        const locationId = this._traspasoLocationId;
+        this._traspasoLocationId = null;
+        if (!locationId || this.state.visitaAbiertaId) {
+            return;
+        }
+        const candidatas = this.state.visitasTodas.filter((v) => v.locationId === locationId);
+        const visita = candidatas.find((v) => v.estado === "pendiente") || candidatas[0];
+        if (!visita) {
+            this.state.busquedaCliente = this._traspasoTexto || "";
+            return;
+        }
+        if (!this.state.visitas.some((v) => v.id === visita.id)) {
+            this.state.modoCartera = "toda";
+            this.state.visitas = this._vistaDeVisitas(this.state.visitasTodas);
+        }
+        if (visita.estado !== "pendiente") {
+            this.state.mostrarVisitados = true;
+        }
+        this.state.seleccionadaId = visita.id;
+        this.abrirVisita(visita);
     }
 
     /** Visitas a mostrar según el filtro de cartera. En "Mi cartera":
@@ -811,6 +851,49 @@ export class RutaDetalle extends Component {
     get siguienteId() {
         const v = this.visitasPendientes[0];
         return v ? v.id : null;
+    }
+
+    /** Cliente con borde rojo y "Tomar pedido": en tablet/computadora, el
+     * que el vendedor tocó (si sigue en la lista); si no, el SIGUIENTE. */
+    get destacadoId() {
+        const sel = this.state.seleccionadaId;
+        if (this.pantalla.ancha && sel && this.visitasFiltradas.some((v) => v.id === sel)) {
+            return sel;
+        }
+        return this.siguienteId;
+    }
+
+    _visitaDestacada() {
+        const id = this.destacadoId;
+        return id ? this.state.visitasTodas.find((v) => v.id === id) || null : null;
+    }
+
+    /** Tocar un cliente de la lista. Celular: abre su hoja, como siempre.
+     * Tablet/computadora: lo marca (borde + "Tomar pedido") y lo señala en
+     * el mapa; tocarlo de nuevo, o "Tomar pedido", abre la hoja. */
+    tocarVisita(visita) {
+        if (!this.pantalla.ancha || this.destacadoId === visita.id) {
+            this.abrirVisita(visita);
+            return;
+        }
+        this.state.seleccionadaId = visita.id;
+        this._resaltarEnMapa(visita, true);
+    }
+
+    /** Marca el pin del cliente en el mapa (pulso, sin transform: ver
+     * .shalom-marker-numero) y, si `mover`, lleva el mapa hasta él. */
+    _resaltarEnMapa(visita, mover) {
+        const marcar = this.pantalla.ancha && visita ? visita.id : null;
+        for (const [id, marker] of Object.entries(this._markersPorVisita || {})) {
+            marker.getElement().classList.toggle("shalom-marker-seleccionado", Number(id) === marcar);
+        }
+        if (mover && marcar && this.mapboxMap && visita.lat && visita.lng && !this.state.navegando) {
+            this.mapboxMap.easeTo({
+                center: [visita.lng, visita.lat],
+                zoom: Math.max(this.mapboxMap.getZoom(), 15),
+                duration: 700,
+            });
+        }
     }
 
     get resumen() {
@@ -1097,6 +1180,16 @@ export class RutaDetalle extends Component {
                     .setPopup(new window.mapboxgl.Popup({offset: 30}).setDOMContent(popupEl))
                     .addTo(this.mapboxMap);
                 this._markersPorVisita[v.id] = marker;
+                pinEl.addEventListener("click", () => {
+                    if (!this.pantalla.ancha) {
+                        return;
+                    }
+                    this.state.seleccionadaId = v.id;
+                    const tarjeta = document.querySelector(`.stop-card[data-visita="${v.id}"]`);
+                    if (tarjeta) {
+                        tarjeta.scrollIntoView({block: "nearest", behavior: "smooth"});
+                    }
+                });
                 bounds.extend([v.lng, v.lat]);
             });
 
@@ -1135,6 +1228,7 @@ export class RutaDetalle extends Component {
 
             this.mostrarPosicionVendedor();
             this.actualizarPaleta();
+            this._resaltarEnMapa(this._visitaDestacada(), false);
             // Recalcular la paletita cada vez que el vendedor mueve o
             // zoomea el mapa -- si el próximo pendiente entra en
             // pantalla, se esconde sola; si sale, aparece apuntando

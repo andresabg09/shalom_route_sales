@@ -477,3 +477,45 @@
         span { flex: 1 1 160px; }
     }
 }
+
+
+// ----------------------------------------------------------------------
+// Dentro de la ruta (celular): el selector de tema se queda arriba a la
+// derecha, junto al título. Antes, al no caber "Visitados", el tema bajaba
+// solo a una segunda línea, a la izquierda, y su menú (que abre hacia la
+// izquierda) quedaba fuera de la pantalla.
+// Tablet/computadora: el cliente tocado en la lista se señala en el mapa
+// con un pulso (box-shadow, nunca transform: ver .shalom-marker-numero).
+// ----------------------------------------------------------------------
+.o_shalom_ruta_app {
+    @media (max-width: 767px) {
+        .topbar-nivel2 .topbar-row .tema-selector {
+            order: 2;
+        }
+        .topbar-nivel2 .topbar-row .visited-toggle-btn {
+            order: 3;
+            margin-left: auto;
+        }
+    }
+    .tema-menu {
+        max-width: calc(100vw - 24px);
+    }
+
+    .shalom-marker-numero.shalom-marker-seleccionado {
+        z-index: 5;
+        width: 40px;
+        height: 40px;
+        animation: shalom-marker-pulso 1.4s ease-out infinite;
+    }
+}
+@keyframes shalom-marker-pulso {
+    0% {
+        box-shadow: 0 0 0 4px #b1245a, 0 0 0 4px rgba(177, 36, 90, 0.6);
+    }
+    70% {
+        box-shadow: 0 0 0 4px #b1245a, 0 0 0 18px rgba(177, 36, 90, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 4px #b1245a, 0 0 0 18px rgba(177, 36, 90, 0);
+    }
+}

@@ -263,7 +263,8 @@ export class RutasHub extends Component {
         return quienAtiende(r.tomada_por);
     }
 
-    /** "Ir a la ruta": abre esa ruta con el buscador ya escrito para ver al cliente. */
+    /** "Ir a la ruta": abre esa ruta directo en la visita del cliente elegido
+     * (sin dejar el buscador escrito); si ahí no tiene visita, cae al texto. */
     irARutaDeResultado(r) {
         if (!r.schedule) {
             this.notification.add("Esa ruta no tiene un ciclo activo todavía.", {type: "warning"});
@@ -272,7 +273,7 @@ export class RutasHub extends Component {
         try {
             window.sessionStorage.setItem(
                 "shalom_detalle_traspaso",
-                JSON.stringify({texto: this.textoBusqueda, verSinVentas: true})
+                JSON.stringify({texto: r.name || this.textoBusqueda, verSinVentas: true, locationId: r.location_id})
             );
         } catch (error) {
             // sin sessionStorage solo se pierde el texto ya escrito
