@@ -49,6 +49,63 @@ const PASO_AYUDA = {
     texto: "Toca este botón cuando quieras para repetir esta ayuda.",
 };
 
+export const PASOS_HUB = [
+    {
+        selector: ".search-row .search-box-live",
+        titulo: "Buscar una ruta o un cliente",
+        texto:
+            "Escribe el nombre de una ruta o de un cliente. Si eliges un cliente, toca «Ir a la ruta» y se abre directo su visita, listo para tomar el pedido.",
+    },
+    {
+        selector: ".segmented",
+        titulo: "Mapa o lista",
+        texto:
+            "Cambia entre ver las rutas en el mapa (cada punto es una ruta) o en una lista. Solo aparecen las rutas que todavía tienen clientes por visitar.",
+    },
+    {
+        selector: ".route-card",
+        titulo: "Cada ruta",
+        texto:
+            "El número grande es cuántos clientes que ya compran te quedan por visitar. Abajo ves lo que puedes vender, cuántos clientes tiene y el tiempo estimado. Las letras de colores dicen qué compañero la está atendiendo. Tócala para entrar y elegir el cliente.",
+    },
+    {
+        selector: ".sin-ventas-toggle",
+        titulo: "Rutas sin pendientes",
+        texto:
+            "Se ocultan las rutas donde no te queda ningún cliente que ya haya comprado. Tócalo para verlas también.",
+    },
+    {
+        selector: ".progreso-juego",
+        titulo: "Tu nivel y tu XP",
+        texto:
+            "Cada pedido te da XP: 1 por cada dólar de ganancia (x1.5 del 1 al 15 de cada mes) más un bono por estrellas: bronce +25 (llegar al 75% de lo que el cliente compra siempre), plata +60 (llegar a lo de siempre) y oro +150 (superar su récord con buen margen).",
+    },
+    {
+        selector: ".progreso-juego",
+        titulo: "Los niveles",
+        texto:
+            "Con el XP subes de nivel: Novato, Explorador (600 XP), Vendedor de ruta (1,800), Estratega (3,600), Capitán (6,000), Comandante (9,000), Maestro de ruta (13,000) y Leyenda (18,000). El nivel nunca baja.",
+    },
+    {
+        selector: ".progreso-juego-link",
+        titulo: "Logros, equipo y temporada",
+        texto:
+            "Tócalo para ver tus logros (misiones que dan XP extra), la meta del equipo del mes (las ventas de todos suman) y la temporada: 12 metas de XP del mes, con premios, que empieza de cero cada mes.",
+    },
+    {
+        selector: ".estrategias-btn",
+        titulo: "Estrategias",
+        texto: "Qué conviene empujar hoy y qué no ofrecer, según lo que decide la oficina.",
+    },
+    {
+        selector: ".avisos-btn",
+        titulo: "Avisos por WhatsApp",
+        texto:
+            "Tus clientes grandes que toca visitar en los próximos 3 días, para avisarles por WhatsApp que vas.",
+    },
+    PASO_AYUDA,
+];
+
 export const PASOS_RUTA = [
     {
         selector: ".sin-ventas-toggle",

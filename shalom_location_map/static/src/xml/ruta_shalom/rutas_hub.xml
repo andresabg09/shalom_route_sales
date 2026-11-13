@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <templates xml:space="preserve">
     <t t-name="shalom_location_map.RutasHub">
-        <div class="shalom-screen">
+        <div class="shalom-screen" t-ref="raiz">
             <div class="topbar topbar-nivel1">
                 <div class="paso-fila">
                     <span class="paso-chip">PASO 1 DE 3</span>
@@ -15,6 +15,7 @@
                     <button class="estrategias-btn" t-if="totalEstrategias" t-on-click="toggleEstrategias">
                         <i class="fa fa-lightbulb-o" aria-hidden="true"/> Estrategias
                     </button>
+                    <button class="icon-btn recorrido-ayuda-btn" t-on-click="abrirRecorrido" title="Ayuda de esta pantalla" aria-label="Ver la ayuda de esta pantalla"><i class="fa fa-question" aria-hidden="true"/></button>
                     <TemaSelector/>
                 </div>
             </div>
@@ -218,6 +219,14 @@
                 </t>
             </div>
             </div>
+
+            <RecorridoGuiado
+                t-if="state.recorridoAbierto"
+                pasos="pasosRecorrido"
+                titulo="'ELEGIR RUTA'"
+                raiz.bind="raizRecorrido"
+                onCerrar.bind="cerrarRecorrido"
+            />
         </div>
     </t>
 </templates>

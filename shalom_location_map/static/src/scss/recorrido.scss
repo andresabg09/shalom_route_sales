@@ -103,9 +103,18 @@
 
     // Botón ? en la barra de la ruta (celular): junto al tema, arriba a la
     // derecha (ver la regla del selector de tema en rediseno.scss).
+    // En "Elegir ruta" igual: ? y tema arriba a la derecha; "Estrategias"
+    // baja a la segunda línea si no cabe (antes el tema se caía a la
+    // izquierda y su menú se salía de la pantalla).
     @media (max-width: 767px) {
-        .topbar-nivel2 .topbar-row .recorrido-ayuda-btn {
+        .topbar-nivel2 .topbar-row .recorrido-ayuda-btn,
+        .topbar-nivel1 .topbar-row .recorrido-ayuda-btn,
+        .topbar-nivel1 .topbar-row .tema-selector {
             order: 2;
+        }
+        .topbar-nivel1 .topbar-row .estrategias-btn {
+            order: 3;
+            margin-left: auto;
         }
     }
 }

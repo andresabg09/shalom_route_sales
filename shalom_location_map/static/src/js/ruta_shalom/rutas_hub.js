@@ -4,6 +4,7 @@ import {Component, onMounted, onWillStart, onWillUnmount, useEffect, useRef, use
 import {useService} from "@web/core/utils/hooks";
 import {cargarMapboxGl, getMapboxToken} from "./mapbox_utils";
 import {TemaSelector} from "./tema_selector";
+import {PASOS_HUB, RecorridoGuiado, marcarRecorrido, recorridoPendiente} from "./recorrido";
 import {Avisos} from "./avisos";
 import {JuegoPanel} from "./juego_panel";
 import {Tutorial} from "./tutorial";
@@ -96,7 +97,7 @@ function formatoHorasImpl(horas) {
 
 export class RutasHub extends Component {
     static template = "shalom_location_map.RutasHub";
-    static components = {TemaSelector, Avisos, JuegoPanel, Tutorial};
+    static components = {TemaSelector, Avisos, JuegoPanel, Tutorial, RecorridoGuiado};
     static props = {
         onAbrirRuta: Function,
         onIrAClientes: {type: Function, optional: true},
@@ -116,6 +117,7 @@ export class RutasHub extends Component {
             // Filtro permanente: las rutas donde ningún cliente ha comprado
             // quedan ocultas; este interruptor las muestra (solo consulta).
             verSinVentas: false,
+            recorridoAbierto: false,
             // Botón flotante "Estrategias" (qué empujar / no ofrezcas),
             // editables por el dueño desde Administración.
             estrategias: {empujar: [], no_ofrecer: []},
@@ -140,6 +142,8 @@ export class RutasHub extends Component {
         });
         this.pantalla = useEsAncha();
         this.mapaRef = useRef("mapaRutas");
+        this.raizRef = useRef("raiz");
+        this.pasosRecorrido = PASOS_HUB;
         this.mapboxMap = null;
         this._mapaSeq = 0;
         // Se redibuja cuando cambia la vista, termina de cargar o cambia
@@ -387,6 +391,8 @@ export class RutasHub extends Component {
             if (estado && estado.mostrar) {
                 this.state.tutorialAbierto = true;
                 this.state.tutorialRepaso = false;
+            } else {
+                this._intentarRecorridoHub();
             }
         } catch (error) {
             console.error("shalom: error al leer el estado del tutorial", error);
@@ -411,6 +417,37 @@ export class RutasHub extends Component {
     cerrarTutorial() {
         this.state.tutorialAbierto = false;
         this.cargarProgreso();
+        this._intentarRecorridoHub();
+    }
+
+    // -- Recorrido guiado de "Elegir ruta" (después del tutorial de
+    // bienvenida, nunca encima de él) --
+
+    async _intentarRecorridoHub() {
+        if (!(await recorridoPendiente(this.orm, "hub"))) {
+            return;
+        }
+        // Espera a que las rutas y el nivel estén dibujados (máx. ~10 s).
+        for (let i = 0; i < 50 && this.state.cargando; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        if (!this.state.tutorialAbierto && !this.state.juegoAbierto && !this.state.avisosAbiertos) {
+            this.state.recorridoAbierto = true;
+        }
+    }
+
+    abrirRecorrido() {
+        this.state.recorridoAbierto = true;
+    }
+
+    cerrarRecorrido() {
+        this.state.recorridoAbierto = false;
+        marcarRecorrido(this.orm, "hub");
+    }
+
+    raizRecorrido() {
+        return this.raizRef.el;
     }
 
     irAlMapaDesdeTutorial() {
