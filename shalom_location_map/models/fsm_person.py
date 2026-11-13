@@ -36,16 +36,14 @@ class FSMPerson(models.Model):
         return self.search([("user_id", "=", self.env.uid)], limit=1)
 
     @api.model
-    def shalom_mis_rutas_programadas(self, date_start, date_end):
-        """Ocurrencias de fsm.route.schedule de las rutas asignadas al
-        vendedor logueado cuya semana se solape con [date_start,
-        date_end] (strings 'YYYY-MM-DD'), MÁS cualquier ocurrencia que
-        todavía no esté completada (estado != 'completada') aunque su
-        fecha haya quedado afuera de esa ventana -- para que una ruta
-        con clientes sin atender no se pierda de vista solo porque
-        pasó su fecha de fin estimada; una vez que de verdad se cierra
-        del todo (todas las visitas en una etapa cerrada), recién ahí
-        puede salir de la ventana por fecha como cualquier otra.
+    def shalom_mis_rutas_programadas(self, date_start=None, date_end=None):
+        """Ciclos (fsm.route.schedule) con AL MENOS UN cliente pendiente
+        (una visita en una etapa no cerrada), sin importar sus fechas. Los
+        vendedores eligen qué ruta atender: ya no se filtra por semana.
+        Un ciclo donde todos los clientes tienen etiqueta (Completado, No
+        atendido, No quiso, Cancelado) no aparece, aunque sea de esta
+        semana; uno viejo con clientes pendientes, sí. date_start y
+        date_end ya no se usan (se aceptan por compatibilidad).
 
         Caso aparte, solo para Visita Exprés: si Administración archivó
         (no cerró, ARCHIVÓ) a todos los clientes de un lote -- ver
@@ -69,13 +67,15 @@ class FSMPerson(models.Model):
         # atender; la marca de quién la está trabajando sale en
         # "tomada_por" (ver shalom_ruta_toma.py). La Visita Exprés sigue
         # siendo solo de su vendedor.
+        con_pendientes = [
+            ciclo.id
+            for (ciclo,) in self.env["fsm.order"]._read_group(
+                [("x_route_schedule_id", "!=", False), ("stage_id.is_closed", "=", False)],
+                ["x_route_schedule_id"],
+            )
+        ]
         schedules = self.env["fsm.route.schedule"].search(
-            [
-                "|",
-                "&", ("date_start", "<=", date_end), ("date_end", ">=", date_start),
-                ("estado", "!=", "completada"),
-            ],
-            order="date_start asc",
+            [("id", "in", con_pendientes)], order="date_start asc"
         )
         schedules = schedules.filtered(
             lambda s: not s.route_id.x_es_visita_express

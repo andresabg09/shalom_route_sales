@@ -116,8 +116,6 @@ export class RutasHub extends Component {
             // Filtro permanente: las rutas donde ningún cliente ha comprado
             // quedan ocultas; este interruptor las muestra (solo consulta).
             verSinVentas: false,
-            periodo: "todos",
-            menuPeriodoAbierto: false,
             // Botón flotante "Estrategias" (qué empujar / no ofrezcas),
             // editables por el dueño desde Administración.
             estrategias: {empujar: [], no_ofrecer: []},
@@ -574,7 +572,6 @@ export class RutasHub extends Component {
         // y se refresca por detrás (antes se esperaba la consulta completa).
         if (!silencioso && CACHE_RUTAS && Date.now() - CACHE_RUTAS.ts < CACHE_RUTAS_MS) {
             this.state.schedules = CACHE_RUTAS.schedules;
-            this.state.periodo = CACHE_RUTAS.periodo;
             this._ventana = CACHE_RUTAS.ventana;
             this.state.cargando = false;
             this.cargar(true);
@@ -596,23 +593,8 @@ export class RutasHub extends Component {
             );
             this.state.schedules = resultado;
             this._ventana = [aFechaStr(desde), aFechaStr(hasta)];
-            if (silencioso) {
-                CACHE_RUTAS = {ts: Date.now(), schedules: resultado, periodo: this.state.periodo, ventana: this._ventana};
-                return;
-            }
+            CACHE_RUTAS = {ts: Date.now(), schedules: resultado, ventana: this._ventana};
 
-            // Por defecto, la semana calendario de HOY -- si no hay
-            // ninguna ruta cuya semana de arranque sea esta, se cae a
-            // "todo el periodo" (mismo criterio que antes, adaptado a
-            // que "periodo" ahora es la clave de un bucket de semana,
-            // no el date_start de una ocurrencia puntual -- ver
-            // semanas()/schedulesFiltrados()).
-            const semanaDeHoy = aFechaStr(desde);
-            const hayRutasEstaSemana = resultado.some(
-                (s) => aFechaStr(inicioSemana(s.date_start + "T00:00:00")) === semanaDeHoy
-            );
-            this.state.periodo = hayRutasEstaSemana ? semanaDeHoy : "todos";
-            CACHE_RUTAS = {ts: Date.now(), schedules: resultado, periodo: this.state.periodo, ventana: this._ventana};
         } catch (error) {
             if (silencioso) {
                 console.error("shalom: error al refrescar las rutas", error);
@@ -625,29 +607,6 @@ export class RutasHub extends Component {
         } finally {
             this.state.cargando = false;
         }
-    }
-
-    /** Agrupa las ocurrencias por SEMANA CALENDARIO real (lunes a
-     * domingo, ver inicioSemana()) en la que arranca cada una -- antes
-     * agrupaba por el date_start literal de cada ocurrencia, así que
-     * un vendedor con 11 rutas con fechas de inicio escalonadas (una
-     * empieza el 1, otra el 3, otra el 7...) veía 11 "semanas"
-     * distintas en el filtro, una por ruta, en vez de agrupadas por
-     * semana real -- pedido explícito: "que aparezcan todas las rutas
-     * de mi semana juntas". Cada bucket trae "cantidad" (cuántas rutas
-     * caen en esa semana) para mostrarlo en el filtro. */
-    get semanas() {
-        const vistas = new Map();
-        for (const s of this.state.schedules) {
-            const inicio = aFechaStr(inicioSemana(s.date_start + "T00:00:00"));
-            if (!vistas.has(inicio)) {
-                const fin = new Date(inicio + "T00:00:00");
-                fin.setDate(fin.getDate() + 6);
-                vistas.set(inicio, {date_start: inicio, date_end: aFechaStr(fin), cantidad: 0});
-            }
-            vistas.get(inicio).cantidad += 1;
-        }
-        return [...vistas.values()].sort((a, b) => (a.date_start < b.date_start ? -1 : 1));
     }
 
     /** Ruta sin nada que vender: ningún cliente por atender ha comprado antes
@@ -667,12 +626,6 @@ export class RutasHub extends Component {
     get schedulesFiltrados() {
         const q = this.state.busqueda.trim().toLowerCase();
         const filtradas = this.state.schedules.filter((s) => {
-            if (this.state.periodo !== "todos") {
-                const semanaDeEsta = aFechaStr(inicioSemana(s.date_start + "T00:00:00"));
-                if (semanaDeEsta !== this.state.periodo) {
-                    return false;
-                }
-            }
             if (q && !s.route_name.toLowerCase().includes(q)) {
                 return false;
             }
@@ -690,26 +643,8 @@ export class RutasHub extends Component {
         );
     }
 
-    /** Etiqueta del filtro de período (menú desplegable) -- une la
-     * semana calendario con cuántas rutas tiene, para elegir sin tener
-     * que abrir cada una ("Semana del 1 al 7 sep · 3 rutas"). */
-    etiquetaPeriodo(dateStart) {
-        if (dateStart === "todos") {
-            return "Todo el periodo";
-        }
-        const semana = this.semanas.find((s) => s.date_start === dateStart);
-        if (!semana) {
-            return "";
-        }
-        const inicio = formatoFechaCorta(new Date(semana.date_start + "T00:00:00"));
-        const fin = formatoFechaCorta(new Date(semana.date_end + "T00:00:00"));
-        const rutas = semana.cantidad === 1 ? "1 ruta" : `${semana.cantidad} rutas`;
-        return `Semana del ${inicio} al ${fin} · ${rutas}`;
-    }
-
     /** Rango de fechas de ESTA ocurrencia puntual, para la tarjeta de
-     * cada ruta -- a diferencia de etiquetaPeriodo() (que describe la
-     * semana calendario del filtro), acá se muestran las fechas reales
+     * cada ruta: se muestran las fechas reales
      * de la ocurrencia tal cual las cargó oficina, aunque no coincidan
      * exactamente con el lunes/domingo de su semana. */
     etiquetaRangoSchedule(schedule) {
@@ -728,15 +663,6 @@ export class RutasHub extends Component {
 
     etiquetaEstado(estado) {
         return ESTADO_RUTA_ETIQUETA[estado] || estado;
-    }
-
-    toggleMenuPeriodo() {
-        this.state.menuPeriodoAbierto = !this.state.menuPeriodoAbierto;
-    }
-
-    elegirPeriodo(dateStart) {
-        this.state.periodo = dateStart;
-        this.state.menuPeriodoAbierto = false;
     }
 
     abrir(schedule) {
