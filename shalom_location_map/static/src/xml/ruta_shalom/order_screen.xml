@@ -421,12 +421,31 @@
                 </div>
             </div>
 
-            <!-- Foto en grande (tocar la foto en el catálogo); tocar en
-                 cualquier lado, la ✕ o Atrás la cierra. -->
-            <div class="foto-ampliada-overlay" t-if="state.fotoAmpliada" t-on-click="cerrarFoto" role="dialog" t-att-aria-label="state.fotoAmpliada.nombre">
-                <button class="foto-ampliada-cerrar" title="Cerrar" aria-label="Cerrar">✕</button>
-                <img t-att-src="state.fotoAmpliada.url" t-att-alt="state.fotoAmpliada.nombre" t-on-error="onImagenError"/>
+            <!-- Foto en grande (tocar la foto en el catálogo), con zoom:
+                 doble toque/clic, pellizco o rueda del mouse; arrastrar
+                 para moverla. Se cierra tocando el fondo, la ✕ o Atrás. -->
+            <div class="foto-ampliada-overlay" t-if="state.fotoAmpliada" role="dialog" t-att-aria-label="state.fotoAmpliada.nombre">
+                <button class="foto-ampliada-cerrar" t-on-click="cerrarFoto" title="Cerrar" aria-label="Cerrar">✕</button>
+                <div
+                    class="foto-ampliada-lienzo"
+                    t-ref="fotoLienzo"
+                    t-on-click.self="onClickFondoFoto"
+                    t-on-pointerdown="onFotoPointerDown"
+                    t-on-pointermove="onFotoPointerMove"
+                    t-on-pointerup="onFotoPointerUp"
+                    t-on-pointercancel="onFotoPointerUp"
+                    t-on-wheel="onFotoWheel"
+                >
+                    <img
+                        t-ref="fotoAmpliadaImg"
+                        t-att-src="state.fotoAmpliada.url"
+                        t-att-alt="state.fotoAmpliada.nombre"
+                        draggable="false"
+                        t-on-error="onImagenError"
+                    />
+                </div>
                 <div class="foto-ampliada-nombre" t-esc="state.fotoAmpliada.nombre"/>
+                <div class="foto-ampliada-ayuda">Doble toque o pellizca para hacer zoom</div>
             </div>
 
             <!-- Pedidos anteriores: hoja de abajo (centrada en tablet). Lo

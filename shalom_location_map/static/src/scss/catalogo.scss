@@ -516,15 +516,39 @@
         justify-content: center;
         gap: 12px;
         padding: 16px;
-        cursor: zoom-out;
         animation: shalom-fondo-in 0.15s ease both;
     }
-    .foto-ampliada-overlay img {
+    // Zona de gestos: ocupa todo el alto libre; touch-action none para
+    // que el navegador no haga su propio zoom/scroll con los dedos.
+    .foto-ampliada-lienzo {
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        touch-action: none;
+        cursor: zoom-out;
+    }
+    .foto-ampliada-lienzo img {
         max-width: 100%;
-        max-height: calc(100% - 64px);
+        max-height: 100%;
         object-fit: contain;
         border-radius: var(--shalom-radius-md);
         background: #ffffff;
+        transform-origin: center center;
+        will-change: transform;
+        user-select: none;
+        -webkit-user-drag: none;
+        cursor: zoom-in;
+    }
+    .foto-ampliada-lienzo.con-zoom img {
+        cursor: grab;
+    }
+    .foto-ampliada-ayuda {
+        color: rgba(255, 255, 255, 0.65);
+        font-size: 0.75rem;
     }
     .foto-ampliada-nombre {
         color: #ffffff;
@@ -535,6 +559,7 @@
     }
     .foto-ampliada-cerrar {
         position: absolute;
+        z-index: 1;
         top: 14px;
         right: 14px;
         width: 44px;

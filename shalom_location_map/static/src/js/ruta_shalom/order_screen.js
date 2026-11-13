@@ -208,6 +208,8 @@ export class OrderScreen extends Component {
         this.notification = useService("notification");
         this.action = useService("action");
         this.videoRef = useRef("video");
+        this.fotoLienzoRef = useRef("fotoLienzo");
+        this.fotoImgRef = useRef("fotoAmpliadaImg");
         this.stream = null;
         this.intervaloEscaneo = null;
         this.detectorEnCurso = false;
@@ -1061,7 +1063,13 @@ export class OrderScreen extends Component {
         if (this.state.fotoAmpliada) {
             return;
         }
-        this.state.fotoAmpliada = {url: this.imagenUrl(producto), nombre: producto.name};
+        this.state.fotoAmpliada = {
+            url: this.imagenUrl(producto),
+            // la original (1920 px) se pide solo si el vendedor acerca la foto
+            urlGrande: `/web/image/product.product/${producto.id}/image_1920`,
+            nombre: producto.name,
+        };
+        this._zoom = {escala: 1, x: 0, y: 0, punteros: new Map(), pinch: null, arrastre: null, ultimoTap: null, movio: false, grandePedida: false};
         abrirNivel({tipo: "foto"});
     }
 
@@ -1069,8 +1077,195 @@ export class OrderScreen extends Component {
         if (!this.state.fotoAmpliada) {
             return;
         }
+        clearTimeout(this._cierreFotoTimer);
         this.state.fotoAmpliada = null;
+        this._zoom = null;
         cerrarNivel();
+    }
+
+    // -- Zoom de la foto en grande (doble toque/clic, pellizco, rueda, arrastre) --
+
+    /** Punto del evento relativo al centro del lienzo (ahí está el centro
+     * de la foto sin transformar). */
+    _puntoFoto(ev) {
+        const r = this.fotoLienzoRef.el.getBoundingClientRect();
+        return {x: ev.clientX - (r.left + r.width / 2), y: ev.clientY - (r.top + r.height / 2)};
+    }
+
+    /** Aplica escala y desplazamiento a la foto, sin dejar que se vaya
+     * fuera de cuadro. Se escribe directo en el estilo (no en el estado
+     * reactivo): son decenas de cambios por segundo durante un gesto. */
+    _aplicarZoom(animado = false) {
+        const z = this._zoom;
+        const img = this.fotoImgRef.el;
+        if (!z || !img) {
+            return;
+        }
+        z.escala = Math.min(5, Math.max(1, z.escala));
+        const maxX = ((z.escala - 1) * img.offsetWidth) / 2;
+        const maxY = ((z.escala - 1) * img.offsetHeight) / 2;
+        z.x = Math.min(maxX, Math.max(-maxX, z.x));
+        z.y = Math.min(maxY, Math.max(-maxY, z.y));
+        img.style.transition = animado ? "transform 0.2s ease" : "none";
+        img.style.transform = `translate(${z.x}px, ${z.y}px) scale(${z.escala})`;
+        if (this.fotoLienzoRef.el) {
+            this.fotoLienzoRef.el.classList.toggle("con-zoom", z.escala > 1.01);
+        }
+        if (z.escala > 1.4 && !z.grandePedida && this.state.fotoAmpliada) {
+            z.grandePedida = true;
+            const foto = this.state.fotoAmpliada;
+            const precarga = new Image();
+            precarga.onload = () => {
+                if (this.state.fotoAmpliada === foto) {
+                    foto.url = foto.urlGrande;
+                }
+            };
+            precarga.src = foto.urlGrande;
+        }
+    }
+
+    /** Lleva la escala a `nueva` dejando quieto el punto p (el dedo/cursor). */
+    _zoomEnPunto(nueva, p, animado = false) {
+        const z = this._zoom;
+        const limitada = Math.min(5, Math.max(1, nueva));
+        const f = limitada / z.escala;
+        z.x = p.x - f * (p.x - z.x);
+        z.y = p.y - f * (p.y - z.y);
+        z.escala = limitada;
+        this._aplicarZoom(animado);
+    }
+
+    onFotoPointerDown(ev) {
+        const z = this._zoom;
+        if (!z) {
+            return;
+        }
+        try {
+            ev.currentTarget.setPointerCapture(ev.pointerId);
+        } catch {
+            // sin captura igual funciona mientras el dedo siga encima
+        }
+        z.punteros.set(ev.pointerId, {x: ev.clientX, y: ev.clientY});
+        if (z.punteros.size === 1) {
+            z.movio = false;
+            z.inicioToque = {x: ev.clientX, y: ev.clientY, t: Date.now()};
+            z.arrastre = {px: ev.clientX, py: ev.clientY, x: z.x, y: z.y};
+            z.pinch = null;
+        } else if (z.punteros.size === 2) {
+            const [a, b] = [...z.punteros.values()];
+            const centro = this._puntoFoto({clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2});
+            z.pinch = {dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, escala: z.escala, c: centro, x: z.x, y: z.y};
+            z.arrastre = null;
+            z.movio = true;
+        }
+    }
+
+    onFotoPointerMove(ev) {
+        const z = this._zoom;
+        if (!z || !z.punteros.has(ev.pointerId)) {
+            return;
+        }
+        z.punteros.set(ev.pointerId, {x: ev.clientX, y: ev.clientY});
+        if (z.pinch && z.punteros.size >= 2) {
+            const [a, b] = [...z.punteros.values()];
+            const centro = this._puntoFoto({clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2});
+            const escala = Math.min(5, Math.max(1, z.pinch.escala * (Math.hypot(a.x - b.x, a.y - b.y) / z.pinch.dist)));
+            const f = escala / z.pinch.escala;
+            z.escala = escala;
+            z.x = centro.x - f * (z.pinch.c.x - z.pinch.x);
+            z.y = centro.y - f * (z.pinch.c.y - z.pinch.y);
+            this._aplicarZoom();
+        } else if (z.arrastre) {
+            const dx = ev.clientX - z.arrastre.px;
+            const dy = ev.clientY - z.arrastre.py;
+            if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+                z.movio = true;
+            }
+            if (z.escala > 1) {
+                z.x = z.arrastre.x + dx;
+                z.y = z.arrastre.y + dy;
+                this._aplicarZoom();
+            }
+        }
+    }
+
+    onFotoPointerUp(ev) {
+        const z = this._zoom;
+        if (!z || !z.punteros.has(ev.pointerId)) {
+            return;
+        }
+        z.punteros.delete(ev.pointerId);
+        if (z.punteros.size === 1) {
+            // quedó un dedo: sigue como arrastre desde donde está
+            const [p] = [...z.punteros.values()];
+            z.pinch = null;
+            z.arrastre = {px: p.x, py: p.y, x: z.x, y: z.y};
+            return;
+        }
+        if (z.punteros.size > 0) {
+            return;
+        }
+        z.pinch = null;
+        z.arrastre = null;
+        if (z.escala < 1.05) {
+            z.escala = 1;
+            z.x = 0;
+            z.y = 0;
+            this._aplicarZoom(true);
+        }
+        // Doble toque / doble clic: dos toques cortos y cercanos.
+        const toque = z.inicioToque;
+        if (z.movio || !toque || Date.now() - toque.t > 300) {
+            z.ultimoTap = null;
+            return;
+        }
+        const ahora = {x: ev.clientX, y: ev.clientY, t: Date.now()};
+        const previo = z.ultimoTap;
+        if (previo && ahora.t - previo.t < 320 && Math.hypot(ahora.x - previo.x, ahora.y - previo.y) < 30) {
+            z.ultimoTap = null;
+            z.dobleToque = true;
+            clearTimeout(this._cierreFotoTimer);
+            if (z.escala > 1.01) {
+                z.escala = 1;
+                z.x = 0;
+                z.y = 0;
+                this._aplicarZoom(true);
+            } else {
+                this._zoomEnPunto(2.5, this._puntoFoto(ev), true);
+            }
+        } else {
+            z.ultimoTap = ahora;
+        }
+    }
+
+    onFotoWheel(ev) {
+        const z = this._zoom;
+        if (!z) {
+            return;
+        }
+        ev.preventDefault();
+        this._zoomEnPunto(z.escala * Math.exp(-ev.deltaY * 0.0025), this._puntoFoto(ev));
+        if (z.escala <= 1.01) {
+            z.x = 0;
+            z.y = 0;
+            this._aplicarZoom();
+        }
+    }
+
+    /** Tocar el fondo (fuera de la foto) cierra, salvo que haya sido parte
+     * de un gesto (arrastre, pellizco o doble toque). */
+    onClickFondoFoto() {
+        const z = this._zoom;
+        if (!z || z.movio) {
+            return;
+        }
+        if (z.dobleToque) {
+            z.dobleToque = false;
+            return;
+        }
+        // Espera un instante por si es el primer toque de un doble toque.
+        clearTimeout(this._cierreFotoTimer);
+        this._cierreFotoTimer = setTimeout(() => this.cerrarFoto(), 330);
     }
 
     toggleMedidor() {
