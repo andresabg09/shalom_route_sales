@@ -160,7 +160,7 @@
                         t-att-class="cantidadEnCarrito(producto.id) ? 'product-card-en-carrito' : ''"
                     >
                         <div class="name" t-esc="producto.name"/>
-                        <div class="product-thumb-wrap">
+                        <div class="product-thumb-wrap" t-on-click="() => this.abrirFoto(producto)" t-att-title="'Ver foto de ' + producto.name">
                             <img class="product-thumb" t-att-src="imagenUrl(producto)" alt="" t-on-error="onImagenError"/>
                         </div>
                         <div class="product-side">
@@ -419,6 +419,14 @@
                         >Confirmar pedido</button>
                     </div>
                 </div>
+            </div>
+
+            <!-- Foto en grande (tocar la foto en el catálogo); tocar en
+                 cualquier lado, la ✕ o Atrás la cierra. -->
+            <div class="foto-ampliada-overlay" t-if="state.fotoAmpliada" t-on-click="cerrarFoto" role="dialog" t-att-aria-label="state.fotoAmpliada.nombre">
+                <button class="foto-ampliada-cerrar" title="Cerrar" aria-label="Cerrar">✕</button>
+                <img t-att-src="state.fotoAmpliada.url" t-att-alt="state.fotoAmpliada.nombre" t-on-error="onImagenError"/>
+                <div class="foto-ampliada-nombre" t-esc="state.fotoAmpliada.nombre"/>
             </div>
 
             <!-- Pedidos anteriores: hoja de abajo (centrada en tablet). Lo

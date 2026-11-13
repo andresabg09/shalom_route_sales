@@ -248,6 +248,8 @@ export class OrderScreen extends Component {
             // la cabecera se esconde al bajar por el catálogo (vuelve al subir).
             medidorAbierto: false,
             cabeceraOculta: false,
+            // Foto en grande: {url, nombre} | null.
+            fotoAmpliada: null,
             carrito: {}, // {productId: {producto, cantidad}}
             // "Precargar de pedidos anteriores" (Fase 1 del juego de
             // ventas): hoja con los últimos pedidos del cliente, para
@@ -1050,6 +1052,25 @@ export class OrderScreen extends Component {
         } catch {
             // sin almacenamiento: la elección dura solo esta pantalla
         }
+    }
+
+    /** Abre la foto del producto a pantalla completa. Es un nivel más
+     * del historial (como la ficha de cliente): el Atrás de Android la
+     * cierra a ella, no al catálogo entero. */
+    abrirFoto(producto) {
+        if (this.state.fotoAmpliada) {
+            return;
+        }
+        this.state.fotoAmpliada = {url: this.imagenUrl(producto), nombre: producto.name};
+        abrirNivel({tipo: "foto"});
+    }
+
+    cerrarFoto() {
+        if (!this.state.fotoAmpliada) {
+            return;
+        }
+        this.state.fotoAmpliada = null;
+        cerrarNivel();
     }
 
     toggleMedidor() {

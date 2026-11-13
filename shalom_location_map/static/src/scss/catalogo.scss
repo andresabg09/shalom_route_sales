@@ -295,7 +295,7 @@
 
     // ---------- Vista LISTA: filas de ~100 px, foto 76x88 ----------
     .catalog-list.vista-lista .product-card {
-        grid-template-columns: 76px minmax(0, 1fr) auto;
+        grid-template-columns: 116px minmax(0, 1fr) auto;
         grid-template-areas:
             "foto nombre accion"
             "foto lado accion"
@@ -316,8 +316,8 @@
         }
         .product-thumb-wrap {
             grid-area: foto;
-            width: 76px;
-            height: 88px;
+            width: 116px;
+            height: 146px;
             margin: 0;
         }
         .product-side {
@@ -417,7 +417,7 @@
         .product-thumb-wrap {
             order: 1;
             width: 100%;
-            height: 104px;
+            height: 168px;
             margin: 0;
         }
         .name {
@@ -490,12 +490,61 @@
     }
     @media (min-width: 768px) {
         .catalog-list.vista-cuadricula {
-            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
             gap: 12px;
         }
         .catalog-list.vista-cuadricula .product-card .product-thumb-wrap {
-            height: 150px;
+            height: 200px;
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Foto en grande: tocar la foto de un producto la abre a pantalla
+    // completa para mostrársela al cliente; tocar de nuevo la cierra.
+    // ------------------------------------------------------------------
+    .catalog-list .product-thumb-wrap {
+        cursor: zoom-in;
+    }
+    .foto-ampliada-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 96;
+        background: rgba(10, 5, 8, 0.92);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 16px;
+        cursor: zoom-out;
+        animation: shalom-fondo-in 0.15s ease both;
+    }
+    .foto-ampliada-overlay img {
+        max-width: 100%;
+        max-height: calc(100% - 64px);
+        object-fit: contain;
+        border-radius: var(--shalom-radius-md);
+        background: #ffffff;
+    }
+    .foto-ampliada-nombre {
+        color: #ffffff;
+        font-weight: 800;
+        font-size: 1rem;
+        text-align: center;
+        max-width: 640px;
+    }
+    .foto-ampliada-cerrar {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        width: 44px;
+        height: 44px;
+        border-radius: 999px;
+        border: none;
+        background: rgba(255, 255, 255, 0.18);
+        color: #ffffff;
+        font-size: 1.1rem;
+        cursor: pointer;
     }
 
     // ------------------------------------------------------------------
