@@ -380,10 +380,10 @@ export class RutaDetalle extends Component {
                 // (ver _abrirClienteDeTraspaso), sin dejar el buscador escrito.
                 this._traspasoLocationId = traspaso.locationId;
                 this._traspasoTexto = traspaso.texto || "";
-                this.state.verSinVentas = true;
             } else if (traspaso && traspaso.texto) {
+                // Los clientes sin ventas siguen ocultos por defecto: si
+                // alguno coincide, el aviso "N ocultos · Mostrar" lo dice.
                 this.state.busquedaCliente = traspaso.texto;
-                this.state.verSinVentas = !!traspaso.verSinVentas;
             }
         } catch (error) {
             // sin sessionStorage solo se pierde el texto ya escrito
@@ -684,6 +684,8 @@ export class RutaDetalle extends Component {
             this.state.busquedaCliente = this._traspasoTexto || "";
             return;
         }
+        this._visibleForzadaId = visita.id;
+        this.state.visitas = this._vistaDeVisitas(this.state.visitasTodas);
         if (!this.state.visitas.some((v) => v.id === visita.id)) {
             this.state.modoCartera = "toda";
             this.state.visitas = this._vistaDeVisitas(this.state.visitasTodas);
@@ -744,9 +746,11 @@ export class RutaDetalle extends Component {
     }
 
     _vistaDeVisitas(todasLasVisitas) {
+        // El cliente al que se llegó desde la búsqueda se ve aunque no
+        // tenga ventas; el resto de los sin ventas sigue oculto.
         const todas = this.state.verSinVentas
             ? todasLasVisitas
-            : todasLasVisitas.filter((v) => !this._esSinVentas(v));
+            : todasLasVisitas.filter((v) => !this._esSinVentas(v) || v.id === this._visibleForzadaId);
         if (!this.props.schedule.tiene_cartera || this.state.modoCartera !== "mi") {
             return todas;
         }

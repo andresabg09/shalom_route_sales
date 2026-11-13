@@ -424,17 +424,20 @@ class FSMPerson(models.Model):
                 "Esta acción es solo para el rol Administrador de "
                 "Servicio de Campo."
             ))
-        # OR con x_reposicion_incompleta=True: cuando el cron de
-        # reposición automática (_shalom_reponer_rutas_vencidas en
-        # fsm_route_schedule.py) marca un ciclo como incompleto,
-        # también cierra como "No atendido" las visitas que habían
-        # quedado colgadas -- eso recalcula estado a 'completada' acto
-        # seguido, y el ciclo desaparecería de esta lista justo cuando
-        # más interesa que Administración lo vea. Por eso un ciclo
-        # marcado como incompleto se sigue mostrando aunque su estado
-        # ya haya pasado a 'completada'.
+        # Solo ciclos ACTIVOS: con al menos un cliente pendiente (visita en
+        # etapa no cerrada). Pedido explícito: los que ya tienen a todos
+        # sus clientes con etiqueta (Completado, No atendido, No quiso,
+        # Cancelado) no se muestran, aunque el cron los haya marcado como
+        # reposición incompleta -- antes se acumulaban todos los ciclos.
+        con_pendientes = [
+            ciclo.id
+            for (ciclo,) in self.env["fsm.order"]._read_group(
+                [("x_route_schedule_id", "!=", False), ("stage_id.is_closed", "=", False)],
+                ["x_route_schedule_id"],
+            )
+        ]
         schedules = self.env["fsm.route.schedule"].search(
-            ["|", ("estado", "!=", "completada"), ("x_reposicion_incompleta", "=", True)],
+            [("id", "in", con_pendientes)],
             order="fsm_person_id, date_start asc",
         )
         vendedores = {}
