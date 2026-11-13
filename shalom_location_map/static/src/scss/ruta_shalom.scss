@@ -4006,6 +4006,83 @@
             align-items: center;
             gap: 8px;
         }
+        // Ajustes del modal de Estrategias (reportado: "está horrible"):
+        // margen interno, campos parejos, buscador sin doble borde,
+        // resultados como lista y Guardar como botón principal.
+        .adm-estrategia-form {
+            padding: 16px 20px 18px;
+            gap: 12px;
+        }
+        .adm-estrategia-form input[type="text"],
+        .adm-estrategia-form input[type="date"],
+        .adm-estrategia-form select {
+            height: 42px;
+            width: 100%;
+        }
+        .adm-estrategia-form textarea {
+            width: 100%;
+            min-height: 76px;
+            resize: vertical;
+        }
+        .adm-estrategia-form input:focus,
+        .adm-estrategia-form select:focus,
+        .adm-estrategia-form textarea:focus {
+            outline: none;
+            border-color: var(--shalom-accent);
+            box-shadow: 0 0 0 3px var(--shalom-accent-soft);
+        }
+        .adm-estrategia-form label.adm-estrategia-check input {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--shalom-accent);
+        }
+        .adm-estrategia-form .adm-side-label {
+            margin-top: 4px;
+        }
+        .adm-estrategia-form .adm-chip-row:empty {
+            display: none;
+        }
+        .adm-estrategia-form .adm-search {
+            height: 42px;
+            flex: none;
+        }
+        .adm-estrategia-form .adm-search:focus-within {
+            border-color: var(--shalom-accent);
+            box-shadow: 0 0 0 3px var(--shalom-accent-soft);
+        }
+        .adm-estrategia-form .adm-search input {
+            height: auto;
+            border: none;
+            padding: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+        .adm-estrategia-form .adm-modal-row {
+            padding: 10px 12px;
+            border: 1px solid var(--shalom-line);
+            border-radius: var(--shalom-radius-sm);
+            margin-top: -4px;
+            color: var(--shalom-ink);
+        }
+        .adm-estrategia-form .adm-modal-row .fa-plus {
+            color: var(--shalom-accent);
+        }
+        .adm-modal-foot {
+            gap: 10px;
+        }
+        .adm-modal-foot .adm-btn-ghost,
+        .adm-modal-foot .adm-actbtn {
+            height: 42px;
+            padding: 0 22px;
+            font-size: 0.88rem;
+            border-radius: var(--shalom-radius-sm);
+        }
+        .adm-modal-foot .adm-actbtn-accent {
+            background: var(--shalom-accent);
+            border-color: var(--shalom-accent);
+            color: var(--shalom-accent-ink);
+            font-weight: 700;
+        }
         .adm-field {
             display: flex;
             align-items: center;
@@ -5190,6 +5267,33 @@
     max-width: 260px;
     vertical-align: top;
     line-height: 1.3;
+}
+// Los botones NO se parten: la regla de arriba (con `*`) también les
+// llegaba, el texto de "Buscar opciones en Google" se partía letra por
+// letra y su columna quedaba de un dedo de ancho (reportado).
+.o_shalom_gps_wizard_list td.o_list_button,
+.o_shalom_gps_wizard_list td.o_list_button *,
+.o_shalom_gps_wizard_list td:has(button.btn),
+.o_shalom_gps_wizard_list td:has(button.btn) * {
+    word-break: normal !important;
+}
+@media (min-width: 769px) {
+    .o_shalom_gps_wizard_list td.o_list_button,
+    .o_shalom_gps_wizard_list td:has(button.btn) {
+        max-width: none;
+        white-space: nowrap !important;
+    }
+    .o_shalom_gps_wizard_list td.o_list_button button.btn,
+    .o_shalom_gps_wizard_list td:has(button.btn) button.btn {
+        white-space: nowrap !important;
+        margin: 2px 6px 2px 0;
+    }
+}
+@media (max-width: 768px) {
+    .o_shalom_gps_wizard_list td.o_list_button,
+    .o_shalom_gps_wizard_list td:has(button.btn) {
+        min-width: 170px;
+    }
 }
 
 // Ídem, pero en celular: el tope fijo de 260px pensado para desktop

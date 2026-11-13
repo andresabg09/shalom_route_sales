@@ -1612,13 +1612,7 @@ export class RutaDetalle extends Component {
         // falta esperar a watchPosition para el trazado inicial).
         navigator.geolocation.getCurrentPosition(
             (position) => this._procesarPosicionNav(position, true),
-            () => {
-                this.notification.add(
-                    "No se pudo obtener tu ubicación GPS para trazar la ruta.",
-                    {type: "danger"}
-                );
-                this.detenerNavegacion();
-            },
+            (error) => this._navSinLecturaInicial(error),
             {enableHighAccuracy: true, timeout: 15000, maximumAge: 0}
         );
 
@@ -1637,6 +1631,49 @@ export class RutaDetalle extends Component {
         );
 
         this._iniciarAnimacionFlujo();
+    }
+
+    /** La primera lectura de GPS de alta precisión falló (pasa sobre todo
+     * en computadoras sin GPS: Windows ubica por wifi y a veces no
+     * responde a "máxima precisión" a tiempo). Antes se cortaba ahí con
+     * "No se pudo obtener tu ubicación". Ahora: 1) si el mapa ya conoce
+     * la ubicación del vendedor (su punto en el mapa), se traza desde
+     * ahí; 2) si no, se reintenta sin alta precisión y aceptando una
+     * lectura de hasta 1 minuto; 3) recién entonces se avisa, diciendo
+     * si es un permiso bloqueado. */
+    _navSinLecturaInicial(error) {
+        if (!this.state.navegando) {
+            return;
+        }
+        const desdePunto = (punto) =>
+            this._procesarPosicionNav(
+                {coords: {latitude: punto.lat, longitude: punto.lng, accuracy: 0, heading: null, speed: null}},
+                true
+            );
+        if (this.posicionVendedor) {
+            desdePunto(this.posicionVendedor);
+            return;
+        }
+        const avisar = (err) => {
+            const permiso = err && err.code === 1;
+            this.notification.add(
+                permiso
+                    ? "El navegador no tiene permiso para usar tu ubicación. Actívalo en el candado de la barra de direcciones y vuelve a intentar."
+                    : "No se pudo obtener tu ubicación GPS para trazar la ruta.",
+                {type: "danger"}
+            );
+            this.detenerNavegacion();
+        };
+        if (error && error.code === 1) {
+            avisar(error);
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (position) =>
+                desdePunto({lat: position.coords.latitude, lng: position.coords.longitude}),
+            avisar,
+            {enableHighAccuracy: false, timeout: 10000, maximumAge: 60000}
+        );
     }
 
     /**
