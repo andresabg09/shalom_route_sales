@@ -956,12 +956,27 @@ class FSMOrder(models.Model):
         Nevada es otra empresa (Greenpeak) y el vendedor puede no tener
         acceso a su inventario.
 
-        Devuelve {product_id: {"dianke": int, "nevada": int}}."""
+        Devuelve {product_id: {"dianke": int, "nevada": int, "bulto": int}}.
+
+        "bulto" = unidades que trae un bulto (caja), dato que carga el
+        módulo stock_picking_sale_buttons en product.product.dk_bulk_units
+        (solo informativo; este módulo NUNCA lo escribe). Se lee en vivo
+        y SOLO si el campo existe: este módulo no depende de aquél, así
+        que sin él "bulto" es 0 y el catálogo se ve igual que siempre.
+        0 = el producto no tiene dato de bulto (la app no muestra nada)."""
         if not product_ids:
             return {}
         dianke, nevada = self._shalom_bodegas_catalogo()
         productos = self.env["product.product"].sudo().browse(product_ids).exists()
-        resultado = {producto.id: {"dianke": 0, "nevada": 0} for producto in productos}
+        tiene_bulto = "dk_bulk_units" in productos._fields
+        resultado = {
+            producto.id: {
+                "dianke": 0,
+                "nevada": 0,
+                "bulto": int(producto.dk_bulk_units or 0) if tiene_bulto else 0,
+            }
+            for producto in productos
+        }
         for clave, bodega in (("dianke", dianke), ("nevada", nevada)):
             if not bodega:
                 continue

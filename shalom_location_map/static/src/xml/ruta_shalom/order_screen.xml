@@ -161,8 +161,16 @@
                         t-att-class="cantidadEnCarrito(producto.id) ? 'product-card-en-carrito' : ''"
                     >
                         <div class="name" t-esc="producto.name"/>
+                        <t t-set="bodegas" t-value="chipsBodegas(producto)"/>
                         <div class="product-thumb-wrap" t-on-click="() => this.abrirFoto(producto)" t-att-title="'Ver foto de ' + producto.name">
                             <img class="product-thumb" t-att-src="imagenUrl(producto)" alt="" t-on-error="onImagenError"/>
+                            <!-- Existencia de Nevada sobre la foto (abajo a la
+                                 izquierda), como en el catálogo de Ventas:
+                                 píldora blanca con punto de color, sin fondo. -->
+                            <span t-if="bodegas" class="nevada-overlay">
+                                <span class="nevada-dot" t-att-class="'tono-' + bodegas.nevada.tono"/>
+                                <t t-esc="bodegas.nevada.texto"/>
+                            </span>
                         </div>
                         <div class="product-side">
                             <!-- Marca de estrategia en la columna lateral (dentro del
@@ -171,17 +179,23 @@
                             <span t-elif="estrategiaDe(producto) === 'empujar'" class="estrategia-marca marca-empujar">EMPUJAR</span>
                             <div class="price-label">Precio unitario</div>
                             <div class="price" t-esc="'$' + producto.list_price.toFixed(2)"/>
-                            <t t-set="bodegas" t-value="chipsBodegas(producto)"/>
                             <t t-if="bodegas">
                                 <div class="stock-chips">
                                     <span class="stock-badge" t-att-class="'tono-' + bodegas.dianke.tono" t-esc="bodegas.dianke.texto"/>
-                                    <span class="stock-badge" t-att-class="'tono-' + bodegas.nevada.tono" t-esc="bodegas.nevada.texto"/>
                                 </div>
                             </t>
                             <t t-else="">
                                 <t t-set="existencia" t-value="infoExistencia(producto)"/>
                                 <span class="stock-badge" t-att-class="'tono-' + existencia.tono" t-esc="existencia.texto"/>
                             </t>
+                            <!-- Unidades por bulto (dato de Odoo, solo lectura):
+                                 solo si el producto lo trae (> 0). -->
+                            <div class="bulto-row" t-if="textoBulto(producto)">
+                                <span class="bulto-chip">
+                                    <i class="fa fa-cubes" aria-hidden="true"/>
+                                    <t t-esc="textoBulto(producto)"/>
+                                </span>
+                            </div>
                             <div class="reservados" t-if="reservados(producto)" t-esc="reservados(producto) + ' reservados'"/>
                         </div>
                         <t t-if="cantidadEnCarrito(producto.id) and etiquetaPromo(producto.id)">

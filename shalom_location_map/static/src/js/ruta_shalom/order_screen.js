@@ -968,6 +968,8 @@ export class OrderScreen extends Component {
                 if (bodegas) {
                     producto.stock_dianke = bodegas.dianke;
                     producto.stock_nevada = bodegas.nevada;
+                    // Unidades por bulto (solo lectura; 0 = sin dato)
+                    producto.bulto = bodegas.bulto || 0;
                 }
             }
         } catch (error) {
@@ -1538,6 +1540,17 @@ export class OrderScreen extends Component {
             dianke: chipDianke,
             nevada: {texto: `Nevada: ${nevada.toLocaleString("en-US")}`, tono: nevada > 0 ? "nevada" : "neutral"},
         };
+    }
+
+    /** Texto de la etiqueta "Bulto: N unidades" del catálogo, o "" si el
+     * producto no trae dato de bulto (0, vacío o sin el campo): en ese
+     * caso la tarjeta no muestra nada. Solo informativo. */
+    textoBulto(producto) {
+        const n = Math.floor(producto.bulto || 0);
+        if (n <= 0) {
+            return "";
+        }
+        return `Bulto: ${n.toLocaleString("en-US")} ${n === 1 ? "unidad" : "unidades"}`;
     }
 
     // -- Estrellas y margen en vivo --

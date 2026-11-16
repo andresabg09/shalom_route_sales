@@ -43,6 +43,8 @@
     --shalom-stock-warning-ink: #f2b765;
     --shalom-stock-success-bg: #153826;
     --shalom-stock-success-ink: #7fd8a8;
+    --shalom-bulto-bg: #1f2c4a;
+    --shalom-bulto-ink: #a9c0f5;
     --shalom-precio: #f5e9ee;
     --shalom-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
     // Estrellas bronce / plata / oro (juego): brillantes sobre fondo oscuro
@@ -90,6 +92,9 @@
     --shalom-stock-warning-ink: #7a4b00;
     --shalom-stock-success-bg: #e3f5ea;
     --shalom-stock-success-ink: #14633a;
+    // Etiqueta "Bulto: N unidades": azul de Ventas (.dk-bulk-badge)
+    --shalom-bulto-bg: #e4ecfb;
+    --shalom-bulto-ink: #1d3a7a;
     --shalom-precio: #2d2650;
     --shalom-shadow: 0 10px 30px -12px rgba(60, 20, 35, 0.28);
     // Estrellas del juego, más oscuras para leerse al sol (contraste ~4:1)
@@ -1859,6 +1864,54 @@
         display: flex;
         flex-wrap: wrap;
         gap: 4px 6px;
+    }
+    // Existencia de Nevada SOBRE la foto (abajo a la izquierda), igual que
+    // en el catálogo de Ventas: píldora blanca con punto de color, sin
+    // fondo de tono. Siempre clara (va sobre una foto), también en oscuro.
+    .nevada-overlay {
+        position: absolute;
+        left: 5px;
+        bottom: 5px;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        max-width: calc(100% - 10px);
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #271b22;
+        font-size: 0.72rem;
+        font-weight: 600;
+        line-height: 1.3;
+        white-space: nowrap;
+        pointer-events: none; // tocar la foto sigue abriéndola en grande
+    }
+    .nevada-dot {
+        flex: 0 0 auto;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #9aa2ae;
+    }
+    .nevada-dot.tono-nevada {
+        background: #f0b323;
+    }
+    // Unidades por bulto: etiqueta azul bajo la existencia (solo si > 0)
+    .bulto-row {
+        max-width: 100%;
+    }
+    .bulto-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 0.15rem 0.55rem;
+        border-radius: 6px;
+        background: var(--shalom-bulto-bg);
+        color: var(--shalom-bulto-ink);
+        font-size: 0.85rem;
+        font-weight: 700;
+        line-height: 1.25;
     }
     // Medidor de estrellas y margen del pedido (vara = el propio
     // historial del cliente). Cada estrella lleva color Y porcentaje.

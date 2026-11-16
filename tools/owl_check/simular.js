@@ -176,7 +176,7 @@ function handlersOrder(extra = {}) {
         "fsm.order.read": () => [{id: 5, location_id: [7, "Cliente X"]}],
         "fsm.order.shalom_campos_cliente_faltantes": [],
         "product.product.searchRead": () => PRODUCTOS.map((p) => ({...p})),
-        "fsm.order.shalom_existencias_bodegas": (a) => Object.fromEntries(a[0].map((id) => [id, {dianke: id === 1 ? 40 : id === 2 ? 2 : 0, nevada: id === 1 ? 1200 : 0}])),
+        "fsm.order.shalom_existencias_bodegas": (a) => Object.fromEntries(a[0].map((id) => [id, {dianke: id === 1 ? 40 : id === 2 ? 2 : 0, nevada: id === 1 ? 1200 : 0, bulto: id === 1 ? 24 : id === 2 ? 1 : 0}])),
         "shalom.estrategia.shalom_estrategias_vigentes": {
             empujar: [{id: 1, titulo: "Oxigenta con cada tinte", texto: "Margen alto", productos: [{id: 2, nombre: "Oxigenta"}]}],
             no_ofrecer: [{id: 2, titulo: "Shampoo viejo", texto: "", productos: [{id: 3, nombre: "Shampoo"}]}],
@@ -219,9 +219,16 @@ escenarios.order = async function () {
     await esperar(() => !comp.state.cargando && qa(".product-card").length === 3);
     ok(qa(".product-card").length === 3, "catálogo renderiza 3 productos");
     const chips = qa(".product-card")[0].querySelectorAll(".stock-chips .stock-badge");
-    ok(chips.length === 2, "producto 1 muestra 2 chips de bodega", chips.length);
+    ok(chips.length === 1, "producto 1: el chip de existencia es solo el de Dianke", chips.length);
     ok(chips[0] && chips[0].textContent.includes("Disponible: 40"), "chip Dianke = 'Disponible: 40'", chips[0] && chips[0].textContent);
-    ok(chips[1] && chips[1].textContent.includes("Nevada: 1,200"), "chip Nevada = 'Nevada: 1,200' (toLocaleString en-US)", chips[1] && chips[1].textContent);
+    const nev = qa(".product-card")[0].querySelector(".product-thumb-wrap .nevada-overlay");
+    ok(nev && nev.textContent.includes("Nevada: 1,200"), "Nevada va SOBRE la foto: 'Nevada: 1,200' (toLocaleString en-US)", nev && nev.textContent);
+    ok(qa(".product-card")[0].querySelector(".nevada-dot.tono-nevada"), "Nevada con existencia -> punto amarillo");
+    ok(qa(".product-card")[2].querySelector(".nevada-dot.tono-neutral"), "Nevada en 0 -> punto gris");
+    const bulto = (i) => qa(".product-card")[i].querySelector(".bulto-chip");
+    ok(bulto(0) && bulto(0).textContent.trim() === "Bulto: 24 unidades", "producto 1 muestra 'Bulto: 24 unidades'", bulto(0) && bulto(0).textContent);
+    ok(bulto(1) && bulto(1).textContent.trim() === "Bulto: 1 unidad", "bulto de 1 -> singular", bulto(1) && bulto(1).textContent);
+    ok(!bulto(2) && !qa(".product-card")[2].querySelector(".bulto-row"), "producto sin bulto (0) no muestra nada");
     ok(qa(".product-card")[2].querySelector(".stock-chips .tono-danger"), "producto 3 (sin existencia) -> chip rojo");
     ok(q(".marca-empujar") && q(".marca-no-ofrecer"), "marcas EMPUJAR / NO OFRECER presentes");
     ok(!q(".medidor"), "sin carrito no hay medidor");

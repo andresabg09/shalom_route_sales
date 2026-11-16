@@ -284,6 +284,17 @@
     .catalog-list .product-card .estrategia-marca {
         margin: 0;
     }
+    // "Bulto: N unidades" y Nevada sobre la foto: tamaño compacto de celular
+    .catalog-list .product-card .bulto-chip {
+        font-size: 0.72rem;
+        padding: 1px 6px;
+        gap: 4px;
+    }
+    .catalog-list .product-card .nevada-overlay {
+        font-size: 0.66rem;
+        padding: 1px 6px;
+        gap: 4px;
+    }
     .catalog-list .product-card .qty-stepper {
         min-width: 0;
     }
@@ -345,6 +356,11 @@
         .stock-chips {
             flex-basis: 100%;
             gap: 3px;
+        }
+        // Bulto en su propia línea, justo debajo de la existencia
+        .bulto-row {
+            order: 3;
+            flex-basis: 100%;
         }
         .reservados {
             order: 4;
