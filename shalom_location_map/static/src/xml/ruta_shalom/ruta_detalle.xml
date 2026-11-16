@@ -29,6 +29,7 @@
                         <t t-else=""><i class="fa fa-check" aria-hidden="true"/> Visitados (<t t-esc="visitasVisitadas.length"/>)</t>
                     </button>
                     <button class="icon-btn recorrido-ayuda-btn" t-on-click="abrirRecorrido" title="Ayuda de esta pantalla" aria-label="Ver la ayuda de esta pantalla"><i class="fa fa-question" aria-hidden="true"/></button>
+                    <IndicadorConexion/>
                     <TemaSelector/>
                 </div>
             </div>
@@ -140,7 +141,7 @@
                         <div class="stop-num" t-esc="visita.orden"/>
                         <div class="stop-info">
                             <div class="stop-siguiente-tag" t-if="visita.id === destacadoId" t-esc="visita.id === siguienteId ? 'SIGUIENTE' : 'SELECCIONADO'"/>
-                            <div class="name" t-esc="visita.nombre"/>
+                            <div class="name"><t t-esc="visita.nombre"/><span t-if="marcaOffline(visita)" t-attf-class="off-marca {{marcaOffline(visita).error ? 'off-marca-error' : ''}}"><i class="fa fa-cloud-upload" aria-hidden="true"/> <t t-esc="marcaOffline(visita).texto"/></span></div>
                             <div class="addr" t-esc="visita.direccion"/>
                             <div class="addr" t-if="visita.direccion2" t-esc="visita.direccion2"/>
                             <div class="stop-chips" t-if="visita.clase or visita.reserva or visita.carteraPersonaId">

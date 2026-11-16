@@ -93,7 +93,8 @@ module.exports = (ctx) => {
         const m = await montar(bundle.AdminGestion, {}, handlers());
         await sleep(100);
         const tabs = qa(".adm-tab");
-        ok(tabs.length === 5 && /Gerente/.test(tabs[4].textContent), "hay una quinta pestaña 'Gerente'", tabs.map((t) => t.textContent.trim()));
+        // (desde el modo offline hay una sexta, "Registro", después de Gerente)
+        ok(tabs.length >= 5 && /Gerente/.test(tabs[4].textContent), "hay una quinta pestaña 'Gerente'", tabs.map((t) => t.textContent.trim()));
         ok(!q(".adm-ger"), "sin abrirla no se carga nada del gerente");
         ok(llamadas(m, "shalom_admin_gerente_mes").length === 0, "ninguna RPC del gerente antes de abrir la pestaña");
         click(tabs[4]);

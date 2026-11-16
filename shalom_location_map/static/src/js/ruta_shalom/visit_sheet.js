@@ -238,6 +238,9 @@ export class VisitSheet extends Component {
             this._aplicarPendientesLocales();
             // Sin await: la ficha de estrellas llega cuando llegue, la hoja no espera.
             this._cargarFichaJuego();
+            // Ids de las etapas guardados ya (con copia en el teléfono): así
+            // cambiar el estado funciona aunque después se pierda la señal.
+            obtenerIdsEtapas(this.orm).catch(() => {});
         } catch (error) {
             this.notification.add(
                 sinConexion()
@@ -371,7 +374,16 @@ export class VisitSheet extends Component {
             this._marcarErrorObservacion();
             return;
         }
-        const ids = await obtenerIdsEtapas(this.orm);
+        let ids;
+        try {
+            ids = await obtenerIdsEtapas(this.orm);
+        } catch (error) {
+            this.notification.add(
+                "Sin señal y sin los estados guardados en el teléfono: usá \"Preparar mi día\" con señal.",
+                {type: "danger"}
+            );
+            return;
+        }
         const stageId = ids[estado];
         if (!stageId) {
             this.notification.add(

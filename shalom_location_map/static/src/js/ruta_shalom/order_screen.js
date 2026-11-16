@@ -9,7 +9,23 @@ import {abrirNivel, cerrarNivel, marcarRetorno} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
 import {TemaSelector} from "./tema_selector";
 import {PASOS_CATALOGO, RecorridoGuiado, marcarRecorrido, recorridoPendiente} from "./recorrido";
-import {conTimeout, iniciarSondeo} from "./red_utils";
+import {conTimeout, iniciarSondeo, sinConexion} from "./red_utils";
+import {leerLocal} from "./almacen_local";
+import {
+    esErrorDeRed,
+    traerCatalogo,
+    traerFaltantes,
+    traerFormasPago,
+    traerPedidosAnteriores,
+    traerUltimaFormaPago,
+    urlFotoProducto,
+} from "./datos_offline";
+import {descartar, encolar, esperarResultado, iniciarSincronizador} from "./sincronizador";
+
+// Modo offline: cuánto se espera la confirmación del servidor antes de
+// dejar el pedido guardado en el teléfono ("se envía con señal"). Un
+// pedido grande puede tardar en confirmarse; con buena señal llega antes.
+const ESPERA_PEDIDO_MS = 45000;
 
 const {DateTime} = luxon;
 
@@ -252,6 +268,9 @@ export class OrderScreen extends Component {
         this._sincronizando = false; // evita solapar dos ciclos si uno tarda
         this._ultimaActualizadaConocida = false; // string del servidor
         this._syncSondeo = null;
+        // Cola offline (ver sincronizador.js): con el orm SIN protección
+        // de componente, para que siga enviando aunque esta pantalla se cierre.
+        iniciarSincronizador((this.env.services && this.env.services.orm) || this.orm, this.notification);
         this._sesionId = shalomIdSesionCatalogo();
         this._sesionCerrada = false; // guarda para no llamar shalom_cerrar_sesion_catalogo dos veces
 
@@ -572,10 +591,14 @@ export class OrderScreen extends Component {
         }
 
         let resultado;
+        if (sinConexion()) {
+            return; // sin señal: manda el carrito del teléfono
+        }
         try {
-            resultado = await this.orm.call("fsm.order", "shalom_leer_carrito", [
-                [this.props.orderId],
-            ]);
+            resultado = await conTimeout(
+                this.orm.call("fsm.order", "shalom_leer_carrito", [[this.props.orderId]]),
+                SHALOM_SYNC_TIMEOUT_MS
+            );
         } catch (error) {
             console.error("shalom: no se pudo leer el carrito del servidor", error);
             return;
@@ -782,13 +805,9 @@ export class OrderScreen extends Component {
      * que el banner desaparezca solo en cuanto ya no falte nada. */
     async _cargarDatosFaltantes() {
         try {
-            const [orden] = await this.orm.read("fsm.order", [this.props.orderId], ["location_id"]);
-            this.state.locationId = orden.location_id ? orden.location_id[0] : false;
-            this.state.datosFaltantes = await this.orm.call(
-                "fsm.order",
-                "shalom_campos_cliente_faltantes",
-                [[this.props.orderId]]
-            );
+            const {locationId, datosFaltantes} = await traerFaltantes(this.orm, this.props.orderId);
+            this.state.locationId = locationId;
+            this.state.datosFaltantes = datosFaltantes || [];
         } catch (error) {
             // No es crítico para poder seguir armando el pedido -- si
             // falla, simplemente no se muestra el aviso.
@@ -865,18 +884,14 @@ export class OrderScreen extends Component {
         this.state.fechaEntregaEspecial = null;
         try {
             if (!this.state.formasPagoDisponibles.length) {
-                this.state.formasPagoDisponibles = await this.orm.call(
-                    "fsm.order",
-                    "shalom_formas_pago_disponibles",
-                    []
-                );
+                this.state.formasPagoDisponibles = await traerFormasPago(this.orm);
             }
             if (this.state.locationId) {
-                const ultima = await this.orm.call(
-                    "fsm.order",
-                    "shalom_ultima_forma_pago_e_itbms",
-                    [this.state.locationId]
-                );
+                const ultima = await traerUltimaFormaPago(this.orm, this.state.locationId).catch(() => ({
+                    // sin señal y sin copia: se elige a mano
+                    payment_method: false,
+                    includes_itbms: false,
+                }));
                 this.state.formaPagoSeleccionada = ultima.payment_method;
                 this.state.incluyeItbms = ultima.includes_itbms;
             } else {
@@ -939,8 +954,21 @@ export class OrderScreen extends Component {
      * refresca en silencio. Al final se piden por detrás los pedidos
      * anteriores, para que "Anteriores" abra sin espera. */
     async _cargarInicial() {
-        const cache =
+        let cache =
             CACHE_CATALOGO && Date.now() - CACHE_CATALOGO.ts < CACHE_CATALOGO_MS ? CACHE_CATALOGO : null;
+        if (!cache) {
+            // Modo offline: el catálogo guardado en el teléfono ("Preparar
+            // mi día" o la última apertura) se muestra AL INSTANTE, con o
+            // sin señal, y se refresca por detrás si hay señal.
+            const local = await leerLocal("catalogo");
+            if (local && local.valor && local.valor.productos) {
+                cache = {
+                    ts: local.ts,
+                    productos: local.valor.productos,
+                    estrategias: local.valor.estrategiaPorProducto || {},
+                };
+            }
+        }
         if (cache) {
             this.state.productos = cache.productos;
             this.state.estrategiaPorProducto = cache.estrategias;
@@ -962,7 +990,7 @@ export class OrderScreen extends Component {
         if (this._destruido) {
             return;
         }
-        if (cache) {
+        if (cache && !sinConexion()) {
             this.cargarProductos(true);
         }
         this._precargarPedidosAnteriores();
@@ -1004,22 +1032,24 @@ export class OrderScreen extends Component {
             this.state.cargando = true;
         }
         try {
-            const productos = await this.orm.searchRead(
-                "product.product",
-                [["sale_ok", "=", true]],
-                ["name", "list_price", "barcode", "default_code", "qty_available", "free_qty", "categ_id"],
-                {order: "name asc"}
-            );
-            // En paralelo (ambos tienen su propio try/catch): antes eran dos
-            // idas y vueltas seguidas en cada apertura del catálogo.
-            await Promise.all([this._sumarExistenciasBodegas(productos), this._cargarEstrategias()]);
+            // Productos + existencias por bodega + estrategias, mismas
+            // llamadas de siempre, con copia en el teléfono (ver
+            // traerCatalogo en datos_offline.js).
+            const {productos, estrategiaPorProducto} = await traerCatalogo(this.orm);
+            if (this._destruido) {
+                return;
+            }
+            this.state.estrategiaPorProducto = estrategiaPorProducto || {};
             this.state.productos = productos;
             CACHE_CATALOGO = {ts: Date.now(), productos, estrategias: this.state.estrategiaPorProducto};
         } catch (error) {
             if (!silencioso || avisarError) {
-                this.notification.add("No se pudo cargar el catálogo de productos.", {
-                    type: "danger",
-                });
+                this.notification.add(
+                    esErrorDeRed(error)
+                        ? "Sin señal y sin catálogo guardado en el teléfono. Usá \"Preparar mi día\" con señal."
+                        : "No se pudo cargar el catálogo de productos.",
+                    {type: "danger"}
+                );
             }
         } finally {
             if (!silencioso) {
@@ -1500,8 +1530,8 @@ export class OrderScreen extends Component {
     /** URL de foto de producto cacheable todo el día (ver
      * TAMANO_FOTO_TARJETA más arriba). */
     _urlFoto(productId, campo) {
-        const hoy = DateTime.now().toISODate();
-        return `/web/image/product.product/${productId}/${campo}?unique=${hoy}`;
+        // Misma URL que precarga "Preparar mi día" (datos_offline.js).
+        return urlFotoProducto(productId, campo);
     }
 
     imagenUrl(producto) {
@@ -1727,8 +1757,7 @@ export class OrderScreen extends Component {
         if (!this.state.locationId || this._pedidosAnterioresPromesa) {
             return this._pedidosAnterioresPromesa;
         }
-        this._pedidosAnterioresPromesa = this.orm
-            .call("fsm.order", "shalom_pedidos_anteriores", [this.state.locationId])
+        this._pedidosAnterioresPromesa = traerPedidosAnteriores(this.orm, this.state.locationId)
             .catch((error) => {
                 this._pedidosAnterioresPromesa = null;
                 throw error;
@@ -2221,7 +2250,24 @@ export class OrderScreen extends Component {
             qty: item.cantidad,
             es_recompensa: !!item.esRecompensa,
             regla_id: item.reglaId || false,
+            // Precio que vio el cliente (cola offline: si al enviarse
+            // cambió el precio de lista, se respeta este y oficina recibe
+            // una nota -- ver _shalom_aplicar_precios_visita).
+            precio_visita: item.esRecompensa ? false : item.producto.list_price,
         }));
+    }
+
+    /** Texto de la acción en el panel de conexión: "Cliente ($123.45)". */
+    _etiquetaCola() {
+        return this.props.clienteNombre + " ($" + this.total.toFixed(2) + ")";
+    }
+
+    /** El pedido quedó en la cola del teléfono: desde acá nada vuelve a
+     * escribir el carrito compartido (mismo corte que tras confirmar). */
+    _marcarGuardadoEnTelefono() {
+        this._confirmado = true;
+        this._cambiosPendientes = {};
+        this._eliminadosPendientes.clear();
     }
 
     // -- Confirmar pedido (venta real) --
@@ -2258,14 +2304,48 @@ export class OrderScreen extends Component {
         }
         this.state.confirmando = true;
         try {
+            // Modo offline: el pedido se guarda PRIMERO en el teléfono (cola,
+            // ver sincronizador.js) y se manda; el servidor corre el mismo
+            // shalom_confirmar_pedido, una sola vez por pedido aunque el
+            // envío se repita. Con señal la respuesta llega como siempre.
             const lineas = this.lineasParaBackend(items);
-            const resultado = await this.orm.call("fsm.order", "shalom_confirmar_pedido", [
-                [this.props.orderId],
-                lineas,
-                this.state.formaPagoSeleccionada,
-                this.state.fechaEntregaEspecial ? this.state.fechaEntregaEspecial.toISODate() : false,
-                this.state.incluyeItbms,
-            ]);
+            const uuid = await encolar(
+                "confirmar_pedido",
+                {
+                    order_id: this.props.orderId,
+                    lineas,
+                    payment_method: this.state.formaPagoSeleccionada,
+                    special_delivery_date: this.state.fechaEntregaEspecial
+                        ? this.state.fechaEntregaEspecial.toISODate()
+                        : false,
+                    includes_itbms: this.state.incluyeItbms,
+                },
+                {etiqueta: this._etiquetaCola()}
+            );
+            const respuesta = await esperarResultado(uuid, ESPERA_PEDIDO_MS);
+            if (respuesta.estado === "error") {
+                // Rechazado por el servidor (igual que antes, se avisa acá
+                // mismo y el carrito sigue intacto para corregir).
+                await descartar(uuid);
+                this.notification.add(respuesta.error || "No se pudo confirmar el pedido.", {type: "danger"});
+                return;
+            }
+            if (respuesta.estado === "pendiente") {
+                // "Avisar y esperar" (decisión del usuario): queda guardado
+                // y marcado "Pendiente de enviar"; el vendedor sigue.
+                this._marcarGuardadoEnTelefono();
+                this.notification.add(
+                    "Sin señal: el pedido de " + this.props.clienteNombre + " quedó GUARDADO EN EL TELÉFONO " +
+                        "y se envía solo cuando vuelva la señal. No cierres la app.",
+                    {type: "warning", sticky: true}
+                );
+                if (this.props.onConfirmado) {
+                    this.props.onConfirmado();
+                }
+                this.cerrarDeVerdad();
+                return;
+            }
+            const resultado = respuesta.resultado;
             this.notification.add(
                 `Pedido confirmado: ${resultado.sale_order_name} ($${resultado.total.toFixed(2)}).`,
                 {type: "success"}
@@ -2347,16 +2427,43 @@ export class OrderScreen extends Component {
         const items = this.itemsCarrito;
         this.state.guardandoBorrador = true;
         try {
+            // Modo offline: por la cola, igual que confirmarPedido (el
+            // servidor corre shalom_guardar_borrador_pedido una sola vez).
             const lineas = this.lineasParaBackend(items);
-            const resultado = await this.orm.call(
-                "fsm.order",
-                "shalom_guardar_borrador_pedido",
-                [[this.props.orderId], lineas]
+            const uuid = await encolar(
+                "guardar_borrador",
+                {order_id: this.props.orderId, lineas},
+                {etiqueta: this._etiquetaCola()}
             );
+            const respuesta = await esperarResultado(uuid, ESPERA_PEDIDO_MS);
+            if (respuesta.estado === "error") {
+                await descartar(uuid);
+                this.notification.add(respuesta.error || "No se pudo guardar la cotización.", {type: "danger"});
+                return;
+            }
+            if (respuesta.estado === "pendiente") {
+                this._marcarGuardadoEnTelefono();
+                this.notification.add(
+                    "Sin señal: la cotización de " + this.props.clienteNombre + " quedó guardada en el teléfono " +
+                        "y se envía sola con señal. Revisala en Ventas después.",
+                    {type: "warning", sticky: true}
+                );
+                if (this.props.onRevisado) {
+                    this.props.onRevisado();
+                }
+                this.cerrarDeVerdad();
+                return;
+            }
             if (this.props.onRevisado) {
                 this.props.onRevisado();
             }
-            const accion = normalizarAccionActWindow(resultado);
+            const accion = normalizarAccionActWindow({
+                type: "ir.actions.act_window",
+                res_model: "sale.order",
+                res_id: respuesta.resultado.sale_order_id,
+                view_mode: "form",
+                target: "current",
+            });
             // Cerrar ANTES del doAction (no después, y sin ningún
             // history.back() de por medio -- eso era justo lo que
             // rompía la redirección): así OrderScreen ya no está
@@ -2435,7 +2542,18 @@ export class OrderScreen extends Component {
         // la salida -- la limpieza mensual automática es la red de
         // seguridad para ese caso (ver shalom_limpiar_carritos_viejos
         // en fsm_order.py).
-        this.orm.call("fsm.order", "shalom_limpiar_carrito", [[this.props.orderId]]).catch(() => {});
+        // Modo offline: va por la cola con la copia del carrito tal como la
+        // tenía este teléfono, para que quede en Administración → Registro
+        // (y se pueda restaurar) aunque se descarte sin señal.
+        const carritoLocal = {};
+        for (const [clave, item] of Object.entries(this.state.carrito)) {
+            carritoLocal[clave] = this._lineaParaServidor(item);
+        }
+        encolar(
+            "descartar_carrito",
+            {order_id: this.props.orderId, carrito: carritoLocal},
+            {etiqueta: this._etiquetaCola()}
+        ).catch(() => {});
         cerrarConAnimacion(this.state, () => this.cerrarDeVerdad());
     }
 

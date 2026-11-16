@@ -1,5 +1,18 @@
 # Plan: Modo offline de Ruta Shalom + Registro de cotizaciones en Administración
 
+## Estado: IMPLEMENTADO (fases 0 a 4)
+
+Todo lo de abajo está hecho, con estos cambios respecto al plan original:
+- **Fotos de las tarjetas:** `image_512`, no `image_256`, porque las tarjetas
+  miden hasta 200 px.
+- **Latido del catálogo:** sigue en 1 s con buena señal. El servidor da por
+  cerrado un catálogo que pasa 3 s sin latido.
+- **Sin endpoints HTTP nuevos para la cola:** son métodos de modelo llamados por
+  ORM (`shalom.sync.evento.shalom_procesar_lote` / `shalom_ping`) y
+  `fsm.route.schedule.shalom_paquete_offline`.
+- **Sin mockup previo:** el usuario pidió hacerlo todo junto. Se usaron las clases
+  `adm-*` y las variables `--shalom-*` existentes.
+
 ## Context
 
 Los vendedores trabajan en la calle con datos móviles débiles o sin señal. Hoy **casi

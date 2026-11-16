@@ -6,7 +6,7 @@ from datetime import timedelta
 
 from odoo import fields
 from odoo.exceptions import AccessError, UserError
-from odoo.tests import tagged
+from odoo.tests import HttpCase, tagged
 
 from .common import ShalomCommon
 
@@ -282,4 +282,17 @@ class TestOffline(ShalomCommon):
         self.assertEqual(paquete["ultima_fp"][loc_id], Orden.shalom_ultima_forma_pago_e_itbms(loc_id))
         self.assertEqual(len(paquete["visitas"]), len(self.visitas))
         self.assertEqual(Ciclo.shalom_paquete_offline(999999)["visitas"], {})
+
+
+@tagged("post_install", "-at_install", "shalom_harness")
+class TestPaginaOffline(HttpCase):
+    def test_service_worker_lleva_la_marca_y_lo_de_odoo(self):
+        respuesta = self.url_open("/web/service-worker.js")
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertIn("shalom-offline-1", respuesta.text)
+        self.assertIn("/odoo/offline", respuesta.text)  # el de Odoo sigue intacto
+        pagina = self.url_open("/odoo/offline")
+        self.assertIn("Sin señal", pagina.text)
+        self.assertIn("Preparar mi día", pagina.text)
+        self.assertNotIn("You are offline", pagina.text)
 

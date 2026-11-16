@@ -113,7 +113,46 @@ const texto = (sel) => (q(sel) ? q(sel).textContent.replace(/\s+/g, " ").trim() 
 function servicios(handlers) {
     const log = [];
     const notas = [];
+    // Modo offline: las acciones del vendedor van por la cola
+    // (shalom.sync.evento.shalom_procesar_lote). Si un escenario no la
+    // simula, se traduce cada acción al método de siempre, para que las
+    // pruebas viejas sigan valiendo tal cual.
+    const LEGADO = {
+        confirmar_pedido: (d) => ["fsm.order", "shalom_confirmar_pedido", [[d.order_id], d.lineas, d.payment_method, d.special_delivery_date, d.includes_itbms]],
+        guardar_borrador: (d) => ["fsm.order", "shalom_guardar_borrador_pedido", [[d.order_id], d.lineas]],
+        descartar_carrito: (d) => ["fsm.order", "shalom_limpiar_carrito", [[d.order_id]]],
+        gps: (d) => ["fsm.order", "action_capturar_gps", [[d.order_id], d.lat, d.lng]],
+        cambiar_etapa: (d) => ["fsm.order", "write", [[d.order_id], {stage_id: d.stage_id}]],
+        observacion: (d) => ["fsm.order", "write", [[d.order_id], {x_observaciones_visita: d.texto}]],
+    };
+    const loteLegado = async (eventos) => {
+        const res = [];
+        for (const ev of eventos) {
+            const [m, met, a] = LEGADO[ev.tipo](ev.datos);
+            const h = handlers[`${m}.${met}`];
+            log.push({model: m, method: met, args: a, viaCola: true});
+            try {
+                let r = h === undefined ? true : typeof h === "function" ? await h(a, {}) : h;
+                if (ev.tipo === "guardar_borrador" && r && r.res_id) {
+                    r = {sale_order_id: r.res_id, sale_order_name: "S" + r.res_id, total: 0};
+                }
+                res.push({uuid: ev.uuid, estado: "ok", resultado: r === true ? {} : r});
+            } catch (e) {
+                res.push({uuid: ev.uuid, estado: "error", error: (e && e.data && e.data.message) || String((e && e.message) || e)});
+            }
+        }
+        return res;
+    };
     const manejar = async (model, method, args, kwargs) => {
+        if (model === "shalom.sync.evento" && handlers[`${model}.${method}`] === undefined) {
+            if (method === "shalom_procesar_lote") {
+                log.push({model, method, args});
+                return loteLegado(args[0]);
+            }
+            if (method === "shalom_ping") {
+                return {ok: true};
+            }
+        }
         log.push({model, method, args});
         const h = handlers[`${model}.${method}`];
         if (h === undefined) throw new Error(`RPC no simulado: ${model}.${method}`);
@@ -137,6 +176,10 @@ const montados = [];
 async function montar(Comp, props, handlers) {
     const s = servicios(handlers);
     sessionStorage.clear(); localStorage.clear();
+    // Cada montaje arranca con la cola y el almacén offline vacíos (son
+    // estado de módulo: si no, quedarían con el ORM falso del anterior).
+    if (bundle._reiniciarSincronizadorParaPruebas) bundle._reiniciarSincronizadorParaPruebas();
+    if (bundle._reiniciarAlmacenParaPruebas && !globalThis.__conservarAlmacen) bundle._reiniciarAlmacenParaPruebas();
     document.body.innerHTML = '<div id="raiz" class="o_shalom_ruta_app"></div>';
     const errores = [];
     const onerr = (e) => errores.push(String((e && e.message) || e));

@@ -11,6 +11,8 @@ import {Tutorial} from "./tutorial";
 import {useEsAncha} from "./pantalla_utils";
 import {estadoDeResultado, quienAtiende, resaltar} from "./busqueda_utils";
 import {conTimeout, iniciarSondeo} from "./red_utils";
+import {esErrorDeRed, traerRutas} from "./datos_offline";
+import {IndicadorConexion} from "./indicador_conexion";
 
 /**
  * Pestaña "Rutas" de la app del vendedor: lista de fsm.route.schedule
@@ -102,7 +104,7 @@ function formatoHorasImpl(horas) {
 
 export class RutasHub extends Component {
     static template = "shalom_location_map.RutasHub";
-    static components = {TemaSelector, Avisos, JuegoPanel, Tutorial, RecorridoGuiado};
+    static components = {TemaSelector, Avisos, JuegoPanel, Tutorial, RecorridoGuiado, IndicadorConexion};
     static props = {
         onAbrirRuta: Function,
         onIrAClientes: {type: Function, optional: true},
@@ -639,11 +641,9 @@ export class RutasHub extends Component {
         hasta.setDate(hasta.getDate() + 7 * SEMANAS_VENTANA - 1);
 
         try {
-            const resultado = await this.orm.call(
-                "fsm.person",
-                "shalom_mis_rutas_programadas",
-                [aFechaStr(desde), aFechaStr(hasta)]
-            );
+            // Con copia en el teléfono (ver datos_offline.js): sin señal
+            // se ven las rutas guardadas.
+            const resultado = await traerRutas(this.orm, [aFechaStr(desde), aFechaStr(hasta)]);
             this.state.schedules = resultado;
             this._ventana = [aFechaStr(desde), aFechaStr(hasta)];
             CACHE_RUTAS = {ts: Date.now(), schedules: resultado, ventana: this._ventana};
@@ -654,7 +654,9 @@ export class RutasHub extends Component {
                 return;
             }
             this.notification.add(
-                "No se pudieron cargar tus rutas. Revisá tu conexión e intentá de nuevo.",
+                esErrorDeRed(error)
+                    ? "Sin señal, y tus rutas no están guardadas en el teléfono. Usá \"Preparar mi día\" con señal."
+                    : "No se pudieron cargar tus rutas. Revisá tu conexión e intentá de nuevo.",
                 {type: "danger"}
             );
         } finally {

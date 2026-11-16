@@ -203,75 +203,79 @@ export function enviarPendientes() {
     if (enCurso) {
         return enCurso;
     }
-    enCurso = (async () => {
-        try {
-            for (;;) {
-                const pendientes = estadoOffline.cola.filter((i) => i.estado === "pendiente");
-                if (!pendientes.length) {
-                    return;
-                }
-                if (!orm || sinConexion()) {
-                    if (sinConexion()) {
-                        estadoOffline.red = "sin_senal";
-                    }
-                    esperaSinRespuesta(pendientes);
-                    return;
-                }
-                const lote = pendientes.slice(0, TAMANO_LOTE);
-                estadoOffline.enviando = true;
-                let respuestas;
-                try {
-                    respuestas = await conTimeout(
-                        orm.call("shalom.sync.evento", "shalom_procesar_lote", [
-                            lote.map((i) => ({uuid: i.uuid, tipo: i.tipo, datos: i.datos, creado_en: i.creado_en})),
-                        ]),
-                        TIMEOUT_LOTE_MS
-                    );
-                } catch (error) {
-                    fallosSeguidos += 1;
-                    marcarRed(false);
-                    esperaSinRespuesta(pendientes);
-                    programarEnvio(esperaConBackoff(BASE_REINTENTO_MS, fallosSeguidos, TOPE_REINTENTO_MS));
-                    return;
-                } finally {
-                    estadoOffline.enviando = false;
-                }
-                fallosSeguidos = 0;
-                marcarRed(true);
-                estadoOffline.ultimoEnvioOk = Date.now();
-                let hayEnProceso = false;
-                for (const respuesta of respuestas || []) {
-                    const item = estadoOffline.cola.find((i) => i.uuid === respuesta.uuid);
-                    if (!item) {
-                        continue;
-                    }
-                    if (respuesta.estado === "ok") {
-                        await colaBorrar(item.uuid);
-                        estadoOffline.cola = estadoOffline.cola.filter((i) => i.uuid !== item.uuid);
-                        resolverEspera(item.uuid, {estado: "ok", resultado: respuesta.resultado || {}});
-                        avisarOyentes(item, respuesta);
-                    } else if (respuesta.estado === "error") {
-                        item.estado = "error";
-                        item.error = respuesta.error || "El servidor rechazó esta acción.";
-                        item.intentos = (item.intentos || 0) + 1;
-                        await colaGuardar({...item});
-                        resolverEspera(item.uuid, {estado: "error", error: item.error});
-                        avisarOyentes(item, respuesta);
-                    } else {
-                        hayEnProceso = true;
-                    }
-                }
-                if (hayEnProceso) {
-                    esperaSinRespuesta(lote.filter((i) => i.estado === "pendiente"));
-                    programarEnvio(REINTENTO_EN_PROCESO_MS);
-                    return;
-                }
-            }
-        } finally {
-            enCurso = null;
-        }
-    })();
+    // OJO: el candado se suelta con .finally() DESPUÉS de asignarlo. Con un
+    // try/finally adentro, si no había nada que enviar la función terminaba
+    // en el acto, soltaba el candado ANTES de que se asignara, y quedaba
+    // trabado para siempre (la cola no volvía a enviar nunca).
+    enCurso = enviarLotes().finally(() => {
+        enCurso = null;
+    });
     return enCurso;
+}
+
+async function enviarLotes() {
+    for (;;) {
+        const pendientes = estadoOffline.cola.filter((i) => i.estado === "pendiente");
+        if (!pendientes.length) {
+            return;
+        }
+        if (!orm || sinConexion()) {
+            if (sinConexion()) {
+                estadoOffline.red = "sin_senal";
+            }
+            esperaSinRespuesta(pendientes);
+            return;
+        }
+        const lote = pendientes.slice(0, TAMANO_LOTE);
+        estadoOffline.enviando = true;
+        let respuestas;
+        try {
+            respuestas = await conTimeout(
+                orm.call("shalom.sync.evento", "shalom_procesar_lote", [
+                    lote.map((i) => ({uuid: i.uuid, tipo: i.tipo, datos: i.datos, creado_en: i.creado_en})),
+                ]),
+                TIMEOUT_LOTE_MS
+            );
+        } catch (error) {
+            fallosSeguidos += 1;
+            marcarRed(false);
+            esperaSinRespuesta(pendientes);
+            programarEnvio(esperaConBackoff(BASE_REINTENTO_MS, fallosSeguidos, TOPE_REINTENTO_MS));
+            return;
+        } finally {
+            estadoOffline.enviando = false;
+        }
+        fallosSeguidos = 0;
+        marcarRed(true);
+        estadoOffline.ultimoEnvioOk = Date.now();
+        let hayEnProceso = false;
+        for (const respuesta of respuestas || []) {
+            const item = estadoOffline.cola.find((i) => i.uuid === respuesta.uuid);
+            if (!item) {
+                continue;
+            }
+            if (respuesta.estado === "ok") {
+                await colaBorrar(item.uuid);
+                estadoOffline.cola = estadoOffline.cola.filter((i) => i.uuid !== item.uuid);
+                resolverEspera(item.uuid, {estado: "ok", resultado: respuesta.resultado || {}});
+                avisarOyentes(item, respuesta);
+            } else if (respuesta.estado === "error") {
+                item.estado = "error";
+                item.error = respuesta.error || "El servidor rechazó esta acción.";
+                item.intentos = (item.intentos || 0) + 1;
+                await colaGuardar({...item});
+                resolverEspera(item.uuid, {estado: "error", error: item.error});
+                avisarOyentes(item, respuesta);
+            } else {
+                hayEnProceso = true;
+            }
+        }
+        if (hayEnProceso) {
+            esperaSinRespuesta(lote.filter((i) => i.estado === "pendiente"));
+            programarEnvio(REINTENTO_EN_PROCESO_MS);
+            return;
+        }
+    }
 }
 
 /** Botón "Reintentar" de una acción con error. */

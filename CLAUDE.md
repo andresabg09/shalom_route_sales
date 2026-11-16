@@ -204,6 +204,24 @@ the short version:
 - `static/src/` — Owl widgets: GPS-capture button, Mapbox background tile
   layer, a live-tracing mini-map on the visit card, and a purchase-history
   chart widget.
+- Modo offline (plan y decisiones en `docs/plan_modo_offline.md`):
+  - **Teléfono:**
+    - `red_utils.js`: timeouts y sondeos adaptativos.
+    - `almacen_local.js`: IndexedDB por usuario.
+    - `datos_offline.js`: lecturas con respaldo local y "Preparar mi día".
+    - `sincronizador.js`: cola de salida con uuid y estado reactivo.
+    - `indicador_conexion.js`: pastilla de conexión y su panel.
+  - **Acciones que pasan por la cola:** confirmar, revisar, estado, nota, GPS y
+    descartar. Las procesa `shalom.sync.evento.shalom_procesar_lote`, que es
+    idempotente por uuid. "Salir sin guardar" queda en
+    `shalom.cotizacion.registro` (Administración → Registro, 7 días, restaurar).
+  - **Paquete por ruta:** `fsm.route.schedule.shalom_paquete_offline`.
+  - **Página sin señal:** `views/offline_page.xml` + `controllers/offline_sw.py`.
+    Si se cambia esa página, subir `VERSION_PAGINA_OFFLINE`.
+  - **Pruebas:**
+    - `tools/owl_check/escenarios_offline.js`
+    - `tools/odoo_harness/.../test_98_offline.py`
+    - `tools/test_offline_utils.py`
 
 ## Conventions
 

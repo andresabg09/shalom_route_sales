@@ -16,6 +16,7 @@
                         <i class="fa fa-lightbulb-o" aria-hidden="true"/> Estrategias
                     </button>
                     <button class="icon-btn recorrido-ayuda-btn" t-on-click="abrirRecorrido" title="Ayuda de esta pantalla" aria-label="Ver la ayuda de esta pantalla"><i class="fa fa-question" aria-hidden="true"/></button>
+                    <IndicadorConexion/>
                     <TemaSelector/>
                 </div>
             </div>

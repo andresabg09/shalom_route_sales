@@ -105,4 +105,173 @@ module.exports = (ctx) => {
         ok(m.errores.length === 0, "sin rechazos no manejados", m.errores);
         m.destruir();
     };
+
+    // -----------------------------------------------------------------
+    // Fase 3: pedido sin señal queda en la cola y se envía después
+    // -----------------------------------------------------------------
+    async function catalogoConUnProducto(extra = {}) {
+        fijarOnLine(true);
+        let confirmado = 0;
+        let cerrado = 0;
+        const m = await montar(bundle.OrderScreen, {
+            orderId: 5, clienteNombre: "Cliente X",
+            onCerrar: () => { cerrado++; }, onConfirmado: () => { confirmado++; },
+        }, handlersOrder(extra));
+        await esperar(() => !m.comp.state.cargando && qa(".product-card").length === 3);
+        click(qa(".qty-add-btn")[0]);
+        await esperar(() => m.comp.cantidadItems === 1);
+        m.comp.state.formaPagoSeleccionada = "cash";
+        return {m, confirmados: () => confirmado, cerrados: () => cerrado};
+    }
+
+    escenarios.offline_pedido_sin_senal = async function () {
+        console.log("\n[Offline F3] confirmar sin señal: queda en el teléfono y se envía al volver");
+        let red = false;
+        const enviados = [];
+        const {m, confirmados, cerrados} = await catalogoConUnProducto({
+            "shalom.sync.evento.shalom_procesar_lote": (a) => {
+                if (!red) {
+                    throw new Error("sin señal");
+                }
+                enviados.push(...a[0]);
+                return a[0].map((ev) => ({uuid: ev.uuid, estado: "ok", resultado: {sale_order_id: 9, sale_order_name: "S0009", total: 10, juego: null}}));
+            },
+        });
+        const cola = bundle.estadoOffline.cola;
+        await m.comp._confirmarPedidoDeVerdad();
+        ok(cola.length === 1 && cola[0].tipo === "confirmar_pedido", "el pedido quedó en la cola del teléfono", cola.map((i) => i.tipo));
+        const linea = cola[0] && cola[0].datos.lineas[0];
+        ok(linea && linea.precio_visita === 10 && linea.qty === 1, "lleva el precio de la visita", linea);
+        ok(cola[0] && cola[0].datos.payment_method === "cash" && cola[0].datos.order_id === 5, "con forma de pago y visita");
+        ok(m.notas.some((n) => /GUARDADO EN EL TELÉFONO/.test(n.msg)), "avisa que quedó guardado en el teléfono");
+        ok(confirmados() === 1 && cerrados() === 1, "el vendedor sigue: la hoja se entera y el catálogo se cierra");
+        const local = bundle.estadoLocalDeVisita(5);
+        ok(local && local.porEnviar && local.pedidoPendiente && local.estado === "completado", "la visita se ve Completada (por enviar)", local);
+        // vuelve la señal
+        red = true;
+        await bundle.enviarPendientes();
+        ok(enviados.length === 1, "al volver la señal se envía una sola vez", enviados.length);
+        ok(bundle.estadoOffline.cola.length === 0, "la cola queda vacía");
+        ok(bundle.estadoLocalDeVisita(5) === null, "la visita ya no está 'por enviar'");
+        m.destruir();
+    };
+
+    escenarios.offline_pedido_rechazado = async function () {
+        console.log("\n[Offline F3] confirmar con señal y el servidor lo rechaza: error en el momento, carrito intacto");
+        const {m, cerrados} = await catalogoConUnProducto({
+            "fsm.order.shalom_confirmar_pedido": () => { throw new Error("Elegí una forma de pago"); },
+        });
+        await m.comp._confirmarPedidoDeVerdad();
+        ok(m.notas.some((n) => n.tipo === "danger" && /forma de pago/.test(n.msg)), "muestra el motivo del servidor", m.notas);
+        ok(bundle.estadoOffline.cola.length === 0, "no queda nada colgado en la cola");
+        ok(cerrados() === 0 && m.comp.cantidadItems === 1, "el catálogo sigue abierto con el carrito");
+        m.destruir();
+    };
+
+    escenarios.offline_pedido_con_senal = async function () {
+        console.log("\n[Offline F3] confirmar con señal: igual que antes (resultado del juego)");
+        const {m, confirmados} = await catalogoConUnProducto();
+        await m.comp._confirmarPedidoDeVerdad();
+        ok(confirmados() === 1, "onConfirmado");
+        ok(!!m.comp.state.resultadoJuego, "se muestra la pantalla de resultado");
+        ok(m.log.some((c) => c.method === "shalom_confirmar_pedido" && c.viaCola), "pasó por la cola");
+        ok(bundle.estadoOffline.cola.length === 0, "cola vacía");
+        m.destruir();
+    };
+
+    escenarios.offline_descartar_registra = async function () {
+        console.log("\n[Offline F1/F3] 'Salir sin guardar' manda la copia del carrito al registro");
+        let lote = null;
+        const {m} = await catalogoConUnProducto({
+            "shalom.sync.evento.shalom_procesar_lote": (a) => { lote = a[0]; return a[0].map((ev) => ({uuid: ev.uuid, estado: "ok", resultado: {}})); },
+        });
+        m.comp.confirmarSalirSinGuardar();
+        await esperar(() => lote, 2000);
+        const ev = lote && lote[0];
+        ok(ev && ev.tipo === "descartar_carrito" && ev.datos.order_id === 5, "evento descartar_carrito de la visita", ev);
+        const item = ev && Object.values(ev.datos.carrito)[0];
+        ok(item && item.cantidad === 1 && item.list_price === 10, "con el carrito del teléfono", item);
+        m.destruir();
+    };
+
+    // -----------------------------------------------------------------
+    // Fase 2/3: hoja de visita sin señal (copia local + cola)
+    // -----------------------------------------------------------------
+    escenarios.offline_hoja_visita = async function () {
+        console.log("\n[Offline F2/F3] hoja de visita: se abre sin señal y el estado queda en la cola");
+        fijarOnLine(true);
+        const h = {
+            "fsm.order.read": () => [{id: 5, location_id: [7, "Cliente X"], x_cliente_orden_ruta: 1, stage_name: "Pendiente", x_observaciones_visita: "", x_cliente_lat: 1, x_cliente_lng: 1, sale_id: false}],
+            "fsm.location.read": () => [{id: 7, name: "Cliente X", phone: "", mobile: "", street: "c", street2: "", partner_id: [1, "p"]}],
+            "fsm.order.shalom_campos_cliente_faltantes": [],
+            "fsm.order.shalom_ficha_juego": {refs: {n: 0, record: 0, tipico: 0, t75: 0, t100: 0}, clase: "NUEVO", esperado: 0, n: 0},
+            "fsm.order.shalom_leer_carrito": {actualizado: false, carrito: {}},
+            "fsm.stage.searchRead": () => [{id: 1, name: "Pendiente"}, {id: 2, name: "Completado"}, {id: 3, name: "No quiso"}, {id: 4, name: "Cancelado"}],
+        };
+        // 1) con señal: carga y deja copia (y los ids de etapas)
+        const m1 = await montar(bundle.VisitSheet, {orderId: 5, onCerrar() {}}, h);
+        await esperar(() => !m1.comp.state.cargando);
+        await m1.comp.elegirEstado("pendiente"); // no-op, mismo estado
+        m1.destruir();
+        // 2) sin señal: la misma visita sale de la copia local
+        globalThis.__conservarAlmacen = true;
+        fijarOnLine(false);
+        const m2 = await montar(bundle.VisitSheet, {orderId: 5, onCerrar() {}}, {});
+        globalThis.__conservarAlmacen = false;
+        await esperar(() => !m2.comp.state.cargando);
+        ok(m2.comp.state.visita && m2.comp.state.visita.nombre === "Cliente X", "sin señal, la visita se abre desde el teléfono", m2.comp.state.visita);
+        ok(!m2.log.some((c) => c.method === "read"), "sin pedir nada al servidor");
+        m2.comp.state.visita.observaciones = "Cerrado por inventario";
+        m2.comp.elegirEstado("cancelado");
+        await esperar(() => m2.comp.state.visita.estado === "cancelado", 3000);
+        const cola = bundle.estadoOffline.cola;
+        ok(cola.length === 1 && cola[0].tipo === "cambiar_etapa" && cola[0].datos.estado_app === "cancelado", "el cambio de estado quedó en la cola", cola.map((i) => i.tipo));
+        ok(m2.comp.state.visita.estado === "cancelado", "y la hoja ya lo muestra Cancelado");
+        ok(q(".off-banner"), "aviso fuerte de 'Pendiente de enviar'");
+        fijarOnLine(true);
+        m2.destruir();
+    };
+
+    // -----------------------------------------------------------------
+    // Fase 1: Administración → Registro
+    // -----------------------------------------------------------------
+    escenarios.offline_admin_registro = async function () {
+        console.log("\n[Offline F1] Administración → Registro: lista, filtros y restaurar");
+        fijarOnLine(true);
+        const ahora = new Date().toISOString().slice(0, 19).replace("T", " ");
+        const filas = [
+            {id: 1, fecha: ahora, cliente_nombre: "Farmacia Uno", ruta_nombre: "R1", vendedor_nombre: "Luis", usuario_nombre: "Luis",
+             cantidad_items: 12, total: 340.5, destacado: true, lineas: [{clave: "1", nombre: "Tinte", cantidad: 12, precio: 28.375, es_recompensa: false}],
+             restaurado: false, restaurado_como: false, restaurado_por: "", restaurado_en: false, sale_id: false, sale_nombre: "", visita_abierta: true},
+            {id: 2, fecha: ahora, cliente_nombre: "Salón Dos", ruta_nombre: "R2", vendedor_nombre: "Ana", usuario_nombre: "Ana",
+             cantidad_items: 2, total: 20, destacado: false, lineas: [], restaurado: true, restaurado_como: "carrito", restaurado_por: "Admin",
+             restaurado_en: ahora, sale_id: false, sale_nombre: "", visita_abierta: true},
+        ];
+        let restaurados = [];
+        const h = {
+            "shalom.cotizacion.registro.shalom_admin_registro": () => filas,
+            "shalom.sync.evento.shalom_admin_envios_con_aviso": [{id: 7, tipo: "Confirmar pedido", estado: "error", error: "Falta nota", recibido_en: ahora, usuario_nombre: "Luis", cliente_nombre: "Farmacia Uno", precios_cambiados: [], sale_order_name: ""}],
+            "shalom.cotizacion.registro.shalom_admin_restaurar": (a) => { restaurados.push(a[0]); return {modo: "carrito"}; },
+        };
+        const m = await montar(bundle.AdminGestion, {}, new Proxy(h, {get: (t, k) => (k in t ? t[k] : (() => []))}));
+        await sleep(100);
+        const tab = qa(".adm-tab").find((t) => /Registro/.test(t.textContent));
+        ok(tab && tab.querySelector(".adm-tab-count") && tab.querySelector(".adm-tab-count").textContent.trim() === "1", "pestaña Registro con 1 carrito grande sin restaurar");
+        click(tab);
+        await esperar(() => qa(".adm-reg-row").length === 2);
+        ok(qa(".adm-reg-row").length === 2, "lista los 2 descartes");
+        ok(/Monto grande/.test(qa(".adm-reg-row")[0].textContent), "el grande sale marcado");
+        click(qa(".adm-chip").find((c) => /Sin restaurar/.test(c.textContent)));
+        await esperar(() => qa(".adm-reg-row").length === 1);
+        ok(qa(".adm-reg-row").length === 1, "filtro 'Sin restaurar'");
+        click(qa(".adm-reg-row")[0]);
+        await esperar(() => q(".adm-reg-linea"));
+        ok(q(".adm-reg-linea") && /Tinte/.test(q(".adm-reg-linea").textContent), "al tocar la fila se ven sus productos");
+        click(q(".adm-reg-row .adm-actbtn-accent"));
+        await esperar(() => restaurados.length === 1);
+        ok(restaurados.length === 1 && restaurados[0][0] === 1, "Restaurar llama al servidor con ese registro", restaurados);
+        ok(/Necesita atención/.test(document.body.textContent), "muestra los envíos de la calle que necesitan revisión");
+        ok(m.errores.length === 0, "sin rechazos no manejados", m.errores);
+        m.destruir();
+    };
 };

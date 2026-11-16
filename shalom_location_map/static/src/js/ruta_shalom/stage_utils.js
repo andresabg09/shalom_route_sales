@@ -1,5 +1,7 @@
 /** @odoo-module **/
 
+import {traerEtapas} from "./datos_offline";
+
 /**
  * Traduce entre el estado interno de la app ("pendiente", "completado",
  * "no_quiso", "cancelado") y las etapas reales de fsm.stage
@@ -38,11 +40,8 @@ export async function obtenerIdsEtapas(orm) {
     if (idsEtapasCache) {
         return idsEtapasCache;
     }
-    const etapas = await orm.searchRead(
-        "fsm.stage",
-        [["stage_type", "=", "order"]],
-        ["name"]
-    );
+    // Con copia en el teléfono: sin señal se pueden cambiar estados igual.
+    const etapas = await traerEtapas(orm);
     const ids = {pendiente: null, completado: null, no_quiso: null, cancelado: null};
     for (const etapa of etapas) {
         const clave = NOMBRE_A_ESTADO[etapa.name] || "pendiente";

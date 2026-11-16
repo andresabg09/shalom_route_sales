@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!--
+        Modo offline (Fase 4): la página que muestra Odoo cuando se intenta
+        ABRIR (o recargar) la app sin señal. Odoo 18 ya la guarda en el
+        teléfono con su service worker (/odoo/offline). Aquí solo se cambia
+        el texto: en español y con lo que el vendedor tiene que saber.
+        Abrir Odoo desde cero sin señal no es posible (ni en el Punto de
+        Venta de Odoo): lo que se hizo sin señal sigue guardado en el
+        teléfono y se envía apenas la app vuelve a abrirse con señal.
+    -->
+    <template id="shalom_webclient_offline" inherit_id="web.webclient_offline">
+        <xpath expr="//div[hasclass('card')]/h1" position="replace">
+            <h1>Sin señal</h1>
+        </xpath>
+        <xpath expr="//div[hasclass('card')]/p" position="replace">
+            <p>No se pudo abrir la app porque no hay internet en este momento.</p>
+            <p><b>Tus pedidos y cambios hechos sin señal NO se perdieron:</b> siguen guardados en este teléfono y se envían solos apenas la app se abra con señal.</p>
+            <p>Consejo para la calle: abrí Ruta Shalom con señal al empezar el día, tocá «Preparar mi día» y no cierres la app.</p>
+        </xpath>
+        <xpath expr="//div[hasclass('card')]/button" position="replace">
+            <button onclick="location.reload()">Reintentar</button>
+        </xpath>
+    </template>
+</odoo>

@@ -3,6 +3,7 @@
 import {Component, onWillStart, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {TemaSelector} from "./tema_selector";
+import {traerCotizaciones} from "./datos_offline";
 
 /**
  * Pestaña "Cotizaciones" (Fase 4): todas las sale.order de los
@@ -34,11 +35,8 @@ export class Cotizaciones extends Component {
     async cargar() {
         this.state.cargando = true;
         try {
-            this.state.cotizaciones = await this.orm.call(
-                "fsm.person",
-                "shalom_mis_cotizaciones",
-                []
-            );
+            // Con copia en el teléfono (ver datos_offline.js).
+            this.state.cotizaciones = await traerCotizaciones(this.orm);
         } catch (error) {
             this.notification.add("No se pudieron cargar tus cotizaciones.", {
                 type: "danger",

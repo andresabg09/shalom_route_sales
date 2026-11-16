@@ -19,7 +19,15 @@ import {TemaSelector} from "./tema_selector";
 import {ConduccionOverlay} from "./conduccion_overlay";
 import {useConduccion} from "./conduccion_utils";
 import {PASOS_RUTA, RecorridoGuiado, marcarRecorrido, recorridoPendiente} from "./recorrido";
-import {conTimeout, iniciarSondeo} from "./red_utils";
+import {conTimeout, iniciarSondeo, sinConexion} from "./red_utils";
+import {leerLocal} from "./almacen_local";
+import {esErrorDeRed, prepararRuta, traerDetalleRuta} from "./datos_offline";
+import {alTerminarEnvio, estadoLocalDeVisita, estadoOffline, ormDeLaCola} from "./sincronizador";
+import {IndicadorConexion} from "./indicador_conexion";
+
+// Modo offline: al abrir una ruta con señal se guarda en el teléfono todo
+// lo de sus visitas (paquete offline), salvo que se haya hecho hace poco.
+const PREPARAR_RUTA_CADA_MS = 30 * 60 * 1000;
 
 /**
  * Detalle de una ruta (una fsm.route.schedule): tabs Lista/Mapa.
@@ -267,7 +275,7 @@ function posicionEnBorde(anguloDeg, ancho, alto, margen) {
 
 export class RutaDetalle extends Component {
     static template = "shalom_location_map.RutaDetalle";
-    static components = {VisitSheet, ClienteForm, TemaSelector, ConduccionOverlay, RecorridoGuiado};
+    static components = {VisitSheet, ClienteForm, TemaSelector, ConduccionOverlay, RecorridoGuiado, IndicadorConexion};
     static props = {
         schedule: Object,
         onVolver: Function,
@@ -286,6 +294,14 @@ export class RutaDetalle extends Component {
     setup() {
         this.orm = useService("orm");
         this.notification = useService("notification");
+        // Modo offline: re-dibuja la lista cuando cambia la cola (marcas
+        // "Por enviar" / "Revisar") -- ver marcaOffline().
+        this.offline = useState(estadoOffline);
+        this._dejarDeOir = alTerminarEnvio((item, respuesta) => {
+            if (respuesta.estado === "ok" && this.state.visitasTodas.some((v) => v.id === item.datos.order_id)) {
+                this.cargar({silencioso: true});
+            }
+        });
         this.mapaRef = useRef("mapa");
         this.raizRef = useRef("raiz");
         this.pasosRecorrido = PASOS_RUTA;
@@ -439,6 +455,7 @@ export class RutaDetalle extends Component {
             if (this._sondeo) {
                 this._sondeo.detener();
             }
+            this._dejarDeOir();
             this.detenerNavegacion();
             if (this.mapboxMap) {
                 this.mapboxMap.remove();
@@ -572,6 +589,10 @@ export class RutaDetalle extends Component {
                 if (nombreEtapa === undefined) {
                     continue;
                 }
+                const local = estadoLocalDeVisita(v.id);
+                if (local && local.estado) {
+                    continue; // lo hecho en este teléfono y aún sin enviar manda
+                }
                 const nuevo = estadoDesdeStageName(nombreEtapa);
                 if (nuevo !== v.estado) {
                     if (v.estado === "pendiente") {
@@ -611,42 +632,11 @@ export class RutaDetalle extends Component {
             // lista seguía mostrando el orden viejo. x_cliente_orden_ruta
             // es un related con store=True a fsm.location.x_orden_ruta,
             // así que siempre refleja la posición actual.
-            const ordenes = await this.orm.searchRead(
-                "fsm.order",
-                [["x_route_schedule_id", "=", this.props.schedule.id]],
-                [
-                    "location_id",
-                    "x_cliente_orden_ruta",
-                    "stage_name",
-                    "x_cliente_lat",
-                    "x_cliente_lng",
-                    "x_cartera_person_id",
-                    "x_cartera_fecha",
-                    "x_cartera_orden",
-                    "x_cartera_reserva",
-                ],
-                {order: "x_cliente_orden_ruta asc"}
-            );
-
-            const locationIds = ordenes
-                .map((o) => o.location_id && o.location_id[0])
-                .filter(Boolean);
-            // Datos de los clientes, sus perfiles (clase A/A2/B... y valor
-            // esperado; si fallan, la lista sale sin esas etiquetas) y el
-            // trazado de la ruta: las tres consultas A LA VEZ (antes iban
-            // una tras otra y con datos móviles cada espera se sumaba).
-            const [locaciones, perfiles, ruta] = await Promise.all([
-                locationIds.length
-                    ? this.orm.read("fsm.location", locationIds, ["phone", "street", "street2", "x_venta_mas_alta"])
-                    : Promise.resolve([]),
-                locationIds.length
-                    ? this.orm.call("fsm.order", "shalom_perfiles_ruta", [locationIds]).catch((error) => {
-                          console.error("shalom: error al leer perfiles de la ruta", error);
-                          return {};
-                      })
-                    : Promise.resolve({}),
-                this.orm.read("fsm.route", [this.props.schedule.route_id], ["x_ruta_trazado"]),
-            ]);
+            // Visitas del ciclo, datos de los clientes, perfiles (clase y
+            // valor esperado) y trazado: mismas consultas de siempre (ver
+            // traerDetalleRuta en datos_offline.js), con copia en el
+            // teléfono para trabajar sin señal.
+            const {ordenes, locaciones, perfiles, ruta} = await traerDetalleRuta(this.orm, this.props.schedule);
             const datosPorLocation = Object.fromEntries(locaciones.map((l) => [l.id, l]));
 
             const todas = ordenes.map((o) => {
@@ -673,18 +663,63 @@ export class RutaDetalle extends Component {
                     metaVenta: loc ? loc.x_venta_mas_alta : 0,
                 };
             });
+            // Lo hecho sin señal en este teléfono (pedido, cambio de
+            // estado) se muestra ya, no el estado viejo del servidor.
+            for (const v of todas) {
+                const local = estadoLocalDeVisita(v.id);
+                if (local && local.estado) {
+                    v.estado = local.estado;
+                }
+            }
             this.state.visitasTodas = todas;
             this.state.visitas = this._vistaDeVisitas(todas);
             this.state.trazadoWkt = ruta.length ? ruta[0].x_ruta_trazado : false;
+            this._prepararEnSegundoPlano();
         } catch (error) {
-            this.notification.add("No se pudieron cargar las visitas de esta ruta.", {
-                type: "danger",
-            });
+            this.notification.add(
+                esErrorDeRed(error)
+                    ? "Sin señal, y esta ruta no está guardada en el teléfono. Usá \"Preparar mi día\" con señal."
+                    : "No se pudieron cargar las visitas de esta ruta.",
+                {type: "danger"}
+            );
         } finally {
             this.state.cargando = false;
         }
         this._abrirVisitaInicialSiCorresponde();
         this._abrirClienteDeTraspaso();
+    }
+
+    /** Modo offline: con señal, deja guardado en el teléfono todo lo de
+     * las visitas de esta ruta (hoja, pedidos anteriores, forma de pago),
+     * en segundo plano y como mucho cada PREPARAR_RUTA_CADA_MS. */
+    async _prepararEnSegundoPlano() {
+        if (this._preparandoRuta || sinConexion() || estadoOffline.red !== "en_linea") {
+            return;
+        }
+        this._preparandoRuta = true;
+        try {
+            const ultima = await leerLocal(`ruta_preparada:${this.props.schedule.id}`);
+            if (ultima && Date.now() - ultima.valor < PREPARAR_RUTA_CADA_MS) {
+                return;
+            }
+            await prepararRuta(ormDeLaCola() || this.orm, this.props.schedule);
+        } catch (error) {
+            // best-effort: con señal se vuelve a intentar al reabrir la ruta
+        } finally {
+            this._preparandoRuta = false;
+        }
+    }
+
+    /** Marca de la tarjeta: null | {texto, error}. */
+    marcaOffline(visita) {
+        const local = estadoLocalDeVisita(visita.id);
+        if (!local) {
+            return null;
+        }
+        if (local.conError) {
+            return {texto: "Revisar", error: true};
+        }
+        return local.porEnviar ? {texto: "Por enviar", error: false} : null;
     }
 
     /** Llegada desde una búsqueda con un cliente elegido ("Ir a la ruta" /
