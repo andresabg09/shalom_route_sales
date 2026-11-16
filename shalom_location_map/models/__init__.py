@@ -11,3 +11,6 @@ from . import shalom_juego
 from . import juego_campo
 from . import juego_social
 from . import shalom_ruta_toma
+from . import shalom_cotizacion_registro
+from . import shalom_sync_evento
+from . import offline_paquete

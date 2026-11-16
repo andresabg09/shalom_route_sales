@@ -22,6 +22,16 @@
                     <div class="addr" t-if="state.visita.direccion2" t-esc="state.visita.direccion2"/>
                     <div class="addr" t-esc="'Orden de ruta: ' + (state.visita.orden || '-')"/>
 
+                    <!-- Modo offline: aviso fuerte mientras algo de esta
+                         visita espera a enviarse o fue rechazado. -->
+                    <div t-if="avisoOffline" t-attf-class="off-banner {{avisoOffline.error ? 'off-banner-error' : ''}}">
+                        <i t-attf-class="fa {{avisoOffline.error ? 'fa-exclamation-circle' : 'fa-cloud-upload'}}" aria-hidden="true"/>
+                        <div>
+                            <div class="off-banner-titulo" t-esc="avisoOffline.titulo"/>
+                            <div t-esc="avisoOffline.texto"/>
+                        </div>
+                    </div>
+
                     <button
                         t-attf-class="status-pill st-{{state.visita.estado}} {{state.panelEstadoAbierto ? 'open' : ''}}"
                         t-on-click="toggleEstado"
@@ -95,8 +105,11 @@
                             <span class="lbl"><i class="fa fa-history" aria-hidden="true"/> Historial</span>
                         </button>
                     </div>
+                    <button t-if="pedidoEnCola" class="cta-order" disabled="disabled">
+                        <i class="fa fa-cloud-upload" aria-hidden="true"/> Pedido guardado, esperando señal
+                    </button>
                     <button
-                        t-if="!state.visita.saleId"
+                        t-elif="!state.visita.saleId"
                         t-attf-class="cta-order {{state.carritoActivo ? 'cta-order-en-vivo' : ''}}"
                         t-on-click="tomarPedido"
                     >

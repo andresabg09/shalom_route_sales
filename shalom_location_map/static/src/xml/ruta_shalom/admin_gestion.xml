@@ -50,6 +50,126 @@
                         t-attf-class="adm-tab {{state.tab === 'gerente' ? 'adm-tab-active' : ''}}"
                         t-on-click="() => this.cambiarTab('gerente')"
                     ><i class="fa fa-line-chart" aria-hidden="true"/> Gerente</button>
+                    <button
+                        t-attf-class="adm-tab {{state.tab === 'registro' ? 'adm-tab-active' : ''}}"
+                        t-on-click="() => this.cambiarTab('registro')"
+                    ><i class="fa fa-history" aria-hidden="true"/> Registro<span class="adm-tab-count" t-if="registroPendientesAviso" t-esc="registroPendientesAviso"/></button>
+                </div>
+            </div>
+
+            <div class="adm-body" t-if="state.tab === 'registro'">
+                <!-- ============ Registro: carritos descartados (7 días) ============ -->
+                <div class="adm-section-label">
+                    <span class="adm-dot adm-dot-cancelado"/> Carritos descartados en la app (últimos 7 días)
+                </div>
+                <div class="adm-chip-row adm-chip-row-scroll">
+                    <button
+                        t-attf-class="adm-chip {{state.registroFiltro === 'todos' ? 'adm-chip-active adm-chip-pendiente' : ''}}"
+                        t-on-click="() => this.elegirFiltroRegistro('todos')"
+                    >Todos</button>
+                    <button
+                        t-attf-class="adm-chip {{state.registroFiltro === 'destacados' ? 'adm-chip-active adm-chip-cancelado' : ''}}"
+                        t-on-click="() => this.elegirFiltroRegistro('destacados')"
+                    ><span class="adm-chip-dot adm-dot-cancelado"/> Montos grandes</button>
+                    <button
+                        t-attf-class="adm-chip {{state.registroFiltro === 'sin_restaurar' ? 'adm-chip-active adm-chip-pendiente' : ''}}"
+                        t-on-click="() => this.elegirFiltroRegistro('sin_restaurar')"
+                    >Sin restaurar</button>
+                </div>
+                <div class="adm-field adm-reg-vendedor" t-if="vendedoresRegistro.length > 1">
+                    <label for="shalom-admin-sel-registro-vendedor"><i class="fa fa-user" aria-hidden="true"/> Descartado por</label>
+                    <span class="adm-field-select">
+                        <select id="shalom-admin-sel-registro-vendedor" t-on-change="elegirVendedorRegistro">
+                            <option value="">Todos</option>
+                            <option
+                                t-foreach="vendedoresRegistro" t-as="nombre" t-key="nombre"
+                                t-att-value="nombre" t-att-selected="nombre === state.registroVendedor"
+                            ><t t-esc="nombre"/></option>
+                        </select>
+                        <i class="fa fa-chevron-down" aria-hidden="true"/>
+                    </span>
+                </div>
+                <div t-if="state.cargandoRegistro" class="adm-empty">Cargando…</div>
+                <div t-elif="!state.registro.length" class="adm-empty">
+                    Nadie descartó un carrito en los últimos 7 días.
+                </div>
+                <div t-elif="!registroFiltrado.length" class="adm-empty">No hay carritos con ese filtro.</div>
+                <t t-else="">
+                    <div class="adm-count">
+                        <t t-esc="registroFiltrado.length"/> carrito(s) descartado(s)
+                    </div>
+                    <div class="adm-card-list">
+                        <div
+                            t-foreach="registroFiltrado" t-as="fila" t-key="fila.id"
+                            t-attf-class="adm-row adm-reg-row {{claseFilaRegistro(fila)}}"
+                            t-on-click="() => this.toggleLineasRegistro(fila)"
+                        >
+                            <span class="adm-row-riel"/>
+                            <div class="adm-row-info">
+                                <div class="adm-row-name">
+                                    <t t-esc="fila.cliente_nombre || 'Sin cliente'"/>
+                                    <span class="adm-badge-alerta" t-if="fila.destacado and !fila.restaurado"><i class="fa fa-exclamation-triangle" aria-hidden="true"/> Monto grande</span>
+                                </div>
+                                <div class="adm-row-meta">
+                                    <t t-esc="(fila.ruta_nombre || 'Sin ruta') + ' · descartado por ' + (fila.usuario_nombre || '?')"/>
+                                </div>
+                                <div class="adm-row-obs" t-if="fila.restaurado" t-esc="textoRestaurado(fila)"/>
+                                <div class="adm-reg-lineas" t-if="state.registroAbiertoId === fila.id">
+                                    <div t-foreach="fila.lineas" t-as="linea" t-key="linea.clave" class="adm-reg-linea">
+                                        <span class="adm-reg-linea-cant"><t t-esc="linea.cantidad"/>×</span>
+                                        <span class="adm-reg-linea-nombre"><t t-if="linea.es_recompensa">Promoción: </t><t t-esc="linea.nombre"/></span>
+                                        <span class="adm-reg-linea-precio" t-if="!linea.es_recompensa">$<t t-esc="(linea.cantidad * linea.precio).toFixed(2)"/></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="adm-row-right">
+                                <div class="adm-row-monto">
+                                    <div class="adm-row-monto-total">$<t t-esc="fila.total.toFixed(2)"/></div>
+                                    <div class="adm-row-monto-detalle"><t t-esc="fila.cantidad_items"/> ítem(s)</div>
+                                </div>
+                                <span class="adm-row-fecha" t-esc="fechaRegistro(fila.fecha)"/>
+                                <button
+                                    t-if="!fila.restaurado"
+                                    class="adm-actbtn adm-actbtn-accent"
+                                    t-att-disabled="state.registroRestaurandoId === fila.id"
+                                    t-on-click="(ev) => this.restaurarRegistro(ev, fila)"
+                                ><i class="fa fa-undo" aria-hidden="true"/> <t t-esc="state.registroRestaurandoId === fila.id ? 'Restaurando…' : 'Restaurar'"/></button>
+                            </div>
+                        </div>
+                    </div>
+                </t>
+
+                <!-- ============ Envíos desde la calle con aviso (cola offline) ============ -->
+                <div class="adm-section-label adm-section-label-sep">
+                    <span class="adm-dot adm-dot-alerta"/> Pedidos y cambios enviados sin señal que necesitan revisión
+                </div>
+                <div t-if="!state.cargandoRegistro and !state.enviosConAviso.length" class="adm-empty">
+                    Nada que revisar: todo lo enviado desde la calle entró bien.
+                </div>
+                <div t-elif="state.enviosConAviso.length" class="adm-card-list">
+                    <div
+                        t-foreach="state.enviosConAviso" t-as="envio" t-key="envio.id"
+                        t-attf-class="adm-row {{envio.estado === 'error' ? 'adm-row-cancelado' : 'adm-row-pendiente'}}"
+                    >
+                        <span class="adm-row-riel"/>
+                        <div class="adm-row-info">
+                            <div class="adm-row-name">
+                                <t t-esc="envio.cliente_nombre || 'Sin cliente'"/> · <t t-esc="envio.tipo"/>
+                                <t t-if="envio.sale_order_name"> (<t t-esc="envio.sale_order_name"/>)</t>
+                            </div>
+                            <div class="adm-row-meta"><t t-esc="envio.usuario_nombre"/></div>
+                            <div class="adm-row-obs" t-if="envio.estado === 'error'">
+                                Quedó sin aplicar: <t t-esc="envio.error"/>
+                            </div>
+                            <div class="adm-row-obs" t-foreach="envio.precios_cambiados" t-as="cambio" t-key="cambio_index">
+                                Precio de la visita respetado: <t t-esc="cambio.producto"/> a $<t t-esc="cambio.visto.toFixed(2)"/> (hoy $<t t-esc="cambio.vigente.toFixed(2)"/>)
+                            </div>
+                        </div>
+                        <div class="adm-row-right">
+                            <span class="adm-row-estado"><t t-esc="envio.estado === 'error' ? 'Necesita atención' : 'Revisar precio'"/></span>
+                            <span class="adm-row-fecha" t-esc="fechaRegistro(envio.recibido_en)"/>
+                        </div>
+                    </div>
                 </div>
             </div>
 

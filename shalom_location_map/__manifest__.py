@@ -5,7 +5,7 @@
                "botón de GPS y orden/jornada de visita en las órdenes de servicio, "
                "generación de visitas por ruta, y la app de venta de ruta callejera "
                "del vendedor (Ruta Shalom).",
-    "version": "18.0.41.0.0",
+    "version": "18.0.42.0.0",
     "category": "Field Service",
     "author": "AutomatePTY",
     "license": "AGPL-3",
@@ -65,6 +65,7 @@
         "data/migrar_orden_ruta.xml",
         "data/carrito_borrador_cron.xml",
         "data/reponer_rutas_cron.xml",
+        "data/cotizacion_registro_cron.xml",
     ],
     "assets": {
         "web.assets_backend": [
@@ -107,6 +108,7 @@
             "shalom_location_map/static/src/js/ruta_shalom/clientes.js",
             "shalom_location_map/static/src/js/ruta_shalom/app.js",
             "shalom_location_map/static/src/scss/admin_gerente.scss",
+            "shalom_location_map/static/src/scss/offline.scss",
             "shalom_location_map/static/src/js/ruta_shalom/admin_gerente.js",
             "shalom_location_map/static/src/js/ruta_shalom/admin_gestion.js",
             "shalom_location_map/static/src/xml/ruta_shalom/tema_selector.xml",

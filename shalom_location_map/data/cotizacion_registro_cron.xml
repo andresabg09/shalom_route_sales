@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo noupdate="0">
+    <!--
+        Administración → Registro: borra cada día los carritos descartados
+        de más de 7 días (decisión del usuario: se guardan una semana). Ver
+        _shalom_limpiar_registro_viejo() en shalom_cotizacion_registro.py.
+        Y el libro de la cola offline (shalom.sync.evento) de más de 30
+        días: ver _shalom_limpiar_sync_viejo() en shalom_sync_evento.py.
+    -->
+    <record id="shalom_cron_limpiar_registro_carritos" model="ir.cron">
+        <field name="name">Shalom: limpiar registro de carritos descartados (7 días)</field>
+        <field name="model_id" ref="model_shalom_cotizacion_registro"/>
+        <field name="state">code</field>
+        <field name="code">model._shalom_limpiar_registro_viejo()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active">True</field>
+    </record>
+    <record id="shalom_cron_limpiar_sync_eventos" model="ir.cron">
+        <field name="name">Shalom: limpiar libro de la cola offline (30 días)</field>
+        <field name="model_id" ref="model_shalom_sync_evento"/>
+        <field name="state">code</field>
+        <field name="code">model._shalom_limpiar_sync_viejo()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active">True</field>
+    </record>
+</odoo>

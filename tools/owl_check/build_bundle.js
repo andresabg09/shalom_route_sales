@@ -14,6 +14,7 @@ const alias = {
     "@web/core/datetime/datetime_input": S("datetime_input.js"),
     "@web/core/network/rpc": S("rpc.js"),
     "@web/core/assets": S("assets.js"),
+    "@web/core/user": S("user.js"),
 };
 // Todos los módulos JS de la app (los componentes nuevos se incluyen solos).
 const fs = require("fs");

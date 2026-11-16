@@ -9,7 +9,23 @@ import {abrirNivel, cerrarNivel, marcarRetorno} from "./back_stack";
 import {capturarMejorPosicionGps} from "./gps_utils";
 import {ClienteForm} from "./cliente_form";
 import {OrderScreen} from "./order_screen";
-import {conTimeout, iniciarSondeo} from "./red_utils";
+import {conTimeout, iniciarSondeo, sinConexion} from "./red_utils";
+import {traerFichaJuego, traerVisita} from "./datos_offline";
+import {
+    alTerminarEnvio,
+    descartar,
+    encolar,
+    estadoLocalDeVisita,
+    esperarResultado,
+    estadoOffline,
+    iniciarSincronizador,
+    pendientesDeVisita,
+} from "./sincronizador";
+
+// Modo offline: cuánto se espera la respuesta del servidor antes de
+// dejar la acción guardada en el teléfono ("se enviará con señal") y
+// seguir. Con buena señal responde mucho antes.
+const ESPERA_ACCION_MS = 12000;
 
 // Umbral de arrastre (px) para que soltar la barrita de arriba de la
 // hoja cuente como "cerrar" en vez de volver a su posición.
@@ -80,6 +96,10 @@ export class VisitSheet extends Component {
         this.notification = useService("notification");
         this.action = useService("action");
         this.sheetRef = useRef("sheet");
+        // Modo offline: re-dibuja la hoja cuando cambia la cola (aviso
+        // "Pendiente de enviar" / "Necesita atención").
+        this.offline = useState(estadoOffline);
+        iniciarSincronizador((this.env.services && this.env.services.orm) || this.orm, this.notification);
         const nivelInicial =
             this.props.pilaRestante && this.props.pilaRestante.length
                 ? this.props.pilaRestante[0]
@@ -139,11 +159,20 @@ export class VisitSheet extends Component {
             topeMs: SHALOM_HEARTBEAT_TOPE_MS,
         });
 
+        // Una acción de esta visita que se envió sola (con la hoja
+        // abierta): se recarga en silencio para mostrar lo del servidor.
+        this._dejarDeOir = alTerminarEnvio((item, respuesta) => {
+            if (item.datos && item.datos.order_id === this.props.orderId && respuesta.estado === "ok" && !this.state.tomandoPedido) {
+                this.cargar({silencioso: true});
+            }
+        });
+
         onWillUnmount(() => {
             this.detenerArrastre();
             if (this._heartbeatSondeo) {
                 this._heartbeatSondeo.detener();
             }
+            this._dejarDeOir();
         });
     }
 
@@ -176,34 +205,14 @@ export class VisitSheet extends Component {
         return true;
     }
 
-    async cargar() {
-        this.state.cargando = true;
+    async cargar({silencioso = false} = {}) {
+        if (!silencioso) {
+            this.state.cargando = true;
+        }
         try {
-            const [orden] = await this.orm.read(
-                "fsm.order",
-                [this.props.orderId],
-                [
-                    "location_id",
-                    "x_cliente_orden_ruta",
-                    "stage_name",
-                    "x_observaciones_visita",
-                    "x_cliente_lat",
-                    "x_cliente_lng",
-                    "sale_id",
-                ]
-            );
-            let locacion = null;
-            if (orden.location_id) {
-                const [loc] = await this.orm.read("fsm.location", [orden.location_id[0]], [
-                    "name",
-                    "phone",
-                    "mobile",
-                    "street",
-                    "street2",
-                    "partner_id",
-                ]);
-                locacion = loc;
-            }
+            // Modo offline: con señal, del servidor (y queda copia en el
+            // teléfono); sin señal, la copia guardada (ver datos_offline.js).
+            const {orden, locacion, datosFaltantes} = await traerVisita(this.orm, this.props.orderId);
             this.state.visita = {
                 id: orden.id,
                 locationId: orden.location_id ? orden.location_id[0] : false,
@@ -222,22 +231,94 @@ export class VisitSheet extends Component {
                 errorObservacion: false,
                 juego: null,
             };
-            // Se pide aparte (no bloquea el resto de la carga si falla)
-            // para poder marcar de entrada, en el selector de estado,
-            // cuáles opciones van a rechazarse si se eligen -- ver
+            // Para marcar de entrada, en el selector de estado, cuáles
+            // opciones van a rechazarse si se eligen -- ver
             // shalom_campos_cliente_faltantes() en fsm_order.py.
-            this.state.visita.datosFaltantes = await this.orm.call(
-                "fsm.order",
-                "shalom_campos_cliente_faltantes",
-                [[this.props.orderId]]
-            );
+            this.state.visita.datosFaltantes = datosFaltantes || [];
+            this._aplicarPendientesLocales();
             // Sin await: la ficha de estrellas llega cuando llegue, la hoja no espera.
             this._cargarFichaJuego();
         } catch (error) {
-            this.notification.add("No se pudo cargar la visita.", {type: "danger"});
+            this.notification.add(
+                sinConexion()
+                    ? "Sin señal, y esta visita no está guardada en el teléfono. Usá \"Preparar mi día\" con señal."
+                    : "No se pudo cargar la visita.",
+                {type: "danger"}
+            );
         } finally {
             this.state.cargando = false;
         }
+    }
+
+    /** Lo que el vendedor hizo sin señal y todavía no llegó al servidor
+     * se muestra igual (estado, nota, GPS), no lo viejo del servidor. */
+    _aplicarPendientesLocales() {
+        const visita = this.state.visita;
+        if (!visita) {
+            return;
+        }
+        for (const item of pendientesDeVisita(this.props.orderId)) {
+            if (item.estado !== "pendiente") {
+                continue;
+            }
+            if (item.tipo === "observacion") {
+                visita.observaciones = item.datos.texto || "";
+            } else if (item.tipo === "gps") {
+                visita.lat = item.datos.lat;
+                visita.lng = item.datos.lng;
+            }
+        }
+        const local = estadoLocalDeVisita(this.props.orderId);
+        if (local && local.estado) {
+            visita.estado = local.estado;
+        }
+    }
+
+    /** Aviso fuerte de la hoja: null, o {error, titulo, texto}. */
+    get avisoOffline() {
+        const local = estadoLocalDeVisita(this.props.orderId);
+        if (!local) {
+            return null;
+        }
+        if (local.conError) {
+            return {
+                error: true,
+                titulo: "Necesita atención: no entró al sistema",
+                texto: `${local.error} Tocá la pastilla de conexión (arriba) para reintentar o descartar.`,
+            };
+        }
+        if (local.porEnviar) {
+            return {
+                error: false,
+                titulo: local.pedidoPendiente ? "Pedido pendiente de enviar" : "Pendiente de enviar",
+                texto: "Está guardado en este teléfono y se envía solo apenas haya señal. No cierres la app ni borres los datos del navegador.",
+            };
+        }
+        return null;
+    }
+
+    /** Con un pedido esperando a enviarse no se puede tomar otro. */
+    get pedidoEnCola() {
+        const local = estadoLocalDeVisita(this.props.orderId);
+        return !!(local && local.pedidoPendiente);
+    }
+
+    /**
+     * Manda una acción por la cola del teléfono y espera la respuesta un
+     * rato. Devuelve "ok" | "pendiente" (guardada, se envía sola con
+     * señal) | "error" (el servidor la rechazó: se muestra el motivo y se
+     * saca de la cola -- el vendedor lo ve en el momento, igual que antes).
+     */
+    async _accionPorCola(tipo, datos, {mensajeError}) {
+        const uuid = await encolar(tipo, {order_id: this.props.orderId, ...datos}, {
+            etiqueta: this.state.visita ? this.state.visita.nombre : "",
+        });
+        const respuesta = await esperarResultado(uuid, ESPERA_ACCION_MS);
+        if (respuesta.estado === "error") {
+            await descartar(uuid);
+            this.notification.add(respuesta.error || mensajeError, {type: "danger"});
+        }
+        return respuesta.estado;
     }
 
     /** Escalera de estrellas del cliente (ticket típico, 75%, récord)
@@ -247,9 +328,7 @@ export class VisitSheet extends Component {
             return;
         }
         try {
-            this.state.visita.juego = await this.orm.call("fsm.order", "shalom_ficha_juego", [
-                this.state.visita.locationId,
-            ]);
+            this.state.visita.juego = await traerFichaJuego(this.orm, this.state.visita.locationId);
         } catch (error) {
             console.error("shalom: error al leer la ficha del juego", error);
         }
@@ -301,38 +380,35 @@ export class VisitSheet extends Component {
             );
             return;
         }
-        try {
-            // fieldservice bloquea por defecto escribir stage_id directo a
-            // la etapa Completado (pensado para que no se llegue ahí
-            // arrastrando una tarjeta en el Kanban nativo, sin pasar por
-            // un flujo controlado) -- bypass_order_completed_stage es la
-            // salida oficial para escrituras programáticas legítimas
-            // como esta. No afecta al resto de las etapas.
-            // shalom_validar_cierre_visita activa, SOLO para esta
-            // escritura, la validación de fsm_order.py._validar_cierre_visita
-            // (datos del cliente completos para Completado/No quiso,
-            // observación obligatoria para Cancelado) -- ver el
-            // docstring de ese método para el porqué va acotado a un
-            // contexto y no aplica también al Kanban nativo de oficina.
-            await this.orm.write("fsm.order", [this.props.orderId], {stage_id: stageId}, {
-                context: {bypass_order_completed_stage: true, shalom_validar_cierre_visita: true},
-            });
-            this.state.visita.estado = estado;
-            this.notification.add(`${this.state.visita.nombre}: ${this.etiquetaEstado(estado)}`, {
-                type: "success",
-            });
-            if (this.props.onCambio) {
-                this.props.onCambio();
-            }
-        } catch (error) {
-            console.error("shalom: error al actualizar estado de fsm.order", error);
-            const mensajeServidor = error && error.data && error.data.message;
-            this.notification.add(mensajeServidor || "No se pudo actualizar el estado.", {
-                type: "danger",
-            });
+        // Modo offline: va por la cola del teléfono (cambiar_etapa en
+        // shalom_sync_evento.py), que en el servidor hace el MISMO write
+        // con el mismo contexto: bypass_order_completed_stage (salida
+        // oficial de fieldservice para escribir Completado por código)
+        // y shalom_validar_cierre_visita (datos del cliente completos
+        // para Completado/No quiso, observación para Cancelado -- ver
+        // _validar_cierre_visita en fsm_order.py). Con señal responde
+        // al momento como siempre; sin señal queda guardado y se envía
+        // solo, y la visita se ve ya con su estado nuevo.
+        const resultado = await this._accionPorCola(
+            "cambiar_etapa",
+            {stage_id: stageId, estado_app: estado},
+            {mensajeError: "No se pudo actualizar el estado."}
+        );
+        if (resultado === "error") {
             if (estado === "cancelado") {
                 this._marcarErrorObservacion();
             }
+            return;
+        }
+        this.state.visita.estado = estado;
+        this.notification.add(
+            resultado === "ok"
+                ? `${this.state.visita.nombre}: ${this.etiquetaEstado(estado)}`
+                : `${this.state.visita.nombre}: ${this.etiquetaEstado(estado)} (guardado en el teléfono, se envía con señal)`,
+            {type: resultado === "ok" ? "success" : "warning"}
+        );
+        if (this.props.onCambio) {
+            this.props.onCambio();
         }
     }
 
@@ -354,17 +430,19 @@ export class VisitSheet extends Component {
 
     async guardarObservaciones(ev) {
         const texto = ev.target.value;
-        try {
-            await this.orm.write("fsm.order", [this.props.orderId], {
-                x_observaciones_visita: texto,
-            });
-            this.state.visita.observaciones = texto;
-            if (texto.trim()) {
-                this.state.visita.errorObservacion = false;
-            }
+        // Se marca al toque (sin esperar la red): si enseguida se elige
+        // "Cancelado", el chequeo de nota ya la ve.
+        this.state.visita.observaciones = texto;
+        if (texto.trim()) {
+            this.state.visita.errorObservacion = false;
+        }
+        const resultado = await this._accionPorCola("observacion", {texto}, {
+            mensajeError: "No se pudo guardar la nota.",
+        });
+        if (resultado === "ok") {
             this.notification.add("Nota guardada.", {type: "success"});
-        } catch (error) {
-            this.notification.add("No se pudo guardar la nota.", {type: "danger"});
+        } else if (resultado === "pendiente") {
+            this.notification.add("Nota guardada en el teléfono: se envía con señal.", {type: "warning"});
         }
     }
 
@@ -454,30 +532,34 @@ export class VisitSheet extends Component {
         }
 
         const {latitude, longitude} = position.coords;
-        try {
-            await this.orm.call("fsm.order", "action_capturar_gps", [
-                [this.props.orderId],
-                latitude,
-                longitude,
-            ]);
-            this.state.visita.lat = latitude;
-            this.state.visita.lng = longitude;
-            this.notification.add(
-                `Ubicación GPS capturada correctamente (precisión: ` +
-                `${Math.round(position.coords.accuracy)}m).`,
-                {type: "success"}
-            );
-            if (this.props.onCambio) {
-                this.props.onCambio();
-            }
-        } catch (error) {
-            this.notification.add("No se pudo guardar la ubicación GPS.", {
-                type: "danger",
-            });
+        // El GPS del teléfono funciona sin datos: la posición se guarda en
+        // la cola y llega al servidor (action_capturar_gps) con señal.
+        const resultado = await this._accionPorCola(
+            "gps",
+            {lat: latitude, lng: longitude},
+            {mensajeError: "No se pudo guardar la ubicación GPS."}
+        );
+        if (resultado === "error") {
+            return;
+        }
+        this.state.visita.lat = latitude;
+        this.state.visita.lng = longitude;
+        this.notification.add(
+            resultado === "ok"
+                ? `Ubicación GPS capturada correctamente (precisión: ${Math.round(position.coords.accuracy)}m).`
+                : `Ubicación GPS guardada en el teléfono (precisión: ${Math.round(position.coords.accuracy)}m): se envía con señal.`,
+            {type: resultado === "ok" ? "success" : "warning"}
+        );
+        if (this.props.onCambio) {
+            this.props.onCambio();
         }
     }
 
     async verHistorial() {
+        if (sinConexion()) {
+            this.notification.add("El historial necesita señal.", {type: "warning"});
+            return;
+        }
         try {
             const resultado = await this.orm.call(
                 "fsm.order",
@@ -512,6 +594,10 @@ export class VisitSheet extends Component {
      * de crear una nueva si sale_id ya está seteado.
      */
     async examinarCotizacion() {
+        if (sinConexion()) {
+            this.notification.add("Abrir la cotización en Ventas necesita señal.", {type: "warning"});
+            return;
+        }
         try {
             const resultado = await this.orm.call("fsm.order", "action_crear_cotizacion", [
                 [this.props.orderId],

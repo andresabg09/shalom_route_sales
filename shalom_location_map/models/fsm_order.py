@@ -123,7 +123,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 from odoo.osv import expression
 
-from . import juego_utils, tz_utils
+from . import juego_utils, offline_utils, tz_utils
 
 _logger = logging.getLogger(__name__)
 
@@ -513,7 +513,7 @@ class FSMOrder(models.Model):
             "target": "current",
         }
 
-    def shalom_guardar_borrador_pedido(self, lineas):
+    def shalom_guardar_borrador_pedido(self, lineas, precios_visita=False):
         """Llamado desde el carrito de la app al tocar "Revisar
         cotización": crea o reutiliza la cotización vinculada a esta
         visita (mismo criterio anti-duplicado que shalom_confirmar_pedido)
@@ -544,7 +544,22 @@ class FSMOrder(models.Model):
         las líneas de recompensa, ver _crear_lineas_pedido).
 
         Devuelve la acción de ventana para abrir esa cotización.
+
+        precios_visita: ver _shalom_aplicar_precios_visita (cola offline).
         """
+        sale_order, _cambios = self._shalom_guardar_borrador(lineas, precios_visita=precios_visita)
+        return {
+            "type": "ir.actions.act_window",
+            "res_model": "sale.order",
+            "res_id": sale_order.id,
+            "view_mode": "form",
+            "target": "current",
+        }
+
+    def _shalom_guardar_borrador(self, lineas, precios_visita=False):
+        """Cuerpo de shalom_guardar_borrador_pedido. Devuelve
+        (sale_order, precios_cambiados) -- lo usa también la cola
+        offline (shalom.sync.evento), que no abre ninguna ventana."""
         self.ensure_one()
         if not lineas:
             raise UserError(_("El pedido no tiene productos."))
@@ -575,17 +590,11 @@ class FSMOrder(models.Model):
 
         sale_order.order_line.unlink()
         self._crear_lineas_pedido(sale_order, lineas)
+        cambios = self._shalom_aplicar_precios_visita(sale_order, lineas) if precios_visita else []
 
         self._cerrar_visita_completada()
         self._shalom_limpiar_carrito_borrador()
-
-        return {
-            "type": "ir.actions.act_window",
-            "res_model": "sale.order",
-            "res_id": sale_order.id,
-            "view_mode": "form",
-            "target": "current",
-        }
+        return sale_order, cambios
 
     def _crear_lineas_pedido(self, sale_order, lineas):
         """Crea las sale.order.line del carrito -- compartido entre
@@ -674,7 +683,8 @@ class FSMOrder(models.Model):
         sale_order._update_programs_and_rewards()
 
     def shalom_confirmar_pedido(
-        self, lineas, payment_method, special_delivery_date=False, includes_itbms=False
+        self, lineas, payment_method, special_delivery_date=False, includes_itbms=False,
+        precios_visita=False,
     ):
         """Llamado desde la app del vendedor al tocar "Confirmar
         pedido": crea o reutiliza la cotización vinculada a esta visita
@@ -750,6 +760,7 @@ class FSMOrder(models.Model):
 
         sale_order.order_line.unlink()
         self._crear_lineas_pedido(sale_order, lineas)
+        cambios = self._shalom_aplicar_precios_visita(sale_order, lineas) if precios_visita else []
         sale_order.write({
             "custom_payment_method": payment_method,
             "custom_special_delivery_date": special_delivery_date or False,
@@ -778,7 +789,59 @@ class FSMOrder(models.Model):
             "sale_order_name": sale_order.name,
             "total": sale_order.amount_total,
             "juego": self._shalom_registrar_resultado_juego(sale_order),
+            "precios_cambiados": cambios,
         }
+
+    def _shalom_aplicar_precios_visita(self, sale_order, lineas):
+        """Cola offline (decisión del usuario: "el precio de la visita").
+        Un pedido tomado sin señal puede llegar horas después; si en ese
+        tiempo cambió el precio de lista de un producto, se respeta el
+        que vio el cliente en la visita (precio_visita, que manda el
+        teléfono) y se deja nota para que oficina lo revise.
+
+        Si el precio de lista NO cambió, no se toca nada: la línea queda
+        con el precio que Odoo calculó (lista de precios del cliente,
+        igual que siempre). Las recompensas no se tocan.
+
+        Devuelve [{producto, visto, vigente}] de las líneas ajustadas."""
+        self.ensure_one()
+        con_precio = [
+            linea for linea in lineas
+            if not linea.get("es_recompensa") and linea.get("precio_visita") not in (None, False)
+        ]
+        if not con_precio:
+            return []
+        productos = self.env["product.product"].browse(
+            list({linea["product_id"] for linea in con_precio})
+        ).exists()
+        vigentes = {p.id: p.list_price for p in productos}
+        cambiadas = offline_utils.lineas_cambiadas(con_precio, vigentes)
+        cambios = []
+        for product_id, visto, vigente in cambiadas:
+            lineas_venta = sale_order.order_line.filtered(
+                lambda l, pid=product_id: l.product_id.id == pid and not l.display_type
+                and not getattr(l, "is_reward_line", False)
+            )
+            if not lineas_venta:
+                continue
+            lineas_venta.write({"price_unit": visto})
+            cambios.append({
+                "producto": lineas_venta[0].product_id.display_name,
+                "visto": visto,
+                "vigente": vigente,
+            })
+        if cambios:
+            detalle = "; ".join(
+                f"{c['producto']}: ${c['visto']:.2f} (hoy ${c['vigente']:.2f})" for c in cambios
+            )
+            nota = _(
+                "Pedido tomado sin señal y enviado después: se respetó el precio "
+                "de la visita en %(n)s producto(s) cuyo precio cambió. Revisar: %(detalle)s",
+                n=len(cambios), detalle=detalle,
+            )
+            sale_order.message_post(body=nota)
+            self.message_post(body=nota)
+        return cambios
 
     def _shalom_registrar_resultado_juego(self, sale_order):
         """Estrellas y XP del pedido recién confirmado, contra el
@@ -1539,14 +1602,28 @@ class FSMOrder(models.Model):
                     "x_carrito_actualizado": False,
                 })
 
-    def shalom_limpiar_carrito(self):
+    def shalom_limpiar_carrito(self, carrito_local=None, uuid=None):
         """Llamado desde order_screen.js al confirmar 'Salir sin
         guardar' (carrito con productos, descartado a propósito) --
-        ver _shalom_limpiar_carrito_borrador(). Se ignora en silencio
-        del lado del JS si esta llamada falla (ej. sin señal en ese
-        instante); no es grave si a veces no llega a limpiarse acá: la
-        limpieza mensual automática (shalom_limpiar_carritos_viejos)
-        es la red de seguridad para esos casos."""
+        ver _shalom_limpiar_carrito_borrador().
+
+        Antes de vaciarlo, guarda una copia en Administración → Registro
+        (shalom.cotizacion.registro) para poder restaurarlo si se
+        descartó por accidente. carrito_local: el carrito tal como lo
+        tenía el teléfono (mismo formato que x_carrito_borrador) -- se
+        prefiere a la copia del servidor, que con mala señal puede estar
+        atrasada. uuid: id único del descarte generado por el teléfono,
+        para no duplicar el registro si el aviso llega dos veces (cola
+        offline). Sin argumentos (versiones viejas de la app) usa la
+        copia del servidor."""
+        self.ensure_one()
+        carrito = carrito_local if isinstance(carrito_local, dict) and carrito_local else self._shalom_carrito_dict()
+        if carrito:
+            try:
+                with self.env.cr.savepoint():
+                    self.env["shalom.cotizacion.registro"]._shalom_registrar_descarte(self, carrito, uuid=uuid)
+            except Exception:  # noqa: BLE001 -- el registro nunca frena el descarte
+                _logger.exception("No se pudo registrar el carrito descartado de fsm.order id=%s", self.id)
         self._shalom_limpiar_carrito_borrador()
         return True
 

@@ -12,3 +12,5 @@ access_shalom_estrategia_user,shalom.estrategia.user,model_shalom_estrategia,fie
 access_shalom_juego_evento_manager,shalom.juego.evento.manager,model_shalom_juego_evento,fieldservice.group_fsm_manager,1,1,1,1
 access_shalom_juego_logro_manager,shalom.juego.logro.manager,model_shalom_juego_logro,fieldservice.group_fsm_manager,1,1,1,1
 access_shalom_ruta_toma_manager,shalom.ruta.toma.manager,model_shalom_ruta_toma,fieldservice.group_fsm_manager,1,1,1,1
+access_shalom_cotizacion_registro_manager,shalom.cotizacion.registro.manager,model_shalom_cotizacion_registro,fieldservice.group_fsm_manager,1,1,1,1
+access_shalom_sync_evento_manager,shalom.sync.evento.manager,model_shalom_sync_evento,fieldservice.group_fsm_manager,1,1,1,1

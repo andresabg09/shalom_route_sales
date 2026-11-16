@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="shalom_location_map.IndicadorConexion">
+        <button t-att-class="clasePastilla" t-on-click="abrir" title="Conexión y datos sin señal" aria-label="Conexión y datos sin señal">
+            <span class="off-pill-dot"/>
+            <span t-attf-class="{{pendientes.length or conError.length ? 'off-pill-pend' : ''}}" t-esc="textoPastilla"/>
+        </button>
+        <div class="off-panel-overlay" t-if="offline.panelAbierto" t-on-click.self="cerrar">
+            <div class="off-panel">
+                <div class="off-panel-titulo">
+                    <t t-if="offline.red === 'en_linea'">Estás en línea</t>
+                    <t t-elif="offline.red === 'debil'">Señal débil</t>
+                    <t t-else="">Sin señal</t>
+                </div>
+                <div class="off-panel-sub">
+                    <t t-if="offline.red === 'en_linea'">Todo lo que hagas se envía al momento.</t>
+                    <t t-else="">Podés seguir vendiendo: lo que hagas queda guardado en el teléfono y se envía solo cuando vuelva la señal. No cierres la app.</t>
+                </div>
+
+                <div class="off-panel-seccion">Trabajar sin señal</div>
+                <div class="off-item-meta" t-esc="textoPreparado"/>
+                <label class="off-item-meta">
+                    <input type="checkbox" t-att-checked="local.fotos" t-on-change="toggleFotos" t-att-disabled="offline.preparando"/>
+                    También las fotos del catálogo (pesan bastante: mejor con Wi-Fi)
+                </label>
+                <button class="off-btn" t-att-disabled="offline.preparando or offline.red === 'sin_senal'" t-on-click="preparar">
+                    <i class="fa fa-download" aria-hidden="true"/>
+                    <t t-esc="offline.preparando ? ' Preparando…' : ' Preparar mi día'"/>
+                </button>
+                <t t-if="offline.preparando or offline.mensajePreparar">
+                    <div class="off-progreso"><div class="off-progreso-barra" t-att-style="'width:' + offline.progreso + '%'"/></div>
+                    <div class="off-item-meta" t-esc="offline.mensajePreparar"/>
+                </t>
+
+                <div class="off-panel-seccion">
+                    Por enviar (<t t-esc="pendientes.length"/>)<t t-if="conError.length"> · Necesita atención (<t t-esc="conError.length"/>)</t>
+                </div>
+                <div t-if="!offline.cola.length" class="off-item-meta">Nada pendiente: todo está en el sistema.</div>
+                <div t-foreach="offline.cola" t-as="item" t-key="item.uuid" class="off-item">
+                    <div class="off-item-info">
+                        <div t-esc="etiquetaItem(item)"/>
+                        <div class="off-item-meta">
+                            <t t-esc="horaItem(item)"/> · <t t-esc="item.estado === 'error' ? 'Necesita atención' : 'Esperando señal'"/>
+                        </div>
+                        <div class="off-item-error" t-if="item.estado === 'error'" t-esc="item.error"/>
+                    </div>
+                    <div class="off-item-acciones" t-if="item.estado === 'error'">
+                        <button class="off-mini-btn" t-on-click="() => this.reintentar(item)">Reintentar</button>
+                        <button class="off-mini-btn off-mini-btn-danger" t-on-click="() => this.descartar(item)">Descartar</button>
+                    </div>
+                </div>
+                <button class="off-btn off-btn-ghost" t-if="pendientes.length" t-att-disabled="offline.enviando" t-on-click="enviarAhora">
+                    <t t-esc="offline.enviando ? 'Enviando…' : 'Enviar ahora'"/>
+                </button>
+                <button class="off-btn off-btn-ghost" t-on-click="cerrar">Cerrar</button>
+            </div>
+        </div>
+    </t>
+</templates>

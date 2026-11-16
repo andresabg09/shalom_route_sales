@@ -11,3 +11,4 @@ from . import test_80_social
 from . import test_90_gerente
 from . import test_95_cron
 from . import test_97_rutas_libres
+from . import test_98_offline

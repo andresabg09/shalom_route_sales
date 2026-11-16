@@ -203,6 +203,16 @@ export class AdminGestion extends Component {
             cargandoCarritosPendientes: true,
             carritosPendientes: [],
 
+            // -- Registro: carritos descartados (7 días) y envíos de la
+            // calle con aviso (cola offline) --
+            cargandoRegistro: true,
+            registro: [],
+            enviosConAviso: [],
+            registroFiltro: "todos", // todos | destacados | sin_restaurar
+            registroVendedor: "",
+            registroAbiertoId: null,
+            registroRestaurandoId: null,
+
             // -- compartido --
             locationIdEditando: null,
         });
@@ -214,6 +224,8 @@ export class AdminGestion extends Component {
                 this.cargarVendedores(),
                 this.cargarVisitasEnVivo(),
                 this.cargarCarritosPendientes(),
+                // Sin await propio: si falla, Administración abre igual.
+                this.cargarRegistro(),
             ]);
         });
         this._enVivoTimer = setInterval(() => {
@@ -257,6 +269,120 @@ export class AdminGestion extends Component {
         this.state.tab = tab;
         if (tab === "estrategias") {
             this.cargarEstrategias();
+        }
+        if (tab === "registro") {
+            this.cargarRegistro();
+        }
+    }
+
+    // ==================================================================
+    // Registro: carritos descartados en la app ("Salir y perder el
+    // carrito") de los últimos 7 días, para restaurar los que se
+    // descartaron por accidente. Ver shalom_cotizacion_registro.py.
+    // Debajo, los envíos de la calle (cola offline) que necesitan que
+    // oficina los mire: con error, o con precio de la visita respetado.
+    // ==================================================================
+
+    async cargarRegistro() {
+        try {
+            const [registro, envios] = await Promise.all([
+                this.orm.call("shalom.cotizacion.registro", "shalom_admin_registro", []),
+                this.orm.call("shalom.sync.evento", "shalom_admin_envios_con_aviso", []),
+            ]);
+            this.state.registro = registro;
+            this.state.enviosConAviso = envios;
+        } catch (error) {
+            console.error("shalom: error al cargar el registro de carritos", error);
+        } finally {
+            this.state.cargandoRegistro = false;
+        }
+    }
+
+    /** Destacados (>= umbral) sin restaurar: el número de la pestaña. */
+    get registroPendientesAviso() {
+        return this.state.registro.filter((r) => r.destacado && !r.restaurado).length;
+    }
+
+    get vendedoresRegistro() {
+        const nombres = new Set(this.state.registro.map((r) => r.usuario_nombre).filter(Boolean));
+        return [...nombres].sort();
+    }
+
+    get registroFiltrado() {
+        return this.state.registro.filter((r) => {
+            if (this.state.registroFiltro === "destacados" && !r.destacado) {
+                return false;
+            }
+            if (this.state.registroFiltro === "sin_restaurar" && r.restaurado) {
+                return false;
+            }
+            if (this.state.registroVendedor && r.usuario_nombre !== this.state.registroVendedor) {
+                return false;
+            }
+            return true;
+        });
+    }
+
+    elegirFiltroRegistro(filtro) {
+        this.state.registroFiltro = filtro;
+    }
+
+    elegirVendedorRegistro(ev) {
+        this.state.registroVendedor = ev.target.value;
+    }
+
+    toggleLineasRegistro(fila) {
+        this.state.registroAbiertoId = this.state.registroAbiertoId === fila.id ? null : fila.id;
+    }
+
+    fechaRegistro(texto) {
+        return formatearFechaPanama(texto);
+    }
+
+    claseFilaRegistro(fila) {
+        if (fila.restaurado) {
+            return "adm-row-completado";
+        }
+        return fila.destacado ? "adm-row-cancelado" : "adm-row-pendiente";
+    }
+
+    textoRestaurado(fila) {
+        const como = fila.restaurado_como === "carrito"
+            ? "devuelto al carrito"
+            : `cotización ${fila.sale_nombre || ""}`.trim();
+        return `Restaurado (${como}) por ${fila.restaurado_por || "?"}`;
+    }
+
+    async restaurarRegistro(ev, fila) {
+        ev.stopPropagation();
+        const destino = fila.visita_abierta
+            ? "Vuelve al carrito de esa visita: el vendedor lo verá al tocar \"Tomar pedido\"."
+            : "La visita ya cerró: se crea una cotización en borrador para el cliente.";
+        // eslint-disable-next-line no-alert
+        if (!window.confirm(`¿Restaurar el carrito de "${fila.cliente_nombre}" ($${fila.total.toFixed(2)})?\n\n${destino}`)) {
+            return;
+        }
+        this.state.registroRestaurandoId = fila.id;
+        try {
+            const res = await this.orm.call("shalom.cotizacion.registro", "shalom_admin_restaurar", [[fila.id]]);
+            await this.cargarRegistro();
+            if (res.modo === "cotizacion") {
+                this.notification.add(`Cotización ${res.sale_order_name} creada en borrador.`, {type: "success"});
+                this.action.doAction({
+                    type: "ir.actions.act_window",
+                    res_model: "sale.order",
+                    res_id: res.sale_order_id,
+                    views: [[false, "form"]],
+                    target: "current",
+                });
+            } else {
+                this.notification.add("Carrito devuelto a la visita.", {type: "success"});
+            }
+        } catch (error) {
+            const mensajeServidor = error && error.data && error.data.message;
+            this.notification.add(mensajeServidor || "No se pudo restaurar el carrito.", {type: "danger"});
+        } finally {
+            this.state.registroRestaurandoId = null;
         }
     }
 
