@@ -9,6 +9,7 @@ import {abrirNivel, cerrarNivel, marcarRetorno} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
 import {TemaSelector} from "./tema_selector";
 import {PASOS_CATALOGO, RecorridoGuiado, marcarRecorrido, recorridoPendiente} from "./recorrido";
+import {conTimeout, iniciarSondeo} from "./red_utils";
 
 const {DateTime} = luxon;
 
@@ -128,6 +129,24 @@ const INACTIVIDAD_MAXIMA_BORRADOR_MS = 30 * 60 * 1000;
 // misma pantalla, en los dos lados.
 const SHALOM_SYNC_INTERVALO_MS = 1000;
 
+// Límite de espera de cada llamada del ciclo de sincronización (modo
+// offline, Fase 0): sin esto, una llamada colgada por señal fantasma
+// congelaba el ciclo entero (tiene candado de "uno a la vez"). Si
+// falla o se corta, el ciclo se espacia solo (2, 4, 8... hasta 30 seg)
+// y vuelve a 1 seg en cuanto hay señal -- ver iniciarSondeo().
+const SHALOM_SYNC_TIMEOUT_MS = 8000;
+const SHALOM_SYNC_TOPE_MS = 30000;
+
+// Fotos del catálogo (modo offline, Fase 0): image_512 en vez de
+// image_1024 -- las tarjetas miden 120-200 px, así que 512 sigue
+// nítida en pantallas de alta densidad pesando ~4 veces menos. Y con
+// "unique" en la URL, Odoo la sirve como inmutable: el teléfono la
+// guarda y no la vuelve a pedir en todo el día (sin "unique", cada
+// foto se re-validaba contra el servidor en cada carga, 80 idas y
+// vueltas por página en 3G). La marca es la fecha del día: una foto
+// cambiada en Odoo se ve al día siguiente.
+const TAMANO_FOTO_TARJETA = "image_512";
+
 function claveBorradorCarrito(orderId) {
     return `shalom_carrito_borrador_${orderId}`;
 }
@@ -232,7 +251,7 @@ export class OrderScreen extends Component {
         this._eliminadosPendientes = new Set();
         this._sincronizando = false; // evita solapar dos ciclos si uno tarda
         this._ultimaActualizadaConocida = false; // string del servidor
-        this._syncTimer = null;
+        this._syncSondeo = null;
         this._sesionId = shalomIdSesionCatalogo();
         this._sesionCerrada = false; // guarda para no llamar shalom_cerrar_sesion_catalogo dos veces
 
@@ -361,15 +380,25 @@ export class OrderScreen extends Component {
         onWillUnmount(() => {
             this._destruido = true;
             this.detenerEscaneo();
-            if (this._syncTimer) {
-                clearInterval(this._syncTimer);
+            if (this._syncSondeo) {
+                this._syncSondeo.detener();
             }
             if (this._evalTimer) {
                 clearTimeout(this._evalTimer);
             }
             this._cerrarSesionCatalogo();
         });
-        this._syncTimer = setInterval(() => this._tickSincronizacionCarrito(), SHALOM_SYNC_INTERVALO_MS);
+        // Ritmo fijo de ~1 seg con buena señal (el servidor considera
+        // "cerrado" un catálogo sin latido en 3 seg, ver
+        // SHALOM_SEGUNDOS_CARRITO_ACTIVO); se espacia solo si falla.
+        // No se pausa con la pestaña oculta: mismo comportamiento de
+        // siempre para "Ver en vivo".
+        this._syncSondeo = iniciarSondeo(() => this._tickSincronizacionCarrito(), {
+            intervaloMs: SHALOM_SYNC_INTERVALO_MS,
+            topeMs: SHALOM_SYNC_TOPE_MS,
+            pausarSiOculto: false,
+            ritmoFijo: true,
+        });
 
         // Enganchar el stream de la cámara al <video> recién cuando el
         // elemento ya existe en el DOM (t-if renderiza el <video> junto
@@ -642,15 +671,25 @@ export class OrderScreen extends Component {
             return;
         }
         this._sincronizando = true;
+        // false = algo falló por red: iniciarSondeo() espacia el próximo
+        // intento (2, 4, 8... seg) en vez de insistir cada segundo.
+        let ok = true;
         try {
             try {
-                const heartbeat = await this.orm.call("fsm.order", "shalom_marcar_catalogo_abierto", [
-                    [this.props.orderId], this._sesionId,
-                ]);
+                const heartbeat = await conTimeout(
+                    this.orm.call("fsm.order", "shalom_marcar_catalogo_abierto", [
+                        [this.props.orderId], this._sesionId,
+                    ]),
+                    SHALOM_SYNC_TIMEOUT_MS
+                );
                 this.state.esPrincipal = heartbeat.es_principal;
             } catch (error) {
                 // Sin señal: no se sabe si sigue siendo principal --
                 // se deja el último valor conocido, no se asume nada.
+                // Tampoco se insiste con el carrito en este mismo tick:
+                // si el latido no pasó, lo demás tampoco va a pasar.
+                ok = false;
+                return ok;
             }
 
             const hayPendientes =
@@ -660,18 +699,36 @@ export class OrderScreen extends Component {
                 const eliminados = Array.from(this._eliminadosPendientes);
                 this._cambiosPendientes = {};
                 this._eliminadosPendientes = new Set();
-                const resultado = await this.orm.call("fsm.order", "shalom_actualizar_carrito", [
-                    [this.props.orderId],
-                    cambios,
-                    eliminados,
-                ]);
+                let resultado;
+                try {
+                    resultado = await conTimeout(
+                        this.orm.call("fsm.order", "shalom_actualizar_carrito", [
+                            [this.props.orderId],
+                            cambios,
+                            eliminados,
+                        ]),
+                        SHALOM_SYNC_TIMEOUT_MS
+                    );
+                } catch (error) {
+                    // Antes, si este envío fallaba (sin señal), esos
+                    // cambios quedaban fuera de la lista de pendientes y
+                    // nunca llegaban al respaldo del servidor. Se
+                    // devuelven a la lista -- salvo las claves que el
+                    // vendedor volvió a tocar mientras tanto (esas ya
+                    // tienen un valor local más nuevo anotado).
+                    this._devolverPendientes(cambios, eliminados);
+                    throw error;
+                }
                 this._ultimaActualizadaConocida = resultado.actualizado;
                 this._aplicarCarritoServidor(resultado.carrito);
                 this.actualizarPromos();
             } else {
-                const resultado = await this.orm.call("fsm.order", "shalom_leer_carrito", [
-                    [this.props.orderId],
-                ]);
+                const resultado = await conTimeout(
+                    this.orm.call("fsm.order", "shalom_leer_carrito", [
+                        [this.props.orderId],
+                    ]),
+                    SHALOM_SYNC_TIMEOUT_MS
+                );
                 // Chequeo de nuevo DESPUÉS de esperar la respuesta: el
                 // vendedor pudo haber tocado el carrito MIENTRAS se
                 // esperaba -- si es así, no se aplica esta foto vieja
@@ -680,10 +737,10 @@ export class OrderScreen extends Component {
                 const siguenSinPendientes =
                     !Object.keys(this._cambiosPendientes).length && !this._eliminadosPendientes.size;
                 if (!siguenSinPendientes) {
-                    return;
+                    return ok;
                 }
                 if (resultado.actualizado === this._ultimaActualizadaConocida) {
-                    return; // nada nuevo -- no re-dibujar la pantalla porque sí
+                    return ok; // nada nuevo -- no re-dibujar la pantalla porque sí
                 }
                 this._ultimaActualizadaConocida = resultado.actualizado;
                 this._aplicarCarritoServidor(resultado.carrito);
@@ -692,8 +749,28 @@ export class OrderScreen extends Component {
         } catch (error) {
             // Sin conexión u otro error transitorio -- se reintenta
             // solo en el próximo tick, no interrumpe al vendedor.
+            ok = false;
         } finally {
             this._sincronizando = false;
+        }
+        return ok;
+    }
+
+    /** Devuelve a la lista de pendientes los cambios de un envío que
+     * falló (ver _tickSincronizacionCarrito), sin pisar lo que el
+     * vendedor haya tocado DESPUÉS de armar ese envío: si una clave ya
+     * está otra vez en _cambiosPendientes o _eliminadosPendientes, ese
+     * valor es más nuevo y gana. */
+    _devolverPendientes(cambios, eliminados) {
+        for (const [clave, linea] of Object.entries(cambios)) {
+            if (!(clave in this._cambiosPendientes) && !this._eliminadosPendientes.has(clave)) {
+                this._cambiosPendientes[clave] = linea;
+            }
+        }
+        for (const clave of eliminados) {
+            if (!(clave in this._cambiosPendientes)) {
+                this._eliminadosPendientes.add(clave);
+            }
         }
     }
 
@@ -1155,7 +1232,8 @@ export class OrderScreen extends Component {
             return;
         }
         this.state.fotoAmpliada = {
-            url: this.imagenUrl(producto),
+            // Primero la de 1024 px (solo al abrir la foto, no en cada tarjeta)
+            url: this._urlFoto(producto.id, "image_1024"),
             // la original (1920 px) se pide solo si el vendedor acerca la foto
             urlGrande: `/web/image/product.product/${producto.id}/image_1920`,
             nombre: producto.name,
@@ -1419,18 +1497,22 @@ export class OrderScreen extends Component {
         this.resetPagina();
     }
 
+    /** URL de foto de producto cacheable todo el día (ver
+     * TAMANO_FOTO_TARJETA más arriba). */
+    _urlFoto(productId, campo) {
+        const hoy = DateTime.now().toISODate();
+        return `/web/image/product.product/${productId}/${campo}?unique=${hoy}`;
+    }
+
     imagenUrl(producto) {
-        // image_1024: un escalón por debajo del original (1920) --
-        // buena resolución para agrandar un poco en el detalle, sin
-        // pesar tanto como el original en una red de datos móviles/
-        // satelital en la calle. El tamaño en pantalla (120x180px) se
-        // controla por CSS (.product-thumb), no por este campo.
-        return `/web/image/product.product/${producto.id}/image_1024`;
+        // Tarjetas del catálogo y líneas del carrito. El tamaño en
+        // pantalla (120-200 px) lo controla el CSS (.product-thumb).
+        return this._urlFoto(producto.id, TAMANO_FOTO_TARJETA);
     }
 
     /** Miniatura liviana (256px) para las listas; la foto grande queda para el catálogo. */
     imagenPrecarga(linea) {
-        return `/web/image/product.product/${linea.product_id}/image_256`;
+        return this._urlFoto(linea.product_id, "image_256");
     }
 
     onImagenError(ev) {
@@ -1449,9 +1531,13 @@ export class OrderScreen extends Component {
         const intentos = Number(el.dataset.shalomReintentos || 0);
         if (intentos < REINTENTOS_IMAGEN_MAX) {
             el.dataset.shalomReintentos = String(intentos + 1);
-            const urlBase = el.src.split("?")[0];
             setTimeout(() => {
-                el.src = `${urlBase}?_r=${Date.now()}`;
+                // Se conserva "unique" (para que, si esta vez carga,
+                // quede cacheada) y se agrega un _r descartable para
+                // forzar una petición nueva.
+                const url = new URL(el.src, window.location.origin);
+                url.searchParams.set("_r", String(Date.now()));
+                el.src = url.pathname + url.search;
             }, RETRASO_REINTENTO_IMAGEN_MS * (intentos + 1));
             return;
         }

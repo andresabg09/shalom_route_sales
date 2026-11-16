@@ -83,6 +83,7 @@
             "shalom_location_map/static/src/scss/recorrido.scss",
             "shalom_location_map/static/src/js/ruta_shalom/mapbox_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/navegacion_utils.js",
+            "shalom_location_map/static/src/js/ruta_shalom/red_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/stage_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/action_utils.js",
             "shalom_location_map/static/src/js/ruta_shalom/animacion_utils.js",

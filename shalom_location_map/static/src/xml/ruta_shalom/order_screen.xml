@@ -163,7 +163,7 @@
                         <div class="name" t-esc="producto.name"/>
                         <t t-set="bodegas" t-value="chipsBodegas(producto)"/>
                         <div class="product-thumb-wrap" t-on-click="() => this.abrirFoto(producto)" t-att-title="'Ver foto de ' + producto.name">
-                            <img class="product-thumb" t-att-src="imagenUrl(producto)" alt="" t-on-error="onImagenError"/>
+                            <img class="product-thumb" t-att-src="imagenUrl(producto)" alt="" loading="lazy" decoding="async" t-on-error="onImagenError"/>
                             <!-- Existencia de Nevada sobre la foto (abajo a la
                                  izquierda), como en el catálogo de Ventas:
                                  píldora blanca con punto de color, sin fondo. -->
@@ -262,6 +262,7 @@
                                 class="product-thumb"
                                 t-att-src="imagenUrl(item.producto)"
                                 alt=""
+                                loading="lazy"
                                 t-on-error="onImagenError"
                             />
                             <span t-else="" class="reward-icon"><i class="fa fa-gift" aria-hidden="true"/></span>

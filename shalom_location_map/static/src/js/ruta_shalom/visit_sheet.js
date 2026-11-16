@@ -9,6 +9,7 @@ import {abrirNivel, cerrarNivel, marcarRetorno} from "./back_stack";
 import {capturarMejorPosicionGps} from "./gps_utils";
 import {ClienteForm} from "./cliente_form";
 import {OrderScreen} from "./order_screen";
+import {conTimeout, iniciarSondeo} from "./red_utils";
 
 // Umbral de arrastre (px) para que soltar la barrita de arriba de la
 // hoja cuente como "cerrar" en vez de volver a su posición.
@@ -22,6 +23,10 @@ const UMBRAL_ARRASTRE_CIERRE = 90;
 // seguido para que el botón reaccione rápido cuando el otro
 // dispositivo se cierra).
 const SHALOM_INTERVALO_HEARTBEAT_MS = 2000;
+// Modo offline, Fase 0: límite de espera de cada pregunta y tope de la
+// espera entre reintentos cuando no hay señal (ver iniciarSondeo()).
+const SHALOM_HEARTBEAT_TIMEOUT_MS = 8000;
+const SHALOM_HEARTBEAT_TOPE_MS = 30000;
 
 /**
  * Hoja de visita (Fase 2): se abre al tocar una parada en la Lista del
@@ -106,7 +111,7 @@ export class VisitSheet extends Component {
         });
         this._onMoverArrastre = (ev) => this.moverArrastre(ev);
         this._onSoltarArrastre = (ev) => this.soltarArrastre(ev);
-        this._heartbeatTimer = null;
+        this._heartbeatSondeo = null;
 
         // El nivel de navegación de ESTA hoja (la visita en sí) lo
         // empuja/cierra quien la abre -- RutaDetalle.abrirVisita()/
@@ -129,14 +134,15 @@ export class VisitSheet extends Component {
             }
         });
         onWillStart(() => this._chequearCarritoActivo());
-        this._heartbeatTimer = setInterval(
-            () => this._chequearCarritoActivo(), SHALOM_INTERVALO_HEARTBEAT_MS
-        );
+        this._heartbeatSondeo = iniciarSondeo(() => this._chequearCarritoActivo(), {
+            intervaloMs: SHALOM_INTERVALO_HEARTBEAT_MS,
+            topeMs: SHALOM_HEARTBEAT_TOPE_MS,
+        });
 
         onWillUnmount(() => {
             this.detenerArrastre();
-            if (this._heartbeatTimer) {
-                clearInterval(this._heartbeatTimer);
+            if (this._heartbeatSondeo) {
+                this._heartbeatSondeo.detener();
             }
         });
     }
@@ -155,13 +161,19 @@ export class VisitSheet extends Component {
             return;
         }
         try {
-            const resultado = await this.orm.call("fsm.order", "shalom_leer_carrito", [
-                [this.props.orderId],
-            ]);
+            const resultado = await conTimeout(
+                this.orm.call("fsm.order", "shalom_leer_carrito", [
+                    [this.props.orderId],
+                ]),
+                SHALOM_HEARTBEAT_TIMEOUT_MS
+            );
             this.state.carritoActivo = resultado.activo;
         } catch (error) {
-            // ver docstring de _chequearCarritoActivo
+            // ver docstring de _chequearCarritoActivo. false: que el
+            // sondeo espacie el próximo intento (sin señal).
+            return false;
         }
+        return true;
     }
 
     async cargar() {

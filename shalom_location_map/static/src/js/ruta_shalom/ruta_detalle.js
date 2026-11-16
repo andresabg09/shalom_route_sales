@@ -19,6 +19,7 @@ import {TemaSelector} from "./tema_selector";
 import {ConduccionOverlay} from "./conduccion_overlay";
 import {useConduccion} from "./conduccion_utils";
 import {PASOS_RUTA, RecorridoGuiado, marcarRecorrido, recorridoPendiente} from "./recorrido";
+import {conTimeout, iniciarSondeo} from "./red_utils";
 
 /**
  * Detalle de una ruta (una fsm.route.schedule): tabs Lista/Mapa.
@@ -47,6 +48,10 @@ const COLOR_MARCADOR = {
 // "precisa"), se descarta: un punto ausente es mejor que uno a
 // kilómetros de la posición real.
 const SONDEO_RUTA_MS = 8000; // cada cuánto se revisa si otro vendedor resolvió clientes
+// Modo offline, Fase 0: límite de espera de cada sondeo y tope de la
+// espera entre reintentos sin señal (ver iniciarSondeo()).
+const SONDEO_RUTA_TIMEOUT_MS = 10000;
+const SONDEO_RUTA_TOPE_MS = 60000;
 const PRECISION_MAXIMA_ACEPTABLE_M = 500;
 
 // Margen (px) entre el borde real del mapa y dónde se dibuja la
@@ -417,7 +422,10 @@ export class RutaDetalle extends Component {
         onMounted(() => {
             // Rutas libres: si el otro vendedor resuelve un cliente, aquí se
             // marca solo (cada 8 s), sin salir ni refrescar la página.
-            this._sondeoTimer = setInterval(() => !document.hidden && this.sondearRuta(), SONDEO_RUTA_MS);
+            this._sondeo = iniciarSondeo(() => this.sondearRuta(), {
+                intervaloMs: SONDEO_RUTA_MS,
+                topeMs: SONDEO_RUTA_TOPE_MS,
+            });
             // Recorrido guiado: la primera vez que el vendedor entra a una
             // ruta. No si llegó desde la búsqueda (se abre su cliente).
             recorridoPendiente(this.orm, "ruta").then((pendiente) => {
@@ -428,7 +436,9 @@ export class RutaDetalle extends Component {
         });
         onWillUnmount(() => {
             clearTimeout(this._otrasTimer);
-            clearInterval(this._sondeoTimer);
+            if (this._sondeo) {
+                this._sondeo.detener();
+            }
             this.detenerNavegacion();
             if (this.mapboxMap) {
                 this.mapboxMap.remove();
@@ -551,7 +561,10 @@ export class RutaDetalle extends Component {
         }
         this._sondeando = true;
         try {
-            const res = await this.orm.call("fsm.route.schedule", "shalom_estado_ruta", [this.props.schedule.id]);
+            const res = await conTimeout(
+                this.orm.call("fsm.route.schedule", "shalom_estado_ruta", [this.props.schedule.id]),
+                SONDEO_RUTA_TIMEOUT_MS
+            );
             this.state.tomadaPor = res.tomada_por;
             const cambiadas = [];
             for (const v of this.state.visitasTodas) {
@@ -576,7 +589,9 @@ export class RutaDetalle extends Component {
                 );
             }
         } catch (error) {
-            console.error("shalom: error al sondear la ruta", error);
+            // Sin señal es lo normal en la calle: false para que el
+            // sondeo espacie el próximo intento (ver iniciarSondeo()).
+            return false;
         } finally {
             this._sondeando = false;
         }

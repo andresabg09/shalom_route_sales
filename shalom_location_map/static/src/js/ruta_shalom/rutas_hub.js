@@ -10,6 +10,7 @@ import {JuegoPanel} from "./juego_panel";
 import {Tutorial} from "./tutorial";
 import {useEsAncha} from "./pantalla_utils";
 import {estadoDeResultado, quienAtiende, resaltar} from "./busqueda_utils";
+import {conTimeout, iniciarSondeo} from "./red_utils";
 
 /**
  * Pestaña "Rutas" de la app del vendedor: lista de fsm.route.schedule
@@ -27,6 +28,10 @@ import {estadoDeResultado, quienAtiende, resaltar} from "./busqueda_utils";
 // adelante. Suficiente para que el vendedor vea el mes en curso y el
 // siguiente sin pedirle a oficina que programe con más anticipación.
 const TOMAS_REFRESCO_MS = 30000;
+// Modo offline, Fase 0: límite de espera del refresco y tope de la
+// espera entre reintentos sin señal (ver iniciarSondeo()).
+const TOMAS_TIMEOUT_MS = 10000;
+const TOMAS_TOPE_MS = 120000;
 // Última lista de rutas vista (se conserva al entrar y salir de una ruta).
 let CACHE_RUTAS = null;
 const CACHE_RUTAS_MS = 10 * 60 * 1000;
@@ -182,14 +187,19 @@ export class RutasHub extends Component {
         );
         onWillUnmount(() => {
             this.quitarMapa();
-            clearInterval(this._tomasTimer);
+            if (this._tomasSondeo) {
+                this._tomasSondeo.detener();
+            }
             clearTimeout(this._busquedaTimer);
         });
         onWillStart(() => this.cargar());
         onMounted(() => {
             // Quién trabaja cada ruta cambia mientras estás en el mapa: se
             // refresca solo cada 30 s (y al volver a la pestaña).
-            this._tomasTimer = setInterval(() => !document.hidden && this.refrescarTomas(), TOMAS_REFRESCO_MS);
+            this._tomasSondeo = iniciarSondeo(() => this.refrescarTomas(), {
+                intervaloMs: TOMAS_REFRESCO_MS,
+                topeMs: TOMAS_TOPE_MS,
+            });
             this.cargarEstrategias();
             this.cargarProgreso();
             this.cargarAvisos();
@@ -328,7 +338,10 @@ export class RutasHub extends Component {
             return;
         }
         try {
-            const nuevas = await this.orm.call("fsm.person", "shalom_mis_rutas_programadas", this._ventana);
+            const nuevas = await conTimeout(
+                this.orm.call("fsm.person", "shalom_mis_rutas_programadas", this._ventana),
+                TOMAS_TIMEOUT_MS
+            );
             const porId = new Map(nuevas.map((s) => [s.id, s]));
             for (const s of this.state.schedules) {
                 const n = porId.get(s.id);
@@ -337,7 +350,9 @@ export class RutasHub extends Component {
                 }
             }
         } catch (error) {
-            console.error("shalom: error al refrescar quién trabaja las rutas", error);
+            // Sin señal es lo normal en la calle: sin ruido en consola,
+            // y false para que el sondeo espacie el próximo intento.
+            return false;
         }
     }
 
