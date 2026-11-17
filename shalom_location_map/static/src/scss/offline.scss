@@ -198,9 +198,6 @@
     .off-panel > * {
         flex-shrink: 0;
     }
-    .off-panel.off-panel-arrastrando {
-        transition: none;
-    }
     // Computadora: ventana centrada con su propio scroll.
     @media (min-width: 900px) {
         .off-panel-overlay {

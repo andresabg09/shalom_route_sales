@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import {Component, onWillUnmount, useRef, useState} from "@odoo/owl";
+import {Component, onRendered, onWillRender, onWillUnmount, useRef, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {
     borrarDatosDescargados,
@@ -80,15 +80,28 @@ export class IndicadorConexion extends Component {
             abiertoUuid: null,
             verRutas: false, // lista de rutas desplegada
             confirmandoDescarga: false, // "Ya tienes todo descargado…"
-            arrastreY: 0, // px que el panel bajó arrastrándolo
-            arrastrando: false,
         });
         this.panelRef = useRef("panel");
+        // Arrastre del panel: NO es estado reactivo (ver iniciarArrastre).
+        this._arrastre = null;
         this._onMoverArrastre = (ev) => this.moverArrastre(ev);
         this._onSoltarArrastre = (ev) => this.soltarArrastre(ev);
         onWillUnmount(() => {
             this.detenerArrastre();
             clearTimeout(this._cierreTimer);
+            cancelAnimationFrame(this._cuadroArrastre);
+        });
+        // Ojo: la plantilla lee los getters sobre un objeto que HEREDA del
+        // componente (Object.create), así que asignar this._algo desde un
+        // getter lo guardaría en ese objeto y no acá. Por eso la memoria
+        // del dibujo es un objeto compartido que solo se modifica por dentro.
+        this._memo = {enDibujo: false, datos: null};
+        onWillRender(() => {
+            this._memo.enDibujo = true;
+            this._memo.datos = null;
+        });
+        onRendered(() => {
+            this._memo.enDibujo = false;
         });
         const ormCrudo = (this.env.services && this.env.services.orm) || this.orm;
         iniciarSincronizador(ormCrudo, this.notification);
@@ -144,7 +157,16 @@ export class IndicadorConexion extends Component {
     // -- Checklist "Datos en este teléfono" --
 
     get datos() {
-        return resumenDatosTelefono(this.offline);
+        // Una sola cuenta por dibujo (la plantilla lo lee una decena de
+        // veces); fuera del dibujo, siempre fresco.
+        const memo = this._memo;
+        if (!memo.enDibujo) {
+            return resumenDatosTelefono(this.offline);
+        }
+        if (!memo.datos) {
+            memo.datos = resumenDatosTelefono(this.offline);
+        }
+        return memo.datos;
     }
 
     get etiquetaFrescura() {
@@ -306,76 +328,115 @@ export class IndicadorConexion extends Component {
 
     abrir() {
         clearTimeout(this._cierreTimer);
-        this.local.arrastreY = 0;
         this.local.panelAbierto = true;
         comprobarRed();
     }
 
     cerrar() {
         this.detenerArrastre();
-        this.local.arrastrando = false;
+        this._arrastre = null;
         this.local.panelAbierto = false;
-        this.local.arrastreY = 0;
-    }
-
-    get estiloPanel() {
-        return this.local.arrastreY ? `transform: translateY(${this.local.arrastreY}px);` : "";
     }
 
     // -- Arrastrar el panel hacia abajo para cerrarlo --
-    // Misma lógica que la hoja de visita (visit_sheet.js): se agarra desde
+    // Misma regla que la hoja de visita (visit_sheet.js): se agarra desde
     // cualquier parte salvo campos y links, y solo cuando el panel está
     // arriba del todo (si no, el gesto es scroll normal del contenido).
+    //
+    // Bug real reportado ("se mueve trabado, como a 5 fps"): el panel tiene
+    // scroll propio, así que el navegador tomaba el gesto como SCROLL y, a
+    // partir de ahí, entregaba los movimientos del dedo de a ratos
+    // (en Android, uno cada ~200 ms) y sin poder frenarlos. Ahora, en el
+    // PRIMER movimiento hacia abajo con el panel arriba del todo, el gesto
+    // se toma como arrastre (preventDefault en un listener no pasivo): el
+    // navegador no arranca el scroll y manda cada movimiento al momento.
+    // Además, el panel se mueve escribiendo el transform directo en el
+    // elemento (una vez por cuadro), sin estado reactivo: cero redibujos de
+    // Owl durante el gesto.
 
     iniciarArrastre(ev) {
         const objetivo = ev.target;
-        if (!objetivo || !objetivo.closest || objetivo.closest("input, textarea, a, select")) {
+        const panel = this.panelRef.el;
+        if (!panel || !objetivo || !objetivo.closest || objetivo.closest("input, textarea, a, select")) {
             return;
         }
-        if (this.panelRef.el && this.panelRef.el.scrollTop > 0) {
+        if (panel.scrollTop > 0 || !ev.touches || ev.touches.length !== 1) {
             return;
         }
-        this._arrastreInicioY = ev.touches ? ev.touches[0].clientY : ev.clientY;
-        this.local.arrastrando = true;
-        window.addEventListener("touchmove", this._onMoverArrastre, {passive: true});
+        this.detenerArrastre();
+        this._arrastre = {inicioY: ev.touches[0].clientY, y: 0, activo: false};
+        panel.addEventListener("touchmove", this._onMoverArrastre, {passive: false});
         window.addEventListener("touchend", this._onSoltarArrastre);
+        window.addEventListener("touchcancel", this._onSoltarArrastre);
     }
 
     moverArrastre(ev) {
-        if (!this.local.arrastrando) {
+        const a = this._arrastre;
+        const panel = this.panelRef.el;
+        if (!a || !panel || !ev.touches || !ev.touches.length) {
             return;
         }
-        const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
-        // Si el contenido se movió (scroll) en vez del panel, no es arrastre.
-        if (this.panelRef.el && this.panelRef.el.scrollTop > 0) {
-            this.local.arrastreY = 0;
-            return;
+        const delta = ev.touches[0].clientY - a.inicioY;
+        if (!a.activo) {
+            // Primer movimiento: hacia arriba (o con el contenido ya
+            // scrolleado) es scroll normal y se suelta el gesto.
+            if (delta <= 0 || panel.scrollTop > 0) {
+                if (delta < 0 || panel.scrollTop > 0) {
+                    this.detenerArrastre();
+                    this._arrastre = null;
+                }
+                return;
+            }
+            a.activo = true;
+            panel.style.transition = "none";
+            panel.style.willChange = "transform";
         }
-        this.local.arrastreY = Math.max(0, y - this._arrastreInicioY);
+        if (ev.cancelable) {
+            ev.preventDefault();
+        }
+        a.y = Math.max(0, delta);
+        if (!this._cuadroArrastre) {
+            this._cuadroArrastre = requestAnimationFrame(() => {
+                this._cuadroArrastre = null;
+                if (this._arrastre && this.panelRef.el) {
+                    this.panelRef.el.style.transform = `translateY(${this._arrastre.y}px)`;
+                }
+            });
+        }
     }
 
     soltarArrastre(ev) {
-        if (!this.local.arrastrando) {
+        const a = this._arrastre;
+        this.detenerArrastre();
+        this._arrastre = null;
+        const panel = this.panelRef.el;
+        if (!a || !a.activo || !panel) {
             return;
         }
-        this.local.arrastrando = false;
-        this.detenerArrastre();
-        if (this.local.arrastreY > UMBRAL_ARRASTRE_CIERRE) {
+        cancelAnimationFrame(this._cuadroArrastre);
+        this._cuadroArrastre = null;
+        panel.style.transition = "";
+        panel.style.willChange = "";
+        if (a.y > UMBRAL_ARRASTRE_CIERRE) {
             // Evita el click "fantasma" sobre el fondo (ver visit_sheet.js).
             if (ev && ev.cancelable) {
                 ev.preventDefault();
             }
-            // Termina de bajar con la misma transición y recién ahí se cierra.
-            this.local.arrastreY = window.innerHeight;
+            // Termina de bajar con la transición del CSS y recién ahí se cierra.
+            panel.style.transform = `translateY(${window.innerHeight}px)`;
             this._cierreTimer = setTimeout(() => this.cerrar(), 200);
         } else {
-            this.local.arrastreY = 0;
+            panel.style.transform = "";
         }
     }
 
     detenerArrastre() {
-        window.removeEventListener("touchmove", this._onMoverArrastre);
+        const panel = this.panelRef && this.panelRef.el;
+        if (panel) {
+            panel.removeEventListener("touchmove", this._onMoverArrastre);
+        }
         window.removeEventListener("touchend", this._onSoltarArrastre);
+        window.removeEventListener("touchcancel", this._onSoltarArrastre);
     }
 
     toggleFotos(ev) {
