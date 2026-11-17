@@ -1048,6 +1048,27 @@ class FSMOrder(models.Model):
         return resultado
 
     @api.model
+    def shalom_marcas_fotos(self, product_ids):
+        """Versión de la foto de cada producto, para la URL de la imagen
+        (/web/image/...?unique=<versión>) del catálogo de la app: con una
+        versión estable, el teléfono guarda cada foto UNA vez y la reusa
+        los días siguientes; solo la vuelve a bajar si el producto o su
+        plantilla cambian en Odoo (la foto suele vivir en la plantilla).
+        Antes la versión era la fecha del día: todo el catálogo de fotos
+        se volvía a bajar cada mañana.
+
+        Devuelve {product_id: "AAAAMMDDhhmmss"} (la más nueva de las dos
+        fechas de modificación). Solo lee fechas: sudo() para no depender
+        de permisos sobre la plantilla."""
+        if not product_ids:
+            return {}
+        resultado = {}
+        for producto in self.env["product.product"].sudo().browse(product_ids).exists():
+            fechas = [f for f in (producto.write_date, producto.product_tmpl_id.write_date) if f]
+            resultado[producto.id] = max(fechas).strftime("%Y%m%d%H%M%S") if fechas else "0"
+        return resultado
+
+    @api.model
     def shalom_pedidos_anteriores(self, location_id, limite=8):
         """Últimos pedidos confirmados del cliente de esta Ubicación,
         para "Precargar de pedidos anteriores" en el catálogo: el

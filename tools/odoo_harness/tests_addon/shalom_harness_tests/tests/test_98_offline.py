@@ -284,6 +284,27 @@ class TestOffline(ShalomCommon):
         self.assertEqual(Ciclo.shalom_paquete_offline(999999)["visitas"], {})
 
 
+    # ------------------------------------------------------------------
+    # Ajustes: versión estable de las fotos del catálogo
+    # ------------------------------------------------------------------
+    def test_marcas_fotos_cambian_solo_si_cambia_el_producto(self):
+        Orden = self.env["fsm.order"].with_user(self.u_a)
+        antes = Orden.shalom_marcas_fotos([self.p_tinte.id, self.p_oxi.id])
+        self.assertEqual(set(antes), {self.p_tinte.id, self.p_oxi.id})
+        self.assertRegex(antes[self.p_tinte.id], r"^\d{14}$")
+        self.assertEqual(Orden.shalom_marcas_fotos([self.p_tinte.id]), {self.p_tinte.id: antes[self.p_tinte.id]})
+        # cambia la plantilla (donde suele estar la foto): cambia la marca
+        self.env.cr.execute(
+            "UPDATE product_template SET write_date = write_date + interval '1 day' WHERE id = %s",
+            (self.p_tinte.product_tmpl_id.id,),
+        )
+        self.p_tinte.product_tmpl_id.invalidate_recordset(["write_date"])
+        despues = Orden.shalom_marcas_fotos([self.p_tinte.id, self.p_oxi.id])
+        self.assertGreater(despues[self.p_tinte.id], antes[self.p_tinte.id])
+        self.assertEqual(despues[self.p_oxi.id], antes[self.p_oxi.id])
+        self.assertEqual(Orden.shalom_marcas_fotos([]), {})
+
+
 @tagged("post_install", "-at_install", "shalom_harness")
 class TestPaginaOffline(HttpCase):
     def test_service_worker_lleva_la_marca_y_lo_de_odoo(self):

@@ -274,4 +274,67 @@ module.exports = (ctx) => {
         ok(m.errores.length === 0, "sin rechazos no manejados", m.errores);
         m.destruir();
     };
+
+    // -----------------------------------------------------------------
+    // Ajustes post-deploy
+    // -----------------------------------------------------------------
+    escenarios.offline_catalogo_pastilla_y_fotos = async function () {
+        console.log("\n[Offline ajustes] pastilla compacta en el catálogo y versión estable de fotos");
+        fijarOnLine(true);
+        const m = await montar(bundle.OrderScreen, {
+            orderId: 5, clienteNombre: "Cliente X", onCerrar: () => {}, onConfirmado: () => {},
+        }, handlersOrder({
+            "fsm.order.shalom_marcas_fotos": (a) => Object.fromEntries(a[0].map((id) => [id, "20261101093000"])),
+        }));
+        await esperar(() => !m.comp.state.cargando && qa(".product-card").length === 3);
+        const pastilla = q(".order-topbar .off-pill");
+        ok(pastilla && pastilla.classList.contains("off-pill-compacta"), "pastilla compacta en la cabecera del catálogo");
+        click(pastilla);
+        await esperar(() => q(".off-panel"));
+        ok(q(".off-panel") && /TODAS las rutas/.test(q(".off-panel").textContent), "abre el panel (Preparar mi día: todas las rutas)");
+        const src = q(".product-card .product-thumb").getAttribute("src");
+        ok(/image_512\?unique=20261101093000$/.test(src), "la foto usa la versión estable del producto (no la fecha del día)", src);
+        m.destruir();
+    };
+
+    escenarios.offline_preparar_todas_las_rutas = async function () {
+        console.log("\n[Offline ajustes] Preparar mi día baja TODAS las rutas, de a 3, y sigue si una falla");
+        fijarOnLine(true);
+        const rutas = [1, 2, 3, 4, 5].map((id) => ({id, route_id: 100 + id, route_name: "R" + id, tomada_por: [], tiene_cartera: false, pendientes_mios: 0, es_visita_express: false}));
+        let enVuelo = 0;
+        let maxVuelo = 0;
+        const preparadas = [];
+        const m = await montar(bundle.OrderScreen, {orderId: 5, clienteNombre: "X", onCerrar() {}, onConfirmado() {}}, handlersOrder({
+            "fsm.person.shalom_mis_rutas_programadas": () => rutas,
+            "fsm.order.searchRead": () => [],
+            "fsm.route.read": () => [{id: 1, x_ruta_trazado: false}],
+            "fsm.stage.searchRead": () => [{id: 1, name: "Pendiente"}],
+            "fsm.person.shalom_mis_cotizaciones": [],
+            "fsm.route.schedule.shalom_paquete_offline": async (a) => {
+                enVuelo++;
+                maxVuelo = Math.max(maxVuelo, enVuelo);
+                await sleep(30);
+                enVuelo--;
+                if (a[0] === 4) {
+                    throw new Error("se cortó");
+                }
+                preparadas.push(a[0]);
+                return {visitas: {}, faltantes: {}, fichas: {}, pedidos: {}, ultima_fp: {}};
+            },
+        }));
+        await esperar(() => !m.comp.state.cargando);
+        const promesa = bundle.prepararDia(m.comp.orm, {});
+        await esperar(() => q(".off-barra-global"), 1000);
+        ok(!q(".off-panel") && q(".off-barra-global"), "con el panel cerrado se ve la barrita de descarga arriba");
+        ok(/\d+%/.test((q(".order-topbar .off-pill") || {}).textContent || ""), "y la pastilla muestra el porcentaje", (q(".order-topbar .off-pill") || {}).textContent);
+        const r = await promesa;
+        await sleep(30);
+        ok(!q(".off-barra-global"), "al terminar la barrita desaparece");
+        ok(r && r.total === 5 && r.rutas === 4 && r.fallidas === 1, "las 5 rutas (aunque nadie las tomó); 1 falló y no frenó a las demás", r);
+        ok(preparadas.sort().join(",") === "1,2,3,5", "se prepararon las demás", preparadas);
+        ok(maxVuelo <= 3 && maxVuelo >= 2, "de a 3 en paralelo como máximo", maxVuelo);
+        ok(/4 de 5 rutas/.test(bundle.estadoOffline.mensajePreparar), "el panel avisa cuántas bajaron", bundle.estadoOffline.mensajePreparar);
+        m.destruir();
+    };
 };
+

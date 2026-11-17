@@ -50,13 +50,18 @@ export function haceCuanto(ts) {
  */
 export class IndicadorConexion extends Component {
     static template = "shalom_location_map.IndicadorConexion";
-    static props = {schedules: {type: Array, optional: true}};
+    // compacta: solo el punto de color (y el número de pendientes), para
+    // cabeceras con poco lugar como la del catálogo.
+    static props = {compacta: {type: Boolean, optional: true}};
 
     setup() {
         this.orm = useService("orm");
         this.notification = useService("notification");
         this.offline = useState(estadoOffline);
-        this.local = useState({fotos: false});
+        // panelAbierto es de CADA pastilla (no del estado compartido): con
+        // el catálogo abierto encima de la ruta hay dos pastillas montadas,
+        // y con el estado compartido el panel se dibujaba dos veces.
+        this.local = useState({fotos: false, panelAbierto: false});
         const ormCrudo = (this.env.services && this.env.services.orm) || this.orm;
         iniciarSincronizador(ormCrudo, this.notification);
         cargarMetaPreparacion();
@@ -72,10 +77,13 @@ export class IndicadorConexion extends Component {
 
     get clasePastilla() {
         const red = {en_linea: "", debil: "off-pill-debil", sin_senal: "off-pill-sin"}[this.offline.red] || "";
-        return `off-pill ${red} ${this.conError.length ? "off-pill-error" : ""}`;
+        return `off-pill ${red} ${this.conError.length ? "off-pill-error" : ""} ${this.props.compacta ? "off-pill-compacta" : ""}`;
     }
 
     get textoPastilla() {
+        if (this.offline.preparando) {
+            return `Descargando… ${this.offline.progreso}%`;
+        }
         const base = {en_linea: "En línea", debil: "Señal débil", sin_senal: "Sin señal"}[this.offline.red] || "En línea";
         if (this.conError.length) {
             return `${base} · ${this.conError.length} con problema`;
@@ -84,6 +92,19 @@ export class IndicadorConexion extends Component {
             return `${base} · ${this.pendientes.length} por enviar`;
         }
         return base;
+    }
+
+    /** Pastilla compacta: solo el número de lo pendiente (o nada). */
+    get textoCompacto() {
+        if (this.offline.preparando) {
+            return `${this.offline.progreso}%`;
+        }
+        const n = this.conError.length || this.pendientes.length;
+        return n ? String(n) : "";
+    }
+
+    get tituloPastilla() {
+        return `${this.textoPastilla}. Tocá para ver la conexión y lo pendiente.`;
     }
 
     get textoPreparado() {
@@ -106,12 +127,12 @@ export class IndicadorConexion extends Component {
     }
 
     abrir() {
-        this.offline.panelAbierto = true;
+        this.local.panelAbierto = true;
         comprobarRed();
     }
 
     cerrar() {
-        this.offline.panelAbierto = false;
+        this.local.panelAbierto = false;
     }
 
     toggleFotos(ev) {
@@ -123,8 +144,10 @@ export class IndicadorConexion extends Component {
             const r = await prepararDia(ormDeLaCola() || this.orm, {fotos: this.local.fotos});
             if (r) {
                 this.notification.add(
-                    `Listo para trabajar sin señal: ${r.rutas} ruta(s) y ${r.productos} productos guardados.`,
-                    {type: "success"}
+                    r.fallidas
+                        ? `Se guardaron ${r.rutas} de ${r.total} rutas y ${r.productos} productos. Las demás: probá de nuevo con mejor señal.`
+                        : `Listo para trabajar sin señal: ${r.rutas} ruta(s) y ${r.productos} productos guardados.`,
+                    {type: r.fallidas ? "warning" : "success"}
                 );
             }
         } catch (error) {

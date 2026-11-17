@@ -21,6 +21,7 @@ import {
     urlFotoProducto,
 } from "./datos_offline";
 import {descartar, encolar, esperarResultado, iniciarSincronizador} from "./sincronizador";
+import {IndicadorConexion} from "./indicador_conexion";
 
 // Modo offline: cuánto se espera la confirmación del servidor antes de
 // dejar el pedido guardado en el teléfono ("se envía con señal"). Un
@@ -231,7 +232,7 @@ function shalomVistaCatalogoInicial() {
 
 export class OrderScreen extends Component {
     static template = "shalom_location_map.OrderScreen";
-    static components = {ClienteForm, DateTimeInput, TemaSelector, RecorridoGuiado};
+    static components = {ClienteForm, DateTimeInput, TemaSelector, RecorridoGuiado, IndicadorConexion};
     static props = {
         orderId: Number,
         // Lo que sigue en la pila de navegación guardada después de
@@ -1263,7 +1264,7 @@ export class OrderScreen extends Component {
         }
         this.state.fotoAmpliada = {
             // Primero la de 1024 px (solo al abrir la foto, no en cada tarjeta)
-            url: this._urlFoto(producto.id, "image_1024"),
+            url: this._urlFoto(producto.id, "image_1024", producto.foto_v),
             // la original (1920 px) se pide solo si el vendedor acerca la foto
             urlGrande: `/web/image/product.product/${producto.id}/image_1920`,
             nombre: producto.name,
@@ -1529,20 +1530,22 @@ export class OrderScreen extends Component {
 
     /** URL de foto de producto cacheable todo el día (ver
      * TAMANO_FOTO_TARJETA más arriba). */
-    _urlFoto(productId, campo) {
-        // Misma URL que precarga "Preparar mi día" (datos_offline.js).
-        return urlFotoProducto(productId, campo);
+    /** Misma URL que precarga "Preparar mi día" (datos_offline.js), con la
+     * versión estable de la foto del producto (foto_v) si se conoce. */
+    _urlFoto(productId, campo, version = null) {
+        return urlFotoProducto(productId, campo, version);
     }
 
     imagenUrl(producto) {
         // Tarjetas del catálogo y líneas del carrito. El tamaño en
         // pantalla (120-200 px) lo controla el CSS (.product-thumb).
-        return this._urlFoto(producto.id, TAMANO_FOTO_TARJETA);
+        return this._urlFoto(producto.id, TAMANO_FOTO_TARJETA, producto.foto_v);
     }
 
     /** Miniatura liviana (256px) para las listas; la foto grande queda para el catálogo. */
     imagenPrecarga(linea) {
-        return this._urlFoto(linea.product_id, "image_256");
+        const producto = this.productoDeLinea(linea);
+        return this._urlFoto(linea.product_id, "image_256", producto && producto.foto_v);
     }
 
     onImagenError(ev) {

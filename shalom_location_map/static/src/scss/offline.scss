@@ -99,6 +99,46 @@
         white-space: nowrap;
         cursor: pointer;
     }
+    // "Preparar mi día" en curso: barrita fija arriba de todo y la pastilla
+    // con el porcentaje, para que se vea aunque el panel esté cerrado.
+    .off-barra-global {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        z-index: 1300;
+        background: var(--shalom-surface-2);
+        pointer-events: none;
+    }
+    .off-barra-global-relleno {
+        height: 100%;
+        background: var(--shalom-accent);
+        transition: width 0.4s ease;
+    }
+    .off-pill-descargando {
+        border-color: var(--shalom-accent);
+        color: var(--shalom-ink);
+        font-variant-numeric: tabular-nums;
+    }
+    .off-pill-descargando .off-pill-dot {
+        background: var(--shalom-accent);
+        animation: off-latido 1s ease-in-out infinite;
+    }
+    @keyframes off-latido {
+        50% {
+            opacity: 0.3;
+        }
+    }
+
+    // Versión compacta (cabecera del catálogo): solo el punto y, si hay
+    // pendientes, el número.
+    .off-pill-compacta {
+        gap: 5px;
+        min-width: 28px;
+        padding: 0 9px;
+        justify-content: center;
+    }
     .off-pill-dot {
         width: 8px;
         height: 8px;

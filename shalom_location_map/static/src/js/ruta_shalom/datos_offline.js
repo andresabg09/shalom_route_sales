@@ -212,6 +212,18 @@ export function traerCatalogo(orm) {
                         estrategiaPorProducto = resultado.productos || {};
                     })
                     .catch((error) => console.error("shalom: error al leer estrategias", error)),
+                // Versión estable de cada foto (ver urlFotoProducto): si falla,
+                // las fotos usan la fecha del día como antes.
+                orm
+                    .call("fsm.order", "shalom_marcas_fotos", [productos.map((p) => p.id)])
+                    .then((marcas) => {
+                        for (const producto of productos) {
+                            if (marcas[producto.id]) {
+                                producto.foto_v = marcas[producto.id];
+                            }
+                        }
+                    })
+                    .catch((error) => console.error("shalom: error al leer versiones de fotos", error)),
             ]);
             return {productos, estrategiaPorProducto, descargadoEn: Date.now()};
         },
@@ -245,13 +257,19 @@ export function traerCotizaciones(orm) {
 // Fotos del catálogo
 // ------------------------------------------------------------------
 
-/** URL de foto de producto cacheable todo el día: con "unique", Odoo la
- * sirve como inmutable y el teléfono no la vuelve a pedir (ni con señal
- * ni sin ella). La marca es la fecha del día. */
-export function urlFotoProducto(productId, campo = "image_512") {
-    const hoy = new Date();
-    const fecha = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
-    return `/web/image/product.product/${productId}/${campo}?unique=${fecha}`;
+/** URL de foto de producto cacheable: con "unique", Odoo la sirve como
+ * inmutable (1 año) y el teléfono no la vuelve a pedir, ni con señal ni
+ * sin ella. `version` = shalom_marcas_fotos (cambia solo si el producto
+ * o su plantilla cambian en Odoo): así cada foto se baja UNA vez y sirve
+ * los días siguientes. Sin versión (catálogo viejo guardado), la fecha
+ * del día, como antes. */
+export function urlFotoProducto(productId, campo = "image_512", version = null) {
+    let marca = version;
+    if (!marca) {
+        const hoy = new Date();
+        marca = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+    }
+    return `/web/image/product.product/${productId}/${campo}?unique=${marca}`;
 }
 
 function precargarImagen(url) {
@@ -266,19 +284,20 @@ function precargarImagen(url) {
 /** Descarga las fotos de las tarjetas del catálogo a la caché del
  * navegador (de a pocas a la vez). onProgreso(hechas, total). */
 export async function precargarFotos(productos, onProgreso) {
-    const ids = productos.map((p) => p.id);
     let hechas = 0;
     let siguiente = 0;
     const trabajador = async () => {
-        while (siguiente < ids.length) {
+        while (siguiente < productos.length) {
             if (sinConexion()) {
                 return;
             }
-            const id = ids[siguiente++];
-            await precargarImagen(urlFotoProducto(id));
+            const producto = productos[siguiente++];
+            // Misma URL que las tarjetas del catálogo: si ya estaba guardada,
+            // el navegador la sirve de su caché sin bajarla de nuevo.
+            await precargarImagen(urlFotoProducto(producto.id, "image_512", producto.foto_v));
             hechas += 1;
             if (onProgreso) {
-                onProgreso(hechas, ids.length);
+                onProgreso(hechas, productos.length);
             }
         }
     };
@@ -318,16 +337,16 @@ export async function prepararRuta(orm, schedule) {
     await guardarLocal(`ruta_preparada:${schedule.id}`, Date.now());
 }
 
-/** Rutas que "Preparar mi día" descarga: las que el vendedor tomó, las de
- * su cartera con pendientes y las Visitas Exprés. */
+/** Rutas que "Preparar mi día" descarga: TODAS las que tienen clientes
+ * pendientes (decisión del usuario: las rutas no están asignadas, cada
+ * vendedor elige la suya en la calle). shalom_mis_rutas_programadas ya
+ * trae solo esas. */
 export function rutasParaPreparar(schedules) {
-    return (schedules || []).filter(
-        (s) =>
-            s.es_visita_express ||
-            (s.tomada_por || []).some((t) => t.es_yo) ||
-            (s.tiene_cartera && s.pendientes_mios > 0)
-    );
+    return [...(schedules || [])];
 }
+
+// Rutas que se preparan a la vez (en vez de una tras otra).
+const RUTAS_EN_PARALELO = 3;
 
 function ventanaRutas() {
     const hoy = new Date();
@@ -369,10 +388,29 @@ export async function prepararDia(orm, {fotos = false, schedules = null} = {}) {
         paso("Formas de pago y estados…", 25);
         await Promise.all([traerFormasPago(orm), traerEtapas(orm), traerCotizaciones(orm).catch(() => null)]);
         const elegidas = schedules || rutasParaPreparar(rutas);
-        for (let i = 0; i < elegidas.length; i++) {
-            const s = elegidas[i];
-            paso(`Ruta ${s.route_name} (${i + 1} de ${elegidas.length})…`, 30 + Math.round((40 * i) / Math.max(1, elegidas.length)));
-            await prepararRuta(orm, s);
+        let hechas = 0;
+        let fallidas = 0;
+        let siguiente = 0;
+        const trabajador = async () => {
+            while (siguiente < elegidas.length) {
+                const s = elegidas[siguiente++];
+                try {
+                    await prepararRuta(orm, s);
+                } catch (error) {
+                    // Una ruta que no baja no frena las demás: se informa al final.
+                    fallidas += 1;
+                    console.error("shalom: no se pudo preparar la ruta", s.route_name, error);
+                }
+                hechas += 1;
+                paso(
+                    `Rutas: ${hechas} de ${elegidas.length} (${s.route_name})…`,
+                    30 + Math.round((40 * hechas) / Math.max(1, elegidas.length))
+                );
+            }
+        };
+        await Promise.all(Array.from({length: Math.min(RUTAS_EN_PARALELO, elegidas.length)}, trabajador));
+        if (fallidas && fallidas === elegidas.length) {
+            throw new SinDatosLocalesError("rutas");
         }
         const ahora = Date.now();
         estadoOffline.preparadoEn = ahora;
@@ -384,8 +422,14 @@ export async function prepararDia(orm, {fotos = false, schedules = null} = {}) {
             estadoOffline.fotosEn = Date.now();
             await guardarLocal("meta:fotos_en", estadoOffline.fotosEn);
         }
-        paso(`Listo: ${elegidas.length} ruta(s) y ${catalogo.productos.length} productos en el teléfono.`, 100);
-        return {rutas: elegidas.length, productos: catalogo.productos.length};
+        const listas = elegidas.length - fallidas;
+        paso(
+            fallidas
+                ? `Listo: ${listas} de ${elegidas.length} rutas (${fallidas} no se pudieron bajar: probá de nuevo con mejor señal) y ${catalogo.productos.length} productos.`
+                : `Listo: ${listas} ruta(s) y ${catalogo.productos.length} productos en el teléfono.`,
+            100
+        );
+        return {rutas: listas, total: elegidas.length, fallidas, productos: catalogo.productos.length};
     } catch (error) {
         paso("No se pudo terminar de preparar. Probá de nuevo con mejor señal.", estadoOffline.progreso);
         throw error;

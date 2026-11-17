@@ -40,7 +40,6 @@ export const estadoOffline = reactive({
     cola: [], // acciones pendientes o con error (copias de lo guardado)
     enviando: false,
     ultimoEnvioOk: null,
-    panelAbierto: false,
     // "Preparar mi día" (ver datos_offline.js)
     preparando: false,
     progreso: 0,

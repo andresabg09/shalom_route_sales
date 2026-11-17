@@ -9,6 +9,7 @@
                     <div class="route-sub" t-esc="props.clienteNombre"/>
                 </div>
                 <button t-if="state.pantalla === 'catalogo'" class="icon-btn recorrido-ayuda-btn" t-on-click="abrirRecorrido" title="Ayuda de esta pantalla" aria-label="Ver la ayuda de esta pantalla"><i class="fa fa-question" aria-hidden="true"/></button>
+                <IndicadorConexion compacta="true"/>
                 <TemaSelector/>
             </div>
 

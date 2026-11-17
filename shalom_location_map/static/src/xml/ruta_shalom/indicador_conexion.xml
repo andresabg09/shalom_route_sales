@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <templates xml:space="preserve">
     <t t-name="shalom_location_map.IndicadorConexion">
-        <button t-att-class="clasePastilla" t-on-click="abrir" title="Conexión y datos sin señal" aria-label="Conexión y datos sin señal">
+        <!-- Mientras "Preparar mi día" descarga: barrita fija arriba de la
+             pantalla, visible aunque el panel esté cerrado. -->
+        <div class="off-barra-global" t-if="offline.preparando" role="progressbar" t-att-aria-valuenow="offline.progreso" aria-valuemin="0" aria-valuemax="100" t-att-title="offline.mensajePreparar">
+            <div class="off-barra-global-relleno" t-att-style="'width:' + Math.max(3, offline.progreso) + '%'"/>
+        </div>
+        <button t-att-class="clasePastilla + (offline.preparando ? ' off-pill-descargando' : '')" t-on-click="abrir" t-att-title="tituloPastilla" t-att-aria-label="tituloPastilla">
             <span class="off-pill-dot"/>
-            <span t-attf-class="{{pendientes.length or conError.length ? 'off-pill-pend' : ''}}" t-esc="textoPastilla"/>
+            <span t-if="!props.compacta" t-attf-class="{{pendientes.length or conError.length ? 'off-pill-pend' : ''}}" t-esc="textoPastilla"/>
+            <span t-elif="textoCompacto" class="off-pill-pend" t-esc="textoCompacto"/>
         </button>
-        <div class="off-panel-overlay" t-if="offline.panelAbierto" t-on-click.self="cerrar">
+        <div class="off-panel-overlay" t-if="local.panelAbierto" t-on-click.self="cerrar">
             <div class="off-panel">
                 <div class="off-panel-titulo">
                     <t t-if="offline.red === 'en_linea'">Estás en línea</t>
@@ -19,9 +25,12 @@
 
                 <div class="off-panel-seccion">Trabajar sin señal</div>
                 <div class="off-item-meta" t-esc="textoPreparado"/>
+                <div class="off-item-meta">
+                    Baja TODAS las rutas con clientes pendientes y el catálogo. Con señal débil puede tardar unos minutos: mejor hacerlo con Wi-Fi antes de salir.
+                </div>
                 <label class="off-item-meta">
                     <input type="checkbox" t-att-checked="local.fotos" t-on-change="toggleFotos" t-att-disabled="offline.preparando"/>
-                    También las fotos del catálogo (pesan bastante: mejor con Wi-Fi)
+                    También las fotos del catálogo (la primera vez pesan bastante: mejor con Wi-Fi; después solo baja las que cambien)
                 </label>
                 <button class="off-btn" t-att-disabled="offline.preparando or offline.red === 'sin_senal'" t-on-click="preparar">
                     <i class="fa fa-download" aria-hidden="true"/>
