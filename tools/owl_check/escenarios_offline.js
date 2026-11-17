@@ -522,5 +522,42 @@ module.exports = (ctx) => {
         ok(bundle.estadoOffline.preparadoEn === null && bundle.estadoOffline.rutasPreparadas.length === 0, "el panel queda en 'Sin descargar'");
         m.destruir();
     };
+
+    // -----------------------------------------------------------------
+    // Ayuda "?": incluye la pastilla de conexión
+    // -----------------------------------------------------------------
+    escenarios.offline_ayuda_conexion = async function () {
+        console.log("\n[Ayuda] el recorrido '?' explica la pastilla de conexión");
+        fijarOnLine(true);
+        ok(["PASOS_HUB", "PASOS_RUTA", "PASOS_CATALOGO"].every((n) => bundle[n].some((p) => p.selector === ".off-pill")),
+            "el paso está en Elegir ruta, dentro de la ruta y el catálogo");
+        const m = await catalogoConPanel();
+        // jsdom no mide nada (getClientRects vacío): se simula que todo se ve.
+        const P = window.Element.prototype;
+        const originales = [P.getClientRects, P.getBoundingClientRect];
+        P.getClientRects = function () { return [{left: 10, top: 10, width: 40, height: 30}]; };
+        P.getBoundingClientRect = function () { return {left: 10, top: 10, right: 50, bottom: 40, width: 40, height: 30, x: 10, y: 10}; };
+        const sinScroll = !P.scrollIntoView;
+        if (sinScroll) {
+            P.scrollIntoView = function () {};
+        }
+        m.comp.state.recorridoAbierto = true;
+        await esperar(() => q(".recorrido-titulo"), 1500);
+        const titulos = [];
+        for (let i = 0; i < 10 && q(".recorrido-titulo"); i++) {
+            titulos.push(q(".recorrido-titulo").textContent.trim());
+            if (/Conexión y lo pendiente/.test(titulos[titulos.length - 1])) {
+                break;
+            }
+            click(q(".recorrido-siguiente"));
+            await sleep(80);
+        }
+        ok(titulos.includes("Conexión y lo pendiente"), "recorriendo la ayuda del catálogo se llega al paso de la conexión", titulos);
+        [P.getClientRects, P.getBoundingClientRect] = originales;
+        if (sinScroll) {
+            delete P.scrollIntoView;
+        }
+        m.destruir();
+    };
 };
 

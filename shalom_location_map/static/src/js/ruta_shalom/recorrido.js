@@ -49,6 +49,14 @@ const PASO_AYUDA = {
     texto: "Toca este botón cuando quieras para repetir esta ayuda.",
 };
 
+// La pastilla de conexión (modo offline, ver indicador_conexion.js).
+const PASO_CONEXION = {
+    selector: ".off-pill",
+    titulo: "Conexión y lo pendiente",
+    texto:
+        "Verde: en línea. Ámbar: señal débil. Rojo: sin señal (igual puedes seguir vendiendo). Tócalo para ver qué tienes en el teléfono (rutas, catálogo y fotos), bajar los datos del día con «Preparar mi día» y revisar lo que espera señal: ahí ves cada pedido guardado y lo puedes eliminar si todavía no se envió.",
+};
+
 export const PASOS_HUB = [
     {
         selector: ".search-row .search-box-live",
@@ -103,6 +111,7 @@ export const PASOS_HUB = [
         texto:
             "Tus clientes grandes que toca visitar en los próximos 3 días, para avisarles por WhatsApp que vas.",
     },
+    PASO_CONEXION,
     PASO_AYUDA,
 ];
 
@@ -119,6 +128,7 @@ export const PASOS_RUTA = [
         texto:
             "Escribe el nombre del cliente. Si está en esta ruta, aparece en la lista. Si está en otra ruta, te sale el botón «Cambiar a …» para ir directo a él, por ejemplo cuando te pide productos fuera de tu ruta.",
     },
+    PASO_CONEXION,
     PASO_AYUDA,
 ];
 
@@ -147,6 +157,7 @@ export const PASOS_CATALOGO = [
         texto:
             "Cambia cómo ves los productos: en lista (más productos a la vez) o en cuadrícula (fotos más grandes). Tu celular recuerda lo que elijas.",
     },
+    PASO_CONEXION,
     PASO_AYUDA,
 ];
 
