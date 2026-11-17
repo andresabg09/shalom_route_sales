@@ -293,9 +293,84 @@ function precargarImagen(url) {
     });
 }
 
-/** Descarga las fotos de las tarjetas del catálogo a la caché del
- * navegador (de a pocas a la vez). onProgreso(hechas, total). */
+// Fotos guardadas en el teléfono (Cache Storage), como los datos offline:
+// el service worker (controllers/offline_sw.py, mismo nombre de caché) las
+// sirve desde acá al instante, con o sin señal. La caché HTTP del navegador
+// no alcanza: en Android es chica y la comparten todos los sitios.
+export const CACHE_FOTOS = "shalom-fotos-v1";
+const TAMANOS_FOTO_GUARDADA = ["image_256", "image_512"];
+
+async function abrirCacheFotos() {
+    try {
+        return typeof caches !== "undefined" ? await caches.open(CACHE_FOTOS) : null;
+    } catch {
+        return null;
+    }
+}
+
+function urlAbsoluta(url) {
+    return new URL(url, window.location.origin).href;
+}
+
+/** Guarda una foto en el teléfono. Si ya estaba, no se vuelve a bajar. */
+async function guardarFoto(cache, url) {
+    if (!cache) {
+        // Sin Cache Storage: al menos queda en la caché del navegador.
+        return precargarImagen(url);
+    }
+    try {
+        const clave = urlAbsoluta(url);
+        if (await cache.match(clave)) {
+            return true;
+        }
+        const respuesta = await fetch(clave, {credentials: "same-origin"});
+        const tipo = respuesta.headers.get("content-type") || "";
+        if (respuesta.status !== 200 || !tipo.startsWith("image/")) {
+            return false;
+        }
+        await cache.put(clave, respuesta);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/** Borra del teléfono las fotos que ya no sirven: versiones viejas (la foto
+ * o el producto cambiaron en Odoo) y productos que ya no están. */
+export async function limpiarFotosViejas(productos) {
+    // Sin las versiones de las fotos (shalom_marcas_fotos falló), no se
+    // sabe cuáles son las vigentes: no se borra nada.
+    if (!productos.length || productos.some((p) => !p.foto_v)) {
+        return 0;
+    }
+    const cache = await abrirCacheFotos();
+    if (!cache) {
+        return 0;
+    }
+    const vigentes = new Set();
+    for (const producto of productos) {
+        for (const campo of TAMANOS_FOTO_GUARDADA) {
+            vigentes.add(urlAbsoluta(urlFotoProducto(producto.id, campo, producto.foto_v)));
+        }
+    }
+    let borradas = 0;
+    try {
+        for (const pedido of await cache.keys()) {
+            if (!vigentes.has(pedido.url)) {
+                await cache.delete(pedido);
+                borradas += 1;
+            }
+        }
+    } catch {
+        // si falla, se limpia la próxima vez
+    }
+    return borradas;
+}
+
+/** Guarda en el teléfono las fotos de las tarjetas del catálogo (de a pocas
+ * a la vez). Las que ya están no se bajan. onProgreso(hechas, total). */
 export async function precargarFotos(productos, onProgreso) {
+    const cache = await abrirCacheFotos();
     let hechas = 0;
     let siguiente = 0;
     const trabajador = async () => {
@@ -304,9 +379,8 @@ export async function precargarFotos(productos, onProgreso) {
                 return;
             }
             const producto = productos[siguiente++];
-            // Misma URL que las tarjetas del catálogo: si ya estaba guardada,
-            // el navegador la sirve de su caché sin bajarla de nuevo.
-            await precargarImagen(urlFotoProducto(producto.id, "image_512", producto.foto_v));
+            // Misma URL que las tarjetas del catálogo y que la foto ampliada.
+            await guardarFoto(cache, urlFotoProducto(producto.id, "image_512", producto.foto_v));
             hechas += 1;
             if (onProgreso) {
                 onProgreso(hechas, productos.length);
@@ -465,6 +539,13 @@ export async function prepararSoloNuevas(orm) {
  * espera enviarse queda intacta. */
 export async function borrarDatosDescargados() {
     await borrarTodoLocal();
+    try {
+        if (typeof caches !== "undefined") {
+            await caches.delete(CACHE_FOTOS);
+        }
+    } catch {
+        // sin Cache Storage: nada que borrar
+    }
     estadoOffline.preparadoEn = null;
     estadoOffline.fotosEn = null;
     estadoOffline.rutasPreparadas = [];
@@ -584,6 +665,7 @@ export async function prepararDia(orm, {fotos = false, schedules = null} = {}) {
         await guardarLocal("meta:productos", estadoOffline.productosGuardados);
         // Lo viejo (ciclos terminados) se borra: el teléfono no acumula.
         await limpiarDatosViejos(elegidas.map((s) => s.id), {soloRutas: fallidas > 0});
+        await limpiarFotosViejas(catalogo.productos);
         if (fotos) {
             await precargarFotos(catalogo.productos, (hechas, total) =>
                 paso(`Fotos del catálogo: ${hechas} de ${total}…`, 70 + Math.round((30 * hechas) / Math.max(1, total)))

@@ -382,8 +382,13 @@ class TestPaginaOffline(HttpCase):
     def test_service_worker_lleva_la_marca_y_lo_de_odoo(self):
         respuesta = self.url_open("/web/service-worker.js")
         self.assertEqual(respuesta.status_code, 200)
-        self.assertIn("shalom-offline-1", respuesta.text)
+        self.assertIn("shalom-offline-2", respuesta.text)
         self.assertIn("/odoo/offline", respuesta.text)  # el de Odoo sigue intacto
+        # fotos del catálogo guardadas en el teléfono (solo 256/512 con versión)
+        self.assertIn('"shalom-fotos-v1"', respuesta.text)
+        self.assertIn("image_(256|512)", respuesta.text)
+        self.assertIn("skipWaiting", respuesta.text)
+        self.assertLess(respuesta.text.index("/odoo/offline"), respuesta.text.index("shalom-fotos-v1"))
         pagina = self.url_open("/odoo/offline")
         self.assertIn("Sin señal", pagina.text)
         self.assertIn("Preparar mi día", pagina.text)

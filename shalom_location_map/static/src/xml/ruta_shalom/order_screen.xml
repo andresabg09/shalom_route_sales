@@ -465,12 +465,16 @@
                     t-on-pointercancel="onFotoPointerUp"
                     t-on-wheel="onFotoWheel"
                 >
+                    <div class="foto-ampliada-ayuda" t-if="state.fotoAmpliada.sinFoto" t-esc="textoSinFoto"/>
+                    <!-- alt vacío: el nombre ya va debajo; nunca en el lugar de la foto -->
                     <img
+                        t-else=""
                         t-ref="fotoAmpliadaImg"
                         t-att-src="state.fotoAmpliada.url"
-                        t-att-alt="state.fotoAmpliada.nombre"
+                        alt=""
                         draggable="false"
-                        t-on-error="onImagenError"
+                        t-on-load="onFotoAmpliadaCargada"
+                        t-on-error="onFotoAmpliadaError"
                     />
                 </div>
                 <div class="foto-ampliada-nombre" t-esc="state.fotoAmpliada.nombre"/>

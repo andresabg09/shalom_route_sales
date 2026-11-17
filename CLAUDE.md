@@ -218,6 +218,11 @@ the short version:
   - **Paquete por ruta:** `fsm.route.schedule.shalom_paquete_offline`.
   - **Página sin señal:** `views/offline_page.xml` + `controllers/offline_sw.py`.
     Si se cambia esa página, subir `VERSION_PAGINA_OFFLINE`.
+  - **Fotos del catálogo en el teléfono:** `controllers/offline_sw.py` agrega al
+    service worker de Odoo una caché propia (`shalom-fotos-v1`, solo
+    `image_256`/`image_512` con `?unique=`); `datos_offline.js` la llena y la
+    limpia (`precargarFotos`, `limpiarFotosViejas`). Las de 1024/1920 px (zoom)
+    van por internet. La foto ampliada abre con la de 512 y mejora sola.
   - **Pruebas:**
     - `tools/owl_check/escenarios_offline.js`
     - `tools/odoo_harness/.../test_98_offline.py`

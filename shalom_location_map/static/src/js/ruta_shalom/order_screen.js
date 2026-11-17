@@ -1262,15 +1262,86 @@ export class OrderScreen extends Component {
         if (this.state.fotoAmpliada) {
             return;
         }
+        // Foto progresiva. Bug real reportado ("no aparece la foto, sino el
+        // nombre del producto"): se abría directo la de 1024 px, que nunca se
+        // había descargado; con señal floja tardaba o fallaba y el navegador
+        // mostraba el texto alternativo (el nombre). Ahora:
+        //  1. abre AL INSTANTE con la misma foto de la tarjeta (512 px, ya
+        //     guardada en el teléfono: misma URL que el catálogo);
+        //  2. con señal, baja la de 1024 px por detrás y la cambia recién
+        //     cuando terminó de cargar;
+        //  3. al acercar (zoom), igual con la original (1920 px).
+        // Nunca se reemplaza lo que se ve por algo que no cargó.
+        const v = producto.foto_v;
         this.state.fotoAmpliada = {
-            // Primero la de 1024 px (solo al abrir la foto, no en cada tarjeta)
-            url: this._urlFoto(producto.id, "image_1024", producto.foto_v),
-            // la original (1920 px) se pide solo si el vendedor acerca la foto
-            urlGrande: `/web/image/product.product/${producto.id}/image_1920`,
+            url: this._urlFoto(producto.id, TAMANO_FOTO_TARJETA, v),
+            urlBase: this._urlFoto(producto.id, TAMANO_FOTO_TARJETA, v),
+            urlMini: this._urlFoto(producto.id, "image_256", v),
+            urlMedia: this._urlFoto(producto.id, "image_1024", v),
+            urlGrande: this._urlFoto(producto.id, "image_1920", v),
+            nivel: 0, // 0 = 512 px, 1 = 1024 px, 2 = 1920 px
+            sinFoto: false,
             nombre: producto.name,
         };
         this._zoom = {escala: 1, x: 0, y: 0, punteros: new Map(), pinch: null, arrastre: null, ultimoTap: null, movio: false, grandePedida: false};
         abrirNivel({tipo: "foto"});
+        this._mejorarFoto(this.state.fotoAmpliada, "urlMedia", 1);
+    }
+
+    /** Baja por detrás una versión mejor de la foto ampliada y la muestra
+     * solo si cargó bien (y la foto sigue abierta). Sin señal, ni se pide. */
+    _mejorarFoto(foto, campo, nivel) {
+        if (sinConexion()) {
+            return;
+        }
+        const precarga = new Image();
+        precarga.onload = () => {
+            const actual = this.state.fotoAmpliada;
+            if (actual && actual === foto && actual.nivel < nivel && !actual.sinFoto) {
+                actual.url = actual[campo];
+                actual.nivel = nivel;
+            }
+        };
+        precarga.src = foto[campo];
+    }
+
+    /** Tamaño fijo de la foto en pantalla (el "contain" del lienzo, hasta
+     * 1024 px de lado): así, al cambiar de 512 a 1024 px no salta de tamaño,
+     * solo se ve más nítida. */
+    onFotoAmpliadaCargada(ev) {
+        const img = ev.target;
+        const lienzo = this.fotoLienzoRef.el;
+        if (!lienzo || !img.naturalWidth || !img.naturalHeight) {
+            return;
+        }
+        const r = img.naturalWidth / img.naturalHeight;
+        const ancho = Math.min(lienzo.clientWidth, lienzo.clientHeight * r, r >= 1 ? 1024 : 1024 * r);
+        if (ancho > 0) {
+            img.style.width = `${Math.round(ancho)}px`;
+            img.style.height = `${Math.round(ancho / r)}px`;
+        }
+    }
+
+    /** Si falla la foto que se ve: la mejor vuelve a la de 512 px; la de
+     * 512 prueba con la miniatura (256 px); si tampoco hay, un aviso en vez
+     * del nombre del producto. */
+    onFotoAmpliadaError() {
+        const foto = this.state.fotoAmpliada;
+        if (!foto) {
+            return;
+        }
+        if (foto.url !== foto.urlBase && foto.url !== foto.urlMini) {
+            foto.url = foto.urlBase;
+            foto.nivel = 0;
+        } else if (foto.url === foto.urlBase) {
+            foto.url = foto.urlMini;
+        } else {
+            foto.sinFoto = true;
+        }
+    }
+
+    get textoSinFoto() {
+        return sinConexion() ? "La foto se verá cuando haya señal" : "No se pudo cargar la foto";
     }
 
     cerrarFoto() {
@@ -1312,15 +1383,9 @@ export class OrderScreen extends Component {
             this.fotoLienzoRef.el.classList.toggle("con-zoom", z.escala > 1.01);
         }
         if (z.escala > 1.4 && !z.grandePedida && this.state.fotoAmpliada) {
+            // Al acercar: la original (1920 px), por internet.
             z.grandePedida = true;
-            const foto = this.state.fotoAmpliada;
-            const precarga = new Image();
-            precarga.onload = () => {
-                if (this.state.fotoAmpliada === foto) {
-                    foto.url = foto.urlGrande;
-                }
-            };
-            precarga.src = foto.urlGrande;
+            this._mejorarFoto(this.state.fotoAmpliada, "urlGrande", 2);
         }
     }
 

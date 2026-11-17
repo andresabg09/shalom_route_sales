@@ -1,19 +1,96 @@
 # License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
-"""Modo offline (Fase 4): marca de versión al final del service worker de
-Odoo 18 (/web/service-worker.js).
+"""Modo offline: agregados al service worker de Odoo 18 (/web/service-worker.js).
 
-El service worker de Odoo guarda la página "sin señal" (/odoo/offline) al
-instalarse, y el navegador solo lo reinstala cuando su contenido cambia.
-Esta línea de comentario cambia cuando cambia esa página (ver
-views/offline_page.xml), para que los teléfonos guarden la versión nueva.
+1. Marca de versión. El service worker de Odoo guarda la página "sin señal"
+   (/odoo/offline) al instalarse, y el navegador solo lo reinstala cuando su
+   contenido cambia. La línea de versión cambia cuando cambia esa página
+   (ver views/offline_page.xml) o este archivo, para que los teléfonos tomen
+   la versión nueva.
+2. Fotos del catálogo guardadas en el teléfono (Cache Storage
+   "shalom-fotos-v1"), igual que los datos del modo offline: primero lo
+   guardado (al instante, también sin señal) y, si falta, internet.
+   Bug real reportado: la caché HTTP de Chrome en Android es chica y la
+   comparten todos los sitios; las ~2300 fotos de 512 px no entran y Chrome
+   las iba sacando, así que el catálogo no siempre cargaba al instante.
+   Solo se interceptan fotos de producto de 256/512 px CON versión
+   (?unique=), que Odoo ya sirve como inmutables por 1 año: el resultado es
+   el mismo que la caché HTTP, pero en almacenamiento propio del sitio. Las
+   de 1024/1920 px (zoom) no se tocan: van por internet.
+   Ante cualquier error, la foto se pide a internet como siempre.
+
 Mismo mecanismo que usa el módulo `mail` para agregar sus notificaciones:
 se extiende _get_service_worker_content(), no se reemplaza nada."""
 from odoo.addons.web.controllers import webmanifest
 
-VERSION_PAGINA_OFFLINE = "shalom-offline-1"
+VERSION_PAGINA_OFFLINE = "shalom-offline-2"
+
+# Mismo nombre que CACHE_FOTOS en static/src/js/ruta_shalom/datos_offline.js
+CACHE_FOTOS = "shalom-fotos-v1"
+
+SW_FOTOS = """
+// shalom: fotos del catálogo guardadas en el teléfono
+(() => {
+    const CACHE_FOTOS = "%(cache)s";
+    const PATRON = /^\\/web\\/image\\/product\\.product\\/\\d+\\/image_(256|512)$/;
+    // La versión nueva toma el control sin cerrar la app (los vendedores no
+    // la cierran en todo el día).
+    self.addEventListener("install", () => self.skipWaiting());
+    self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+    // Clave de la foto (sin el _r de los reintentos) o null si no se guarda.
+    const claveFoto = (request) => {
+        if (request.method !== "GET") {
+            return null;
+        }
+        const aceptar = request.headers.get("accept") || "";
+        if (request.mode === "navigate" || aceptar.includes("text/html")) {
+            return null;
+        }
+        const url = new URL(request.url);
+        if (url.origin !== self.location.origin || !PATRON.test(url.pathname) || !url.searchParams.get("unique")) {
+            return null;
+        }
+        for (const clave of url.searchParams.keys()) {
+            if (clave !== "unique" && clave !== "_r") {
+                return null;
+            }
+        }
+        url.searchParams.delete("_r");
+        return url.href;
+    };
+    const servirFoto = async (request, clave) => {
+        let cache = null;
+        try {
+            cache = await caches.open(CACHE_FOTOS);
+            const guardada = await cache.match(clave);
+            if (guardada) {
+                return guardada;
+            }
+        } catch (error) {
+            cache = null;
+        }
+        const respuesta = await fetch(request);
+        const tipo = respuesta.headers.get("content-type") || "";
+        if (cache && respuesta.status === 200 && tipo.startsWith("image/")) {
+            cache.put(clave, respuesta.clone()).catch(() => {});
+        }
+        return respuesta;
+    };
+    self.addEventListener("fetch", (event) => {
+        let clave = null;
+        try {
+            clave = claveFoto(event.request);
+        } catch (error) {
+            clave = null;
+        }
+        if (clave) {
+            event.respondWith(servirFoto(event.request, clave));
+        }
+    });
+})();
+""" % {"cache": CACHE_FOTOS}
 
 
 class ShalomWebManifest(webmanifest.WebManifest):
     def _get_service_worker_content(self):
         body = super()._get_service_worker_content()
-        return body + f"\n// {VERSION_PAGINA_OFFLINE}\n"
+        return body + SW_FOTOS + f"\n// {VERSION_PAGINA_OFFLINE}\n"

@@ -39,8 +39,120 @@ module.exports = (ctx) => {
         const src2 = img.getAttribute("src");
         ok(/image_512\?unique=[\d-]+&_r=\d+$/.test(src2 || ""), "reintento conserva unique y agrega _r", src2);
         m.comp.abrirFoto(m.comp.state.productos ? m.comp.state.productos[0] : {id: 1, name: "x"});
-        ok(/image_1024\?unique=/.test((m.comp.state.fotoAmpliada || {}).url || ""), "foto ampliada pide image_1024 (solo al abrirla)", m.comp.state.fotoAmpliada);
+        ok(/image_512\?unique=/.test((m.comp.state.fotoAmpliada || {}).url || ""), "foto ampliada abre con la de 512 px de la tarjeta (ya guardada)", m.comp.state.fotoAmpliada);
+        m.comp.cerrarFoto();
         m.destruir();
+    };
+
+    // -----------------------------------------------------------------
+    // Foto ampliada progresiva: 512 al instante, 1024 por detrás, 1920 al
+    // acercar; nunca el nombre del producto en lugar de la foto.
+    // -----------------------------------------------------------------
+    escenarios.offline_foto_ampliada = async function () {
+        console.log("\n[Fotos] foto ampliada: al instante con la guardada y mejora sola por internet");
+        fijarOnLine(true);
+        const ImageReal = globalThis.Image;
+        const pedidas = [];
+        globalThis.Image = class {
+            constructor() { pedidas.push(this); }
+            set src(v) { this._src = v; }
+            get src() { return this._src; }
+        };
+        try {
+            const m = await montar(bundle.OrderScreen, {
+                orderId: 5, clienteNombre: "Cliente X", onCerrar: () => {}, onConfirmado: () => {},
+            }, handlersOrder({
+                "fsm.order.shalom_marcas_fotos": (a) => Object.fromEntries(a[0].map((id) => [id, "20261101093000"])),
+            }));
+            await esperar(() => !m.comp.state.cargando && qa(".product-card").length === 3);
+            const tarjeta = q(".product-card .product-thumb").getAttribute("src");
+            m.comp.abrirFoto(m.comp.state.productos.find((p) => p.id === 1));
+            await sleep(30);
+            const img = q(".foto-ampliada-lienzo img");
+            ok(img && img.getAttribute("src") === tarjeta, "abre con la MISMA foto de la tarjeta (sin esperar red)", [img && img.getAttribute("src"), tarjeta]);
+            ok(img && img.getAttribute("alt") === "", "el nombre nunca va en el lugar de la foto (alt vacío)");
+            const media = pedidas.find((i) => /image_1024\?unique=20261101093000$/.test(i.src));
+            ok(!!media, "pide la de 1024 px por detrás, con versión (queda en caché)", pedidas.map((i) => i.src));
+            ok(/image_512/.test(m.comp.state.fotoAmpliada.url), "hasta que no carga, se sigue viendo la de 512 px");
+            media.onload();
+            await sleep(30);
+            ok(/image_1024/.test(q(".foto-ampliada-lienzo img").getAttribute("src")), "cuando cargó, cambia a la de 1024 px");
+            // acercar: pide la original con versión
+            m.comp._zoom.escala = 2;
+            m.comp._aplicarZoom();
+            const grande = pedidas.find((i) => /image_1920\?unique=20261101093000$/.test(i.src));
+            ok(!!grande, "al acercar pide la original (1920 px) con versión", pedidas.map((i) => i.src));
+            grande.onerror && grande.onerror();
+            await sleep(20);
+            ok(/image_1024/.test(m.comp.state.fotoAmpliada.url), "si la original no carga, se queda la que se ve");
+            // la que se ve falla (se borró de la caché): vuelve a la de 512
+            q(".foto-ampliada-lienzo img").dispatchEvent(new window.Event("error"));
+            await sleep(20);
+            ok(/image_512/.test(m.comp.state.fotoAmpliada.url), "si falla la mejor, vuelve a la de 512 px");
+            q(".foto-ampliada-lienzo img").dispatchEvent(new window.Event("error"));
+            await sleep(20);
+            ok(/image_256/.test(m.comp.state.fotoAmpliada.url), "si falla la de 512, prueba la miniatura");
+            fijarOnLine(false);
+            q(".foto-ampliada-lienzo img").dispatchEvent(new window.Event("error"));
+            await sleep(30);
+            const aviso = q(".foto-ampliada-lienzo .foto-ampliada-ayuda");
+            ok(aviso && /cuando haya señal/.test(aviso.textContent) && !q(".foto-ampliada-lienzo img"), "sin ninguna foto: aviso, no el nombre", aviso && aviso.textContent);
+            m.comp.cerrarFoto();
+            // sin señal: abre con la guardada y no pide nada más
+            const antes = pedidas.length;
+            m.comp.abrirFoto(m.comp.state.productos.find((p) => p.id === 2));
+            await sleep(20);
+            ok(pedidas.length === antes && /image_512/.test(q(".foto-ampliada-lienzo img").getAttribute("src")), "sin señal: muestra la guardada y no intenta bajar más");
+            m.comp.cerrarFoto();
+            m.destruir();
+        } finally {
+            globalThis.Image = ImageReal;
+            fijarOnLine(true);
+        }
+    };
+
+    // -----------------------------------------------------------------
+    // Fotos guardadas en el teléfono (Cache Storage): no se bajan dos veces
+    // y se borran las versiones viejas.
+    // -----------------------------------------------------------------
+    escenarios.offline_fotos_en_telefono = async function () {
+        console.log("\n[Fotos] guardadas en el teléfono: no se repiten y se limpia lo viejo");
+        fijarOnLine(true);
+        const guardado = new Map();
+        const bajadas = [];
+        const cacheFalsa = {
+            match: async (u) => guardado.get(typeof u === "string" ? u : u.url),
+            put: async (u, r) => { guardado.set(u, r); },
+            keys: async () => [...guardado.keys()].map((url) => ({url})),
+            delete: async (pedido) => guardado.delete(pedido.url),
+        };
+        const cachesReal = globalThis.caches;
+        const fetchReal = globalThis.fetch;
+        let borradaToda = false;
+        globalThis.caches = {open: async () => cacheFalsa, delete: async () => { borradaToda = true; guardado.clear(); return true; }};
+        globalThis.fetch = async (url) => {
+            bajadas.push(url);
+            return {status: 200, headers: {get: () => "image/jpeg"}};
+        };
+        try {
+            const productos = [{id: 1, foto_v: "A1"}, {id: 2, foto_v: "B1"}];
+            await bundle.precargarFotos(productos);
+            ok(bajadas.length === 2 && guardado.size === 2, "primera vez: baja y guarda cada foto", bajadas);
+            ok([...guardado.keys()].every((k) => /\/web\/image\/product\.product\/\d\/image_512\?unique=(A1|B1)$/.test(k)), "misma URL que las tarjetas del catálogo", [...guardado.keys()]);
+            await bundle.precargarFotos(productos);
+            ok(bajadas.length === 2, "segunda vez: no se baja nada (ya están en el teléfono)", bajadas.length);
+            // cambia la foto del producto 1 y el 2 sale del catálogo
+            const nuevos = [{id: 1, foto_v: "A2"}];
+            await bundle.precargarFotos(nuevos);
+            const borradas = await bundle.limpiarFotosViejas(nuevos);
+            ok(borradas === 2 && guardado.size === 1 && /unique=A2$/.test([...guardado.keys()][0]), "borra la versión vieja y la del producto que ya no está", [...guardado.keys()]);
+            ok((await bundle.limpiarFotosViejas([{id: 1}])) === 0 && guardado.size === 1, "sin versiones de fotos no borra nada (no sabe cuáles son las vigentes)");
+            await bundle.borrarDatosDescargados();
+            ok(borradaToda, "'Borrar datos descargados' también borra las fotos");
+        } finally {
+            globalThis.caches = cachesReal;
+            globalThis.fetch = fetchReal;
+        }
     };
 
     // -----------------------------------------------------------------
@@ -601,31 +713,60 @@ module.exports = (ctx) => {
         console.log("\n[Panel] celular: arrastrar hacia abajo cierra, como la hoja de visita");
         const m = await panelConMuchasRutas();
         const panel = q(".off-panel");
+        // Los movimientos se escuchan en el panel (no pasivo) para que el
+        // navegador no los tome como scroll: se disparan sobre el panel.
+        const mover = (y) => toque("touchmove", y, q(".off-panel") || window);
         toque("touchstart", 100, q(".off-estado"));
         await sleep(30);
-        toque("touchmove", 150);
-        await sleep(100);
+        const primer = new window.Event("touchmove", {bubbles: true, cancelable: true});
+        primer.touches = [{clientY: 150}];
+        q(".off-estado").dispatchEvent(primer);
+        await sleep(60);
         const p2 = q(".off-panel");
-        ok(/translateY\(50px\)/.test(p2.getAttribute("style") || ""), "el panel sigue al dedo", [p2.getAttribute("style"), p2 === panel]);
-        ok(p2.classList.contains("off-panel-arrastrando"), "sin transición mientras se arrastra", p2.className);
+        ok(/translateY\(50px\)/.test(p2.style.transform), "el panel sigue al dedo", [p2.style.transform, p2 === panel]);
+        ok(primer.defaultPrevented, "el gesto hacia abajo se toma como arrastre (el navegador no lo hace scroll)");
+        ok(p2.style.transition === "none", "sin transición mientras se arrastra", p2.style.transition);
         toque("touchend", 0);
         await sleep(100);
-        ok(q(".off-panel") && !(q(".off-panel").getAttribute("style") || "").includes("translateY"), "soltar antes de 90 px: vuelve a su lugar");
+        ok(q(".off-panel") && !q(".off-panel").style.transform, "soltar antes de 90 px: vuelve a su lugar", q(".off-panel") && q(".off-panel").style.transform);
+        // hacia arriba: es scroll normal, no se toca
+        toque("touchstart", 300, q(".off-estado"));
+        const arriba = new window.Event("touchmove", {bubbles: true, cancelable: true});
+        arriba.touches = [{clientY: 200}];
+        q(".off-estado").dispatchEvent(arriba);
+        mover(150);
+        await sleep(60);
+        ok(!arriba.defaultPrevented && !q(".off-panel").style.transform, "deslizar hacia arriba sigue siendo scroll normal");
+        toque("touchend", 0);
         // con el contenido scrolleado, el gesto es scroll, no cierra
-        q(".off-panel").scrollTop = 200;
         Object.defineProperty(q(".off-panel"), "scrollTop", {value: 200, configurable: true});
         toque("touchstart", 100, q(".off-estado"));
-        toque("touchmove", 400);
+        mover(400);
         toque("touchend", 0);
         await sleep(260);
         ok(!!q(".off-panel"), "con el panel scrolleado, arrastrar NO lo cierra");
-        delete q(".off-panel").scrollTop;
         Object.defineProperty(q(".off-panel"), "scrollTop", {value: 0, configurable: true});
         toque("touchstart", 100, q(".off-estado"));
-        toque("touchmove", 260);
+        mover(180);
+        mover(260);
+        await sleep(40);
         toque("touchend", 0);
         await sleep(300);
         ok(!q(".off-panel"), "arriba del todo y más de 90 px: se cierra");
+        // sin redibujos de Owl durante el gesto: el panel es el mismo nodo
+        click(q(".off-pill"));
+        await esperar(() => q(".off-panel"));
+        await sleep(50);
+        const nodo = m.comp.__owl__;
+        const renderOriginal = nodo.render;
+        let dibujos = 0;
+        nodo.render = function (...a) { dibujos++; return renderOriginal.apply(this, a); };
+        toque("touchstart", 100, q(".off-estado"));
+        for (let y = 110; y <= 160; y += 10) { mover(y); await sleep(20); }
+        nodo.render = renderOriginal;
+        ok(dibujos === 0 && /translateY/.test(q(".off-panel").style.transform), "arrastrar no redibuja el panel con Owl (solo cambia su posición)", dibujos);
+        toque("touchend", 0);
+        await sleep(250);
         if (process.env.SHALOM_VOLCADO) {
             // Para la prueba en Chromium real: el panel abierto, renderizado.
             click(q(".off-pill"));
