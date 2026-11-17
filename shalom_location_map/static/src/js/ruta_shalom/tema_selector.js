@@ -51,6 +51,9 @@ export function aplicarTema(valor) {
         .forEach((raiz) => raiz.setAttribute("data-shalom-tema", valor));
 }
 
+// Ancho mínimo del menú (min-width de .tema-menu en ruta_shalom.scss).
+const ANCHO_MENU_TEMA = 176;
+
 export class TemaSelector extends Component {
     static template = "shalom_location_map.TemaSelector";
     static props = {};
@@ -58,7 +61,10 @@ export class TemaSelector extends Component {
     setup() {
         this.temas = TEMAS;
         this.raiz = useRef("raiz");
-        this.state = useState({tema: leerTema(), abierto: false});
+        // abreIzquierda: el menú se ancla a la izquierda del botón (abre
+        // hacia la derecha) cuando hacia la izquierda no entra -- ver
+        // toggleMenu().
+        this.state = useState({tema: leerTema(), abierto: false, abreIzquierda: false});
         // Cada pantalla monta su propio selector: aplicar al montar
         // asegura que la raíz tenga el atributo aunque el vendedor
         // nunca toque el botón.
@@ -76,6 +82,16 @@ export class TemaSelector extends Component {
     }
 
     toggleMenu() {
+        // El menú abre normalmente hacia la izquierda (anclado al borde
+        // derecho del botón). Bug real reportado: cuando la cabecera no
+        // tiene lugar y el botón cae a la izquierda de la pantalla (pasó al
+        // agregar la pastilla de conexión), el menú se salía del celular.
+        // Se mide al abrir: si no entra hacia la izquierda, abre hacia la
+        // derecha. Funciona sin importar cómo se acomode cada cabecera.
+        if (!this.state.abierto && this.raiz.el) {
+            const caja = this.raiz.el.getBoundingClientRect();
+            this.state.abreIzquierda = caja.right < ANCHO_MENU_TEMA + 12;
+        }
         this.state.abierto = !this.state.abierto;
     }
 

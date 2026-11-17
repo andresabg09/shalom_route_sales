@@ -190,6 +190,12 @@
         border-radius: var(--shalom-radius-md);
         box-shadow: var(--shalom-shadow);
     }
+    // El botón quedó cerca del borde izquierdo: el menú abre hacia la
+    // derecha para no salirse de la pantalla (ver tema_selector.js).
+    .tema-menu.tema-menu-izq {
+        right: auto;
+        left: 0;
+    }
     .tema-opcion {
         display: flex;
         align-items: center;

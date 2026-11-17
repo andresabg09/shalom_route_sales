@@ -336,5 +336,24 @@ module.exports = (ctx) => {
         ok(/4 de 5 rutas/.test(bundle.estadoOffline.mensajePreparar), "el panel avisa cuántas bajaron", bundle.estadoOffline.mensajePreparar);
         m.destruir();
     };
+
+    // -----------------------------------------------------------------
+    // Selector de tema: el menú no se sale de la pantalla
+    // -----------------------------------------------------------------
+    escenarios.tema_menu_no_se_sale = async function () {
+        console.log("\n[Tema] el menú abre hacia donde hay lugar");
+        const probar = async (derecha) => {
+            const m = await montar(bundle.TemaSelector, {}, {});
+            const raiz = q(".tema-selector");
+            raiz.getBoundingClientRect = () => ({left: derecha - 40, right: derecha, top: 0, bottom: 40, width: 40, height: 40});
+            click(q(".tema-btn"));
+            await esperar(() => q(".tema-menu"), 500);
+            const izq = q(".tema-menu").classList.contains("tema-menu-izq");
+            m.destruir();
+            return izq;
+        };
+        ok(await probar(60) === true, "botón pegado a la izquierda: el menú abre hacia la derecha");
+        ok(await probar(380) === false, "botón a la derecha: el menú abre hacia la izquierda, como siempre");
+    };
 };
 

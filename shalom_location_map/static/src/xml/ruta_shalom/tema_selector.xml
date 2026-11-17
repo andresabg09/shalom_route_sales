@@ -10,7 +10,7 @@
                 aria-haspopup="true"
                 t-att-aria-expanded="state.abierto ? 'true' : 'false'"
             ><i t-attf-class="fa {{temaActual.icono}}" aria-hidden="true"/></button>
-            <div class="tema-menu" t-if="state.abierto" role="menu">
+            <div t-attf-class="tema-menu {{state.abreIzquierda ? 'tema-menu-izq' : ''}}" t-if="state.abierto" role="menu">
                 <button
                     type="button"
                     role="menuitemradio"
