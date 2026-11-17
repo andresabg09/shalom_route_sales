@@ -14,7 +14,14 @@
 
         <!-- Panel (diseño aprobado: "Panel de conexión Ruta Shalom") -->
         <div class="off-panel-overlay" t-if="local.panelAbierto" t-on-click.self="cerrar">
-            <div class="off-panel" role="dialog" aria-label="Conexión y datos sin señal">
+            <div
+                t-attf-class="off-panel {{local.arrastrando ? 'off-panel-arrastrando' : ''}}"
+                role="dialog"
+                aria-label="Conexión y datos sin señal"
+                t-ref="panel"
+                t-att-style="estiloPanel"
+                t-on-touchstart="iniciarArrastre"
+            >
                 <div class="off-panel-asa"/>
 
                 <!-- (a) Estado de la conexión -->

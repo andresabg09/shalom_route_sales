@@ -559,5 +559,90 @@ module.exports = (ctx) => {
         }
         m.destruir();
     };
+
+    // -----------------------------------------------------------------
+    // Panel en celular: arrastrar para cerrar (como la hoja de visita)
+    // -----------------------------------------------------------------
+    function toque(tipo, y, destino) {
+        const ev = new window.Event(tipo, {bubbles: true, cancelable: true});
+        ev.touches = tipo === "touchend" ? [] : [{clientY: y}];
+        (destino || window).dispatchEvent(ev);
+    }
+
+    async function panelConMuchasRutas() {
+        fijarOnLine(true);
+        const m = await montar(bundle.IndicadorConexion, {}, {});
+        const E = bundle.estadoOffline;
+        const ids = Array.from({length: 12}, (_, i) => i + 1);
+        Object.assign(E, {
+            preparadoEn: Date.now(), rutasPreparadas: ids.slice(0, 9), rutasDisponibles: ids, productosGuardados: 2340,
+            rutasNombres: Object.fromEntries(ids.map((i) => [i, `Ruta ${i} - Zona ${i}`])),
+            rutasMeta: Object.fromEntries(ids.slice(0, 9).map((i) => [i, {nombre: `Ruta ${i}`, clientes: 10 + i, en: Date.now()}])),
+            espacioUsado: 14 * 1024 * 1024,
+        });
+        for (let i = 0; i < 3; i++) {
+            E.cola.push({
+                uuid: `u${i}`, seq: i, tipo: "confirmar_pedido", datos: {order_id: 100 + i}, estado: "pendiente", intento_envio: false,
+                creado_en: new Date().toISOString(), etiqueta: `Cliente ${i}`,
+                resumen: {cliente: `Cliente ${i}`, total: 120 + i, forma_pago: "Efectivo",
+                    lineas: [{nombre: "Tinte Rubio 8.0", cantidad: 12, precio: 7, recompensa: false}, {nombre: "Oxigenta 20 vol", cantidad: 6, precio: 4.5, recompensa: false}]},
+            });
+        }
+        click(q(".off-pill"));
+        await esperar(() => q(".off-panel"));
+        click(q(".off-check-boton"));
+        await esperar(() => qa(".off-ruta-fila").length === 12);
+        click(q(".off-tarjeta-cab"));
+        await sleep(50);
+        return m;
+    }
+
+    escenarios.offline_panel_arrastre = async function () {
+        console.log("\n[Panel] celular: arrastrar hacia abajo cierra, como la hoja de visita");
+        const m = await panelConMuchasRutas();
+        const panel = q(".off-panel");
+        toque("touchstart", 100, q(".off-estado"));
+        await sleep(30);
+        toque("touchmove", 150);
+        await sleep(100);
+        const p2 = q(".off-panel");
+        ok(/translateY\(50px\)/.test(p2.getAttribute("style") || ""), "el panel sigue al dedo", [p2.getAttribute("style"), p2 === panel]);
+        ok(p2.classList.contains("off-panel-arrastrando"), "sin transición mientras se arrastra", p2.className);
+        toque("touchend", 0);
+        await sleep(100);
+        ok(q(".off-panel") && !(q(".off-panel").getAttribute("style") || "").includes("translateY"), "soltar antes de 90 px: vuelve a su lugar");
+        // con el contenido scrolleado, el gesto es scroll, no cierra
+        q(".off-panel").scrollTop = 200;
+        Object.defineProperty(q(".off-panel"), "scrollTop", {value: 200, configurable: true});
+        toque("touchstart", 100, q(".off-estado"));
+        toque("touchmove", 400);
+        toque("touchend", 0);
+        await sleep(260);
+        ok(!!q(".off-panel"), "con el panel scrolleado, arrastrar NO lo cierra");
+        delete q(".off-panel").scrollTop;
+        Object.defineProperty(q(".off-panel"), "scrollTop", {value: 0, configurable: true});
+        toque("touchstart", 100, q(".off-estado"));
+        toque("touchmove", 260);
+        toque("touchend", 0);
+        await sleep(300);
+        ok(!q(".off-panel"), "arriba del todo y más de 90 px: se cierra");
+        if (process.env.SHALOM_VOLCADO) {
+            // Para la prueba en Chromium real: el panel abierto, renderizado.
+            click(q(".off-pill"));
+            await esperar(() => q(".off-panel"));
+            await sleep(80);
+            if (!qa(".off-ruta-fila").length) {
+                click(q(".off-check-boton"));
+                await esperar(() => qa(".off-ruta-fila").length === 12);
+            }
+            if (!q(".off-lineas")) {
+                click(q(".off-tarjeta-cab"));
+                await sleep(80);
+            }
+            require("fs").writeFileSync(process.env.SHALOM_VOLCADO, document.body.innerHTML);
+            console.log("    volcado en", process.env.SHALOM_VOLCADO);
+        }
+        m.destruir();
+    };
 };
 

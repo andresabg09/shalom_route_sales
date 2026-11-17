@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import {Component, useState} from "@odoo/owl";
+import {Component, onWillUnmount, useRef, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {
     borrarDatosDescargados,
@@ -21,6 +21,10 @@ import {
     ormDeLaCola,
     reintentar,
 } from "./sincronizador";
+
+// Igual que la hoja de visita (UMBRAL_ARRASTRE_CIERRE en visit_sheet.js):
+// soltar el panel más abajo que esto lo cierra.
+const UMBRAL_ARRASTRE_CIERRE = 90;
 
 const ETIQUETA_TIPO = {
     confirmar_pedido: "Pedido",
@@ -76,6 +80,15 @@ export class IndicadorConexion extends Component {
             abiertoUuid: null,
             verRutas: false, // lista de rutas desplegada
             confirmandoDescarga: false, // "Ya tienes todo descargado…"
+            arrastreY: 0, // px que el panel bajó arrastrándolo
+            arrastrando: false,
+        });
+        this.panelRef = useRef("panel");
+        this._onMoverArrastre = (ev) => this.moverArrastre(ev);
+        this._onSoltarArrastre = (ev) => this.soltarArrastre(ev);
+        onWillUnmount(() => {
+            this.detenerArrastre();
+            clearTimeout(this._cierreTimer);
         });
         const ormCrudo = (this.env.services && this.env.services.orm) || this.orm;
         iniciarSincronizador(ormCrudo, this.notification);
@@ -292,12 +305,77 @@ export class IndicadorConexion extends Component {
     }
 
     abrir() {
+        clearTimeout(this._cierreTimer);
+        this.local.arrastreY = 0;
         this.local.panelAbierto = true;
         comprobarRed();
     }
 
     cerrar() {
+        this.detenerArrastre();
+        this.local.arrastrando = false;
         this.local.panelAbierto = false;
+        this.local.arrastreY = 0;
+    }
+
+    get estiloPanel() {
+        return this.local.arrastreY ? `transform: translateY(${this.local.arrastreY}px);` : "";
+    }
+
+    // -- Arrastrar el panel hacia abajo para cerrarlo --
+    // Misma lógica que la hoja de visita (visit_sheet.js): se agarra desde
+    // cualquier parte salvo campos y links, y solo cuando el panel está
+    // arriba del todo (si no, el gesto es scroll normal del contenido).
+
+    iniciarArrastre(ev) {
+        const objetivo = ev.target;
+        if (!objetivo || !objetivo.closest || objetivo.closest("input, textarea, a, select")) {
+            return;
+        }
+        if (this.panelRef.el && this.panelRef.el.scrollTop > 0) {
+            return;
+        }
+        this._arrastreInicioY = ev.touches ? ev.touches[0].clientY : ev.clientY;
+        this.local.arrastrando = true;
+        window.addEventListener("touchmove", this._onMoverArrastre, {passive: true});
+        window.addEventListener("touchend", this._onSoltarArrastre);
+    }
+
+    moverArrastre(ev) {
+        if (!this.local.arrastrando) {
+            return;
+        }
+        const y = ev.touches ? ev.touches[0].clientY : ev.clientY;
+        // Si el contenido se movió (scroll) en vez del panel, no es arrastre.
+        if (this.panelRef.el && this.panelRef.el.scrollTop > 0) {
+            this.local.arrastreY = 0;
+            return;
+        }
+        this.local.arrastreY = Math.max(0, y - this._arrastreInicioY);
+    }
+
+    soltarArrastre(ev) {
+        if (!this.local.arrastrando) {
+            return;
+        }
+        this.local.arrastrando = false;
+        this.detenerArrastre();
+        if (this.local.arrastreY > UMBRAL_ARRASTRE_CIERRE) {
+            // Evita el click "fantasma" sobre el fondo (ver visit_sheet.js).
+            if (ev && ev.cancelable) {
+                ev.preventDefault();
+            }
+            // Termina de bajar con la misma transición y recién ahí se cierra.
+            this.local.arrastreY = window.innerHeight;
+            this._cierreTimer = setTimeout(() => this.cerrar(), 200);
+        } else {
+            this.local.arrastreY = 0;
+        }
+    }
+
+    detenerArrastre() {
+        window.removeEventListener("touchmove", this._onMoverArrastre);
+        window.removeEventListener("touchend", this._onSoltarArrastre);
     }
 
     toggleFotos(ev) {
