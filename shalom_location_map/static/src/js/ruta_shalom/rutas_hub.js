@@ -9,7 +9,7 @@ import {Avisos} from "./avisos";
 import {JuegoPanel} from "./juego_panel";
 import {Tutorial} from "./tutorial";
 import {useEsAncha} from "./pantalla_utils";
-import {estadoDeResultado, quienAtiende, resaltar} from "./busqueda_utils";
+import {estadoDeResultado, normalizarBusqueda, quienAtiende, resaltar} from "./busqueda_utils";
 import {conTimeout, iniciarSondeo} from "./red_utils";
 import {esErrorDeRed, traerRutas} from "./datos_offline";
 import {IndicadorConexion} from "./indicador_conexion";
@@ -679,9 +679,9 @@ export class RutasHub extends Component {
     }
 
     get schedulesFiltrados() {
-        const q = this.state.busqueda.trim().toLowerCase();
+        const q = normalizarBusqueda(this.state.busqueda).trim();
         const filtradas = this.state.schedules.filter((s) => {
-            if (q && !s.route_name.toLowerCase().includes(q)) {
+            if (q && !normalizarBusqueda(s.route_name).includes(q)) {
                 return false;
             }
             if (this._sinVentas(s) && !this.state.verSinVentas) {

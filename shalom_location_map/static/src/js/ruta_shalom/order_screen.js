@@ -22,6 +22,7 @@ import {
 } from "./datos_offline";
 import {descartar, encolar, esperarResultado, iniciarSincronizador} from "./sincronizador";
 import {IndicadorConexion} from "./indicador_conexion";
+import {normalizarBusqueda} from "./busqueda_utils";
 
 // Modo offline: cuánto se espera la confirmación del servidor antes de
 // dejar el pedido guardado en el teléfono ("se envía con señal"). Un
@@ -1232,7 +1233,7 @@ export class OrderScreen extends Component {
      * catálogo).
      */
     get productosParaCategorias() {
-        const texto = this.state.busqueda.trim().toLowerCase();
+        const texto = normalizarBusqueda(this.state.busqueda).trim();
         return this.state.productos.filter((producto) => {
             if (this.state.soloConStock && !this.tieneStock(producto)) {
                 return false;
@@ -1241,9 +1242,9 @@ export class OrderScreen extends Component {
                 return true;
             }
             return (
-                (producto.name || "").toLowerCase().includes(texto) ||
-                (producto.default_code || "").toLowerCase().includes(texto) ||
-                (producto.barcode || "").toLowerCase().includes(texto)
+                normalizarBusqueda(producto.name || "").includes(texto) ||
+                normalizarBusqueda(producto.default_code || "").includes(texto) ||
+                normalizarBusqueda(producto.barcode || "").includes(texto)
             );
         });
     }
@@ -1279,11 +1280,11 @@ export class OrderScreen extends Component {
     }
 
     get categoriasFiltradas() {
-        const texto = this.state.busquedaCategoria.trim().toLowerCase();
+        const texto = normalizarBusqueda(this.state.busquedaCategoria).trim();
         if (!texto) {
             return this.categoriasDisponibles;
         }
-        return this.categoriasDisponibles.filter((c) => c.nombre.toLowerCase().includes(texto));
+        return this.categoriasDisponibles.filter((c) => normalizarBusqueda(c.nombre).includes(texto));
     }
 
     get etiquetaCategoriaActual() {
@@ -1379,7 +1380,7 @@ export class OrderScreen extends Component {
     }
 
     _filtrarProductos() {
-        const texto = this.state.busqueda.trim().toLowerCase();
+        const texto = normalizarBusqueda(this.state.busqueda).trim();
         return this.state.productos.filter((producto) => {
             if (
                 this.state.categoriaSeleccionada !== CATEGORIA_TODAS &&
@@ -1394,9 +1395,9 @@ export class OrderScreen extends Component {
                 return true;
             }
             return (
-                (producto.name || "").toLowerCase().includes(texto) ||
-                (producto.default_code || "").toLowerCase().includes(texto) ||
-                (producto.barcode || "").toLowerCase().includes(texto)
+                normalizarBusqueda(producto.name || "").includes(texto) ||
+                normalizarBusqueda(producto.default_code || "").includes(texto) ||
+                normalizarBusqueda(producto.barcode || "").includes(texto)
             );
         });
     }

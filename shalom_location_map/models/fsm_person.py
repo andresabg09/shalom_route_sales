@@ -270,8 +270,10 @@ class FSMPerson(models.Model):
         if len(texto) < 2:
             return []
         persona = self._shalom_persona_actual()
-        locations = self.env["fsm.location"].search(
-            [("name", "ilike", texto), ("fsm_route_id", "!=", False)],
+        Ubicacion = self.env["fsm.location"]
+        # Sin tildes ni mayúsculas: "jose" encuentra a "José".
+        locations = Ubicacion.search(
+            [("id", "in", Ubicacion._shalom_ids_por_nombre(texto)), ("fsm_route_id", "!=", False)],
             limit=30,
             order="name",
         )

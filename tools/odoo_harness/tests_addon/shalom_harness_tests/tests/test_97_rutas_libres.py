@@ -90,3 +90,27 @@ class TestRutasLibres(ShalomCommon):
         self.assertTrue(r["cerrada"])
         self.assertEqual(r["atendido_por"], "Persona A")
         self.assertTrue(r["atendido_hoy"])
+
+    def test_buscar_sin_tildes_ni_mayusculas(self):
+        """Pedido explícito: las tildes y las mayúsculas no impiden encontrar
+        al cliente ni al producto ("jose" encuentra a "José")."""
+        P = self.env["fsm.person"]
+        cli = self.clientes["A1"]
+        cli.name = "Abarrotería José Peñalba"
+        for consulta in ("jose", "JOSÉ", "Jose penalba", "ABARROTERIA", "peñal", "abarrotería josé"):
+            res = P.with_user(self.u_b).shalom_buscar(consulta)
+            self.assertEqual([r["location_id"] for r in res], [cli.id], consulta)
+        # % y _ se buscan literal, no como comodines
+        self.assertEqual(P.with_user(self.u_b).shalom_buscar("j_s%"), [])
+        # Visita Exprés (Administración): mismo criterio
+        L = self.env["fsm.location"]
+        res = L.with_user(self.u_mgr).shalom_buscar_clientes_admin("JOSE PENALBA")
+        self.assertEqual([r["id"] for r in res], [cli.id])
+        self.assertEqual(L.with_user(self.u_mgr).shalom_buscar_clientes_admin("jose", [cli.id]), [])
+        # Productos (Administración → Estrategias): nombre o referencia
+        prod = self.env["product.product"].create({"name": "Acondicionador Nutrición Ácida", "default_code": "ÑU-01", "sale_ok": True})
+        O = self.env["fsm.order"].with_user(self.u_mgr)
+        for consulta in ("acondicionador nutricion", "ACIDA", "nu-01", "ñu"):
+            self.assertIn(prod.id, [r["id"] for r in O.shalom_buscar_productos(consulta)], consulta)
+        self.assertNotIn(prod.id, [r["id"] for r in O.shalom_buscar_productos("acida", [prod.id])])
+        self.assertEqual(O.shalom_buscar_productos("   "), [])

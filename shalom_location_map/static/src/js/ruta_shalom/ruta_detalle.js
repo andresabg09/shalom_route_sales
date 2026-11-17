@@ -11,7 +11,7 @@ import {
 } from "./navegacion_utils";
 import {ESTADO_ETIQUETA, estadoDesdeStageName} from "./stage_utils";
 import {useEsAncha} from "./pantalla_utils";
-import {estadoDeResultado, resaltar} from "./busqueda_utils";
+import {estadoDeResultado, normalizarBusqueda, resaltar} from "./busqueda_utils";
 import {abrirNivel, cerrarNivel} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
 import {VisitSheet} from "./visit_sheet";
@@ -511,16 +511,16 @@ export class RutaDetalle extends Component {
 
     /** Clientes de ESTA ruta que coinciden con lo escrito pero están ocultos por no tener ventas. */
     get ocultosPorVentas() {
-        const texto = this.state.busquedaCliente.trim().toLowerCase();
+        const texto = normalizarBusqueda(this.state.busquedaCliente).trim();
         if (this.state.verSinVentas || texto.length < 2) {
             return 0;
         }
         return this.state.visitasTodas.filter(
             (v) =>
                 this._esSinVentas(v) &&
-                ((v.nombre || "").toLowerCase().includes(texto) ||
-                    (v.direccion || "").toLowerCase().includes(texto) ||
-                    (v.direccion2 || "").toLowerCase().includes(texto))
+                (normalizarBusqueda(v.nombre || "").includes(texto) ||
+                    normalizarBusqueda(v.direccion || "").includes(texto) ||
+                    normalizarBusqueda(v.direccion2 || "").includes(texto))
         ).length;
     }
 
@@ -1031,15 +1031,15 @@ export class RutaDetalle extends Component {
      */
     get visitasFiltradas() {
         const base = this.state.mostrarVisitados ? this.visitasVisitadas : this.visitasPendientes;
-        const texto = this.state.busquedaCliente.trim().toLowerCase();
+        const texto = normalizarBusqueda(this.state.busquedaCliente).trim();
         if (!texto) {
             return base;
         }
         return base.filter(
             (v) =>
-                (v.nombre || "").toLowerCase().includes(texto) ||
-                (v.direccion || "").toLowerCase().includes(texto) ||
-                (v.direccion2 || "").toLowerCase().includes(texto)
+                normalizarBusqueda(v.nombre || "").includes(texto) ||
+                normalizarBusqueda(v.direccion || "").includes(texto) ||
+                normalizarBusqueda(v.direccion2 || "").includes(texto)
         );
     }
 

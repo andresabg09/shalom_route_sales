@@ -10,6 +10,7 @@ import {OrderScreen} from "./order_screen";
 import {ESTADO_ETIQUETA, estadoDesdeStageName} from "./stage_utils";
 import {getMapboxToken, cargarMapboxGl} from "./mapbox_utils";
 import {TemaSelector} from "./tema_selector";
+import {normalizarBusqueda} from "./busqueda_utils";
 
 const {DateTime} = luxon;
 
@@ -514,13 +515,8 @@ export class AdminGestion extends Component {
         }
         try {
             const yaEstan = this.state.estrategiaEditando.productos.map((p) => p.id);
-            const productos = await this.orm.searchRead(
-                "product.product",
-                [["sale_ok", "=", true], ["id", "not in", yaEstan], "|", ["name", "ilike", texto.trim()], ["default_code", "ilike", texto.trim()]],
-                ["display_name"],
-                {limit: 8, order: "name asc"}
-            );
-            this.state.estrategiaResultados = productos.map((p) => ({id: p.id, nombre: p.display_name}));
+            // Sin tildes ni mayúsculas (ver shalom_buscar_productos).
+            this.state.estrategiaResultados = await this.orm.call("fsm.order", "shalom_buscar_productos", [texto, yaEstan, 8]);
         } catch (error) {
             this.notification.add("No se pudo buscar productos.", {type: "danger"});
         }
@@ -615,7 +611,7 @@ export class AdminGestion extends Component {
     }
 
     get visitasFiltradas() {
-        const texto = this.state.busquedaVisita.trim().toLowerCase();
+        const texto = normalizarBusqueda(this.state.busquedaVisita).trim();
         return this.state.visitas.filter((v) => {
             if (
                 this.state.filtroVendedorNombre &&
@@ -629,7 +625,7 @@ export class AdminGestion extends Component {
             ) {
                 return false;
             }
-            if (texto && !(v.cliente_nombre || "").toLowerCase().includes(texto)) {
+            if (texto && !normalizarBusqueda(v.cliente_nombre || "").includes(texto)) {
                 return false;
             }
             return true;
@@ -852,11 +848,11 @@ export class AdminGestion extends Component {
     }
 
     get clientesRutaFiltrados() {
-        const texto = this.state.busquedaClienteRuta.trim().toLowerCase();
+        const texto = normalizarBusqueda(this.state.busquedaClienteRuta).trim();
         if (!texto) {
             return this.state.clientesRuta;
         }
-        return this.state.clientesRuta.filter((c) => c.nombre.toLowerCase().includes(texto));
+        return this.state.clientesRuta.filter((c) => normalizarBusqueda(c.nombre).includes(texto));
     }
 
     /** Filtrado del pop-up "+ Añadir cliente a esta ruta" -- del lado
@@ -864,12 +860,12 @@ export class AdminGestion extends Component {
      * abrirAgregarVisita(): el universo ya viene acotado a una sola
      * ruta, a diferencia del buscador de Visita Exprés). */
     get agregarVisitaFiltrados() {
-        const texto = this.state.agregarVisitaBusqueda.trim().toLowerCase();
+        const texto = normalizarBusqueda(this.state.agregarVisitaBusqueda).trim();
         if (!texto) {
             return this.state.agregarVisitaCandidatos;
         }
         return this.state.agregarVisitaCandidatos.filter((c) =>
-            c.name.toLowerCase().includes(texto)
+            normalizarBusqueda(c.name).includes(texto)
         );
     }
 

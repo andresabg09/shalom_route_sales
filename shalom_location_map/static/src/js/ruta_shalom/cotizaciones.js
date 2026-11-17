@@ -4,6 +4,7 @@ import {Component, onWillStart, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {TemaSelector} from "./tema_selector";
 import {traerCotizaciones} from "./datos_offline";
+import {normalizarBusqueda} from "./busqueda_utils";
 
 /**
  * Pestaña "Cotizaciones" (Fase 4): todas las sale.order de los
@@ -47,14 +48,14 @@ export class Cotizaciones extends Component {
     }
 
     get cotizacionesFiltradas() {
-        const texto = this.state.busqueda.trim().toLowerCase();
+        const texto = normalizarBusqueda(this.state.busqueda).trim();
         if (!texto) {
             return this.state.cotizaciones;
         }
         return this.state.cotizaciones.filter(
             (c) =>
-                c.name.toLowerCase().includes(texto) ||
-                (c.partner_name || "").toLowerCase().includes(texto)
+                normalizarBusqueda(c.name).includes(texto) ||
+                normalizarBusqueda(c.partner_name || "").includes(texto)
         );
     }
 

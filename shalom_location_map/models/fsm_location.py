@@ -25,6 +25,8 @@ import re
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 
+from . import busqueda_utils
+
 _logger = logging.getLogger(__name__)
 
 # Mismo criterio que ESTADOS_VENTA_CONFIRMADA en fsm_order.py y
@@ -496,6 +498,25 @@ class FSMLocation(models.Model):
         return True
 
     @api.model
+    def _shalom_ids_por_nombre(self, texto):
+        """Ids de clientes cuyo nombre CONTIENE `texto`, sin distinguir
+        tildes ni mayúsculas ("jose" encuentra a "José"). Solo devuelve
+        candidatos: quien llama los pasa por search() con el resto de las
+        condiciones, así que las reglas de acceso se siguen aplicando."""
+        self.env["res.partner"].flush_model(["name"])
+        self.flush_model(["partner_id"])
+        self.env.cr.execute(
+            f"""
+            SELECT l.id
+              FROM fsm_location l
+              JOIN res_partner p ON p.id = l.partner_id
+             WHERE {busqueda_utils.sql_normalizado("p.name")} LIKE %s
+            """,
+            (busqueda_utils.CON_TILDE, busqueda_utils.SIN_TILDE, busqueda_utils.patron_contiene(texto)),
+        )
+        return [fila[0] for fila in self.env.cr.fetchall()]
+
+    @api.model
     def shalom_buscar_clientes_admin(self, texto, excluir_ids=None):
         """Buscador de Visita Exprés (Administración → Rutas de mis
         vendedores): busca por nombre en TODA la base, sin acotar a
@@ -518,7 +539,8 @@ class FSMLocation(models.Model):
         texto = (texto or "").strip()
         if not texto:
             return []
-        domain = [("name", "ilike", texto)]
+        # Sin tildes ni mayúsculas (ver _shalom_ids_por_nombre).
+        domain = [("id", "in", self._shalom_ids_por_nombre(texto))]
         if excluir_ids:
             domain.append(("id", "not in", excluir_ids))
         locations = self.search(domain, limit=15, order="name asc")

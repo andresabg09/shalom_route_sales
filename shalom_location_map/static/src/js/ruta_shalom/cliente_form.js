@@ -5,6 +5,7 @@ import {useService} from "@web/core/utils/hooks";
 import {cerrarConAnimacion} from "./animacion_utils";
 import {abrirNivel, cerrarNivel} from "./back_stack";
 import {capturarMejorPosicionGps} from "./gps_utils";
+import {normalizarBusqueda} from "./busqueda_utils";
 
 /**
  * Formulario ampliado de cliente (Fase 4, ronda de feedback): un solo
@@ -247,11 +248,11 @@ export class ClienteForm extends Component {
     }
 
     get rutasFiltradas() {
-        const texto = this.state.busquedaRuta.trim().toLowerCase();
+        const texto = normalizarBusqueda(this.state.busquedaRuta).trim();
         if (!texto) {
             return this.state.rutas;
         }
-        return this.state.rutas.filter((r) => r.name.toLowerCase().includes(texto));
+        return this.state.rutas.filter((r) => normalizarBusqueda(r.name).includes(texto));
     }
 
     get etiquetaRutaActual() {
@@ -282,12 +283,12 @@ export class ClienteForm extends Component {
     }
 
     get clientesDeRutaFiltrados() {
-        const texto = this.state.busquedaClienteAnterior.trim().toLowerCase();
+        const texto = normalizarBusqueda(this.state.busquedaClienteAnterior).trim();
         if (!texto) {
             return this.state.clientesDeRuta;
         }
         return this.state.clientesDeRuta.filter((c) =>
-            c.name.toLowerCase().includes(texto)
+            normalizarBusqueda(c.name).includes(texto)
         );
     }
 

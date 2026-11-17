@@ -123,7 +123,7 @@ from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
 from odoo.osv import expression
 
-from . import juego_utils, offline_utils, tz_utils
+from . import busqueda_utils, juego_utils, offline_utils, tz_utils
 
 _logger = logging.getLogger(__name__)
 
@@ -1046,6 +1046,41 @@ class FSMOrder(models.Model):
             for producto in productos.with_context(warehouse_id=bodega.id):
                 resultado[producto.id][clave] = int(producto.free_qty or 0)
         return resultado
+
+    @api.model
+    def shalom_buscar_productos(self, texto, excluir_ids=None, limite=8):
+        """Buscador de productos de Administración (Estrategias): por nombre
+        o referencia, sin distinguir tildes ni mayúsculas ("acondicionador"
+        encuentra "Acondicionador Nutrición"). El nombre del producto es
+        traducible (JSON por idioma): se busca en el del usuario y, si no
+        hay, en el de base. Devuelve [{id, nombre}]."""
+        texto = (texto or "").strip()
+        if not texto:
+            return []
+        Producto = self.env["product.product"]
+        Producto.flush_model(["default_code", "product_tmpl_id"])
+        self.env["product.template"].flush_model(["name"])
+        nombre = "COALESCE(pt.name->>%s, pt.name->>'en_US')"
+        patron = busqueda_utils.patron_contiene(texto)
+        mapa = (busqueda_utils.CON_TILDE, busqueda_utils.SIN_TILDE)
+        self.env.cr.execute(
+            f"""
+            SELECT pp.id
+              FROM product_product pp
+              JOIN product_template pt ON pt.id = pp.product_tmpl_id
+             WHERE {busqueda_utils.sql_normalizado(nombre)} LIKE %s
+                OR {busqueda_utils.sql_normalizado("pp.default_code")} LIKE %s
+            """,
+            (self.env.lang or "en_US", *mapa, patron, *mapa, patron),
+        )
+        ids = [fila[0] for fila in self.env.cr.fetchall()]
+        dominio = [("id", "in", ids), ("sale_ok", "=", True)]
+        if excluir_ids:
+            dominio.append(("id", "not in", excluir_ids))
+        return [
+            {"id": p.id, "nombre": p.display_name}
+            for p in Producto.search(dominio, limit=limite, order="name asc")
+        ]
 
     @api.model
     def shalom_marcas_fotos(self, product_ids):

@@ -169,7 +169,28 @@ module.exports = (ctx) => {
         comp.state.busqueda = "tinte";
         await sleep(10);
         ok(lista() === "Tinte 2 | Tinte 10", "al buscar: A-Z", lista());
+        // Buscar sin que estorben tildes ni mayúsculas
+        comp.state.busqueda = "acido";
+        await sleep(10);
+        ok(lista() === "Ácido", "'acido' encuentra 'Ácido'", lista());
+        comp.state.busqueda = "ACEITE";
+        await sleep(10);
+        ok(lista() === "aceite", "'ACEITE' encuentra 'aceite'", lista());
+        comp.state.busqueda = "ÁCIDO";
+        await sleep(10);
+        ok(lista() === "Ácido", "'ÁCIDO' encuentra 'Ácido'", lista());
         m.destruir();
+    };
+
+    escenarios.busqueda_sin_tildes = async function () {
+        console.log("\n[Buscadores] sin tildes ni mayúsculas, y el resaltado marca el texto original");
+        const {normalizarBusqueda, resaltar, coincideBusqueda} = bundle;
+        ok(normalizarBusqueda("José PÉREZ Peñalba") === "jose perez penalba", "normaliza tildes, ñ y mayúsculas", normalizarBusqueda("José PÉREZ Peñalba"));
+        ok(coincideBusqueda("Abarrotería José", "abarroteria jose") && coincideBusqueda("abarroteria", "ABARROTERÍA"), "coincide en los dos sentidos");
+        const r = resaltar("Mini Súper José", "super jo");
+        ok(r.pre === "Mini " && r.hit === "Súper Jo" && r.post === "sé", "resalta el pedazo original con sus tildes", r);
+        const n = resaltar("Ruta Norte", "zzz");
+        ok(n.hit === "" && n.pre === "Ruta Norte", "sin coincidencia no resalta nada");
     };
 
     escenarios.catalogo_cabecera_sin_saltos = async function () {

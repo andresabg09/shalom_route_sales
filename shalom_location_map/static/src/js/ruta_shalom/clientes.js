@@ -4,6 +4,7 @@ import {Component, onWillStart, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {ClienteForm} from "./cliente_form";
 import {TemaSelector} from "./tema_selector";
+import {normalizarBusqueda} from "./busqueda_utils";
 
 /**
  * Pestaña "Clientes" (Fase 4): directorio de fsm.location asignadas al
@@ -70,15 +71,15 @@ export class Clientes extends Component {
     }
 
     get clientesFiltrados() {
-        const texto = this.state.busqueda.trim().toLowerCase();
+        const texto = normalizarBusqueda(this.state.busqueda).trim();
         if (!texto) {
             return this.state.clientes;
         }
         return this.state.clientes.filter(
             (c) =>
-                (c.name || "").toLowerCase().includes(texto) ||
-                (c.street || "").toLowerCase().includes(texto) ||
-                (c.street2 || "").toLowerCase().includes(texto)
+                normalizarBusqueda(c.name || "").includes(texto) ||
+                normalizarBusqueda(c.street || "").includes(texto) ||
+                normalizarBusqueda(c.street2 || "").includes(texto)
         );
     }
 

@@ -673,7 +673,8 @@ escenarios.admin = async function () {
         "shalom.estrategia.shalom_admin_estrategias": () => est.map((e) => ({...e})),
         "shalom.estrategia.shalom_admin_guardar_estrategia": (a) => { guardados.push(a); return 3; },
         "shalom.estrategia.shalom_admin_borrar_estrategia": true,
-        "product.product.searchRead": (a) => [{id: 5, display_name: "Tinte 5.0"}],
+        // buscador de productos sin tildes (shalom_buscar_productos)
+        "fsm.order.shalom_buscar_productos": () => [{id: 5, nombre: "Tinte 5.0"}],
         "fsm.order.shalom_admin_seguimiento_visitas": [],
         "fsm.order.shalom_admin_visitas_en_vivo": [],
         "fsm.order.shalom_admin_carritos_pendientes": [],
