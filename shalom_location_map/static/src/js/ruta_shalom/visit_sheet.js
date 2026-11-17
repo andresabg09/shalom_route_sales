@@ -162,7 +162,12 @@ export class VisitSheet extends Component {
         // Una acción de esta visita que se envió sola (con la hoja
         // abierta): se recarga en silencio para mostrar lo del servidor.
         this._dejarDeOir = alTerminarEnvio((item, respuesta) => {
-            if (item.datos && item.datos.order_id === this.props.orderId && respuesta.estado === "ok" && !this.state.tomandoPedido) {
+            // "eliminado": el vendedor lo sacó de la cola desde el panel, la
+            // hoja vuelve a mostrar el estado que tenía.
+            if (
+                item.datos && item.datos.order_id === this.props.orderId &&
+                (respuesta.estado === "ok" || respuesta.estado === "eliminado") && !this.state.tomandoPedido
+            ) {
                 this.cargar({silencioso: true});
             }
         });
@@ -312,9 +317,12 @@ export class VisitSheet extends Component {
      * señal) | "error" (el servidor la rechazó: se muestra el motivo y se
      * saca de la cola -- el vendedor lo ve en el momento, igual que antes).
      */
-    async _accionPorCola(tipo, datos, {mensajeError}) {
+    async _accionPorCola(tipo, datos, {mensajeError, detalle = "", texto = ""}) {
+        const cliente = this.state.visita ? this.state.visita.nombre : "";
         const uuid = await encolar(tipo, {order_id: this.props.orderId, ...datos}, {
-            etiqueta: this.state.visita ? this.state.visita.nombre : "",
+            etiqueta: cliente,
+            // Vista previa en el panel de conexión (no viaja al servidor).
+            resumen: {cliente, detalle, texto},
         });
         const respuesta = await esperarResultado(uuid, ESPERA_ACCION_MS);
         if (respuesta.estado === "error") {
@@ -404,7 +412,7 @@ export class VisitSheet extends Component {
         const resultado = await this._accionPorCola(
             "cambiar_etapa",
             {stage_id: stageId, estado_app: estado},
-            {mensajeError: "No se pudo actualizar el estado."}
+            {mensajeError: "No se pudo actualizar el estado.", detalle: this.etiquetaEstado(estado)}
         );
         if (resultado === "error") {
             if (estado === "cancelado") {
@@ -450,6 +458,8 @@ export class VisitSheet extends Component {
         }
         const resultado = await this._accionPorCola("observacion", {texto}, {
             mensajeError: "No se pudo guardar la nota.",
+            detalle: "Nota",
+            texto: texto ? "«" + texto + "»" : "Nota vacía",
         });
         if (resultado === "ok") {
             this.notification.add("Nota guardada.", {type: "success"});
@@ -549,7 +559,7 @@ export class VisitSheet extends Component {
         const resultado = await this._accionPorCola(
             "gps",
             {lat: latitude, lng: longitude},
-            {mensajeError: "No se pudo guardar la ubicación GPS."}
+            {mensajeError: "No se pudo guardar la ubicación GPS.", detalle: "Ubicación del cliente"}
         );
         if (resultado === "error") {
             return;

@@ -98,8 +98,12 @@ export async function leerConRespaldo(clave, llamada, {timeoutMs = TIMEOUT_LECTU
 // Lecturas de cada pantalla (mismas llamadas y forma de siempre)
 // ------------------------------------------------------------------
 
-export function traerRutas(orm, ventana) {
-    return leerConRespaldo("rutas", () => orm.call("fsm.person", "shalom_mis_rutas_programadas", ventana));
+export async function traerRutas(orm, ventana) {
+    const rutas = await leerConRespaldo("rutas", () => orm.call("fsm.person", "shalom_mis_rutas_programadas", ventana));
+    // Para el checklist del panel: qué rutas con pendientes existen (y
+    // así cuántas todavía no están en el teléfono).
+    estadoOffline.rutasDisponibles = (rutas || []).map((s) => s.id);
+    return rutas;
 }
 
 /** RutaDetalle.cargar(): visitas del ciclo + datos de clientes + perfiles + trazado. */
@@ -335,6 +339,10 @@ export async function prepararRuta(orm, schedule) {
     }
     await Promise.all(escrituras);
     await guardarLocal(`ruta_preparada:${schedule.id}`, Date.now());
+    if (!estadoOffline.rutasPreparadas.includes(schedule.id)) {
+        estadoOffline.rutasPreparadas = [...estadoOffline.rutasPreparadas, schedule.id];
+        await guardarLocal("meta:rutas_preparadas", estadoOffline.rutasPreparadas);
+    }
 }
 
 /** Rutas que "Preparar mi día" descarga: TODAS las que tienen clientes
@@ -415,6 +423,13 @@ export async function prepararDia(orm, {fotos = false, schedules = null} = {}) {
         const ahora = Date.now();
         estadoOffline.preparadoEn = ahora;
         await guardarLocal("meta:preparado_en", ahora);
+        // Solo cuentan las rutas que siguen con pendientes (las demás ya
+        // no aparecen en la lista y no hace falta tenerlas).
+        const disponibles = new Set(elegidas.map((s) => s.id));
+        estadoOffline.rutasPreparadas = estadoOffline.rutasPreparadas.filter((id) => disponibles.has(id));
+        await guardarLocal("meta:rutas_preparadas", estadoOffline.rutasPreparadas);
+        estadoOffline.productosGuardados = catalogo.productos.length;
+        await guardarLocal("meta:productos", estadoOffline.productosGuardados);
         if (fotos) {
             await precargarFotos(catalogo.productos, (hechas, total) =>
                 paso(`Fotos del catálogo: ${hechas} de ${total}…`, 70 + Math.round((30 * hechas) / Math.max(1, total)))
@@ -440,7 +455,62 @@ export async function prepararDia(orm, {fotos = false, schedules = null} = {}) {
 
 /** Fechas de la última preparación (para "Datos de hace X"). */
 export async function cargarMetaPreparacion() {
-    const [preparado, fotos] = await Promise.all([leerLocal("meta:preparado_en"), leerLocal("meta:fotos_en")]);
+    const [preparado, fotos, rutas, productos, listaRutas] = await Promise.all([
+        leerLocal("meta:preparado_en"),
+        leerLocal("meta:fotos_en"),
+        leerLocal("meta:rutas_preparadas"),
+        leerLocal("meta:productos"),
+        leerLocal("rutas"),
+    ]);
     estadoOffline.preparadoEn = preparado ? preparado.valor : null;
     estadoOffline.fotosEn = fotos ? fotos.valor : null;
+    estadoOffline.rutasPreparadas = rutas && Array.isArray(rutas.valor) ? rutas.valor : [];
+    estadoOffline.productosGuardados = productos ? productos.valor || 0 : 0;
+    if (estadoOffline.rutasDisponibles === null && listaRutas && Array.isArray(listaRutas.valor)) {
+        estadoOffline.rutasDisponibles = listaRutas.valor.map((s) => s.id);
+    }
+}
+
+/** Fecha y hora cortas y amigables: "hoy 8:05 a. m.", "ayer 5:40 p. m.",
+ * "lun 14/11, 9:00 a. m.". */
+export function cuandoAmigable(ts) {
+    if (!ts) {
+        return "";
+    }
+    const fecha = new Date(ts);
+    const hora = fecha.toLocaleTimeString("es-PA", {hour: "numeric", minute: "2-digit"});
+    const hoy = new Date();
+    const ayer = new Date();
+    ayer.setDate(hoy.getDate() - 1);
+    const mismoDia = (a, b) => a.toDateString() === b.toDateString();
+    if (mismoDia(fecha, hoy)) {
+        return `hoy ${hora}`;
+    }
+    if (mismoDia(fecha, ayer)) {
+        return `ayer ${hora}`;
+    }
+    const dia = fecha.toLocaleDateString("es-PA", {weekday: "short", day: "numeric", month: "numeric"});
+    return `${dia}, ${hora}`;
+}
+
+/** Estado de los datos del teléfono para el checklist del panel. */
+export function resumenDatosTelefono(estado, ahora = new Date()) {
+    const preparadas = new Set(estado.rutasPreparadas || []);
+    const disponibles = estado.rutasDisponibles;
+    const rutasGuardadas = disponibles ? disponibles.filter((id) => preparadas.has(id)).length : preparadas.size;
+    const rutasNuevas = disponibles ? disponibles.filter((id) => !preparadas.has(id)).length : 0;
+    let frescura = "al_dia";
+    if (!estado.preparadoEn) {
+        frescura = "sin_descargar";
+    } else if (new Date(estado.preparadoEn).toDateString() !== ahora.toDateString() || rutasNuevas > 0) {
+        frescura = "actualizar";
+    }
+    return {
+        frescura,
+        rutasGuardadas,
+        rutasNuevas,
+        productos: estado.productosGuardados || 0,
+        cuando: cuandoAmigable(estado.preparadoEn),
+        fotosCuando: estado.fotosEn ? cuandoAmigable(estado.fotosEn) : "",
+    };
 }

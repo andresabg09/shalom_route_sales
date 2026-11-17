@@ -11,57 +11,179 @@
             <span t-if="!props.compacta" t-attf-class="{{pendientes.length or conError.length ? 'off-pill-pend' : ''}}" t-esc="textoPastilla"/>
             <span t-elif="textoCompacto" class="off-pill-pend" t-esc="textoCompacto"/>
         </button>
+
+        <!-- Panel (diseño aprobado: "Panel de conexión Ruta Shalom") -->
         <div class="off-panel-overlay" t-if="local.panelAbierto" t-on-click.self="cerrar">
-            <div class="off-panel">
-                <div class="off-panel-titulo">
-                    <t t-if="offline.red === 'en_linea'">Estás en línea</t>
-                    <t t-elif="offline.red === 'debil'">Señal débil</t>
-                    <t t-else="">Sin señal</t>
-                </div>
-                <div class="off-panel-sub">
-                    <t t-if="offline.red === 'en_linea'">Todo lo que hagas se envía al momento.</t>
-                    <t t-else="">Podés seguir vendiendo: lo que hagas queda guardado en el teléfono y se envía solo cuando vuelva la señal. No cierres la app.</t>
+            <div class="off-panel" role="dialog" aria-label="Conexión y datos sin señal">
+                <div class="off-panel-asa"/>
+
+                <!-- (a) Estado de la conexión -->
+                <div t-attf-class="off-estado off-estado-{{offline.red}}">
+                    <span class="off-estado-icono"><i t-attf-class="fa {{offline.red === 'sin_senal' ? 'fa-ban' : 'fa-wifi'}}" aria-hidden="true"/></span>
+                    <div class="off-estado-textos">
+                        <div class="off-estado-titulo">
+                            <t t-if="offline.red === 'en_linea'">En línea</t>
+                            <t t-elif="offline.red === 'debil'">Señal débil</t>
+                            <t t-else="">Sin señal</t>
+                        </div>
+                        <div class="off-estado-sub" t-esc="textoEstadoRed"/>
+                    </div>
                 </div>
 
-                <div class="off-panel-seccion">Trabajar sin señal</div>
-                <div class="off-item-meta" t-esc="textoPreparado"/>
-                <div class="off-item-meta">
-                    Baja TODAS las rutas con clientes pendientes y el catálogo. Con señal débil puede tardar unos minutos: mejor hacerlo con Wi-Fi antes de salir.
+                <!-- (b) Datos en este teléfono -->
+                <div class="off-seccion-cab">
+                    <div class="off-seccion-titulo">Datos en este teléfono</div>
+                    <span t-attf-class="off-chip off-chip-{{datos.frescura}}">
+                        <i t-attf-class="fa {{datos.frescura === 'al_dia' ? 'fa-check' : datos.frescura === 'actualizar' ? 'fa-clock-o' : 'fa-exclamation'}}" aria-hidden="true"/>
+                        <t t-esc="etiquetaFrescura"/>
+                    </span>
                 </div>
-                <label class="off-item-meta">
-                    <input type="checkbox" t-att-checked="local.fotos" t-on-change="toggleFotos" t-att-disabled="offline.preparando"/>
-                    También las fotos del catálogo (la primera vez pesan bastante: mejor con Wi-Fi; después solo baja las que cambien)
-                </label>
-                <button class="off-btn" t-att-disabled="offline.preparando or offline.red === 'sin_senal'" t-on-click="preparar">
-                    <i class="fa fa-download" aria-hidden="true"/>
-                    <t t-esc="offline.preparando ? ' Preparando…' : ' Preparar mi día'"/>
+                <div class="off-checklist">
+                    <div class="off-check">
+                        <span class="off-check-ico"><i class="fa fa-map-o" aria-hidden="true"/></span>
+                        <div class="off-check-textos">
+                            <div class="off-check-titulo">Rutas y clientes</div>
+                            <div class="off-check-sub" t-esc="textoRutas"/>
+                            <div class="off-check-alerta" t-if="datos.rutasNuevas">
+                                <t t-esc="datos.rutasNuevas"/> ruta<t t-if="datos.rutasNuevas !== 1">s</t> nueva<t t-if="datos.rutasNuevas !== 1">s</t> sin descargar
+                            </div>
+                        </div>
+                        <i t-attf-class="fa off-check-estado off-check-{{iconoDatos}} {{iconoDatos === 'ok' ? 'fa-check-circle' : iconoDatos === 'viejo' ? 'fa-exclamation-circle' : 'fa-circle-o'}}" aria-hidden="true"/>
+                    </div>
+                    <div class="off-check">
+                        <span class="off-check-ico"><i class="fa fa-cube" aria-hidden="true"/></span>
+                        <div class="off-check-textos">
+                            <div class="off-check-titulo">Catálogo, precios y existencias</div>
+                            <div class="off-check-sub" t-esc="textoCatalogo"/>
+                        </div>
+                        <i t-attf-class="fa off-check-estado off-check-{{iconoDatos}} {{iconoDatos === 'ok' ? 'fa-check-circle' : iconoDatos === 'viejo' ? 'fa-exclamation-circle' : 'fa-circle-o'}}" aria-hidden="true"/>
+                    </div>
+                    <div class="off-check">
+                        <span class="off-check-ico"><i class="fa fa-picture-o" aria-hidden="true"/></span>
+                        <div class="off-check-textos">
+                            <div class="off-check-titulo">Fotos del catálogo</div>
+                            <div class="off-check-sub" t-esc="textoFotos"/>
+                        </div>
+                        <i t-attf-class="fa off-check-estado {{offline.fotosEn ? 'off-check-ok fa-check-circle' : 'off-check-falta fa-circle-o'}}" aria-hidden="true"/>
+                    </div>
+                </div>
+
+                <!-- (c) Aviso y opciones de la descarga (no hace falta si ya está todo al día) -->
+                <t t-if="datos.frescura !== 'al_dia' or offline.preparando">
+                    <div class="off-aviso">
+                        <i class="fa fa-info-circle" aria-hidden="true"/>
+                        <div><b>Se bajan todas las rutas con clientes pendientes.</b> Con señal débil puede tardar: mejor con Wi-Fi antes de salir.</div>
+                    </div>
+                    <label class="off-interruptor">
+                        <span class="off-interruptor-textos">
+                            <span class="off-interruptor-titulo">Incluir fotos del catálogo</span>
+                            <span class="off-check-sub">Pesan bastante la primera vez · después solo las que cambien</span>
+                        </span>
+                        <input type="checkbox" t-att-checked="local.fotos" t-on-change="toggleFotos" t-att-disabled="offline.preparando"/>
+                    </label>
+                </t>
+                <button
+                    t-attf-class="off-btn {{datos.frescura === 'al_dia' and !offline.preparando ? 'off-btn-ghost' : ''}}"
+                    t-att-disabled="offline.preparando or offline.red === 'sin_senal'"
+                    t-on-click="preparar"
+                >
+                    <i t-attf-class="fa {{datos.frescura === 'al_dia' ? 'fa-refresh' : 'fa-download'}}" aria-hidden="true"/>
+                    <t t-esc="' ' + textoBotonPreparar"/>
                 </button>
                 <t t-if="offline.preparando or offline.mensajePreparar">
                     <div class="off-progreso"><div class="off-progreso-barra" t-att-style="'width:' + offline.progreso + '%'"/></div>
-                    <div class="off-item-meta" t-esc="offline.mensajePreparar"/>
+                    <div class="off-check-sub" t-esc="offline.mensajePreparar"/>
                 </t>
 
-                <div class="off-panel-seccion">
-                    Por enviar (<t t-esc="pendientes.length"/>)<t t-if="conError.length"> · Necesita atención (<t t-esc="conError.length"/>)</t>
-                </div>
-                <div t-if="!offline.cola.length" class="off-item-meta">Nada pendiente: todo está en el sistema.</div>
-                <div t-foreach="offline.cola" t-as="item" t-key="item.uuid" class="off-item">
-                    <div class="off-item-info">
-                        <div t-esc="etiquetaItem(item)"/>
-                        <div class="off-item-meta">
-                            <t t-esc="horaItem(item)"/> · <t t-esc="item.estado === 'error' ? 'Necesita atención' : 'Esperando señal'"/>
+                <!-- (d) Necesita atención (rechazado por el servidor) -->
+                <t t-if="conError.length">
+                    <div class="off-seccion-cab">
+                        <div class="off-seccion-titulo off-seccion-titulo-error">Necesita atención</div>
+                        <span class="off-contador off-contador-error" t-esc="conError.length"/>
+                    </div>
+                    <div t-foreach="conError" t-as="item" t-key="item.uuid" class="off-tarjeta off-tarjeta-error">
+                        <div class="off-tarjeta-cab">
+                            <span class="off-tarjeta-ico"><i class="fa fa-exclamation-circle" aria-hidden="true"/></span>
+                            <div class="off-tarjeta-textos">
+                                <div class="off-tarjeta-titulo"><t t-esc="etiquetaItem(item).split(':')[0]"/> · <t t-esc="clienteItem(item)"/></div>
+                                <div class="off-tarjeta-sub">
+                                    <t t-if="detalleItem(item)"><t t-esc="detalleItem(item)"/> · </t><t t-esc="horaItem(item)"/> · no entró al sistema
+                                </div>
+                            </div>
+                            <div class="off-tarjeta-total" t-if="totalItem(item)" t-esc="totalItem(item)"/>
                         </div>
-                        <div class="off-item-error" t-if="item.estado === 'error'" t-esc="item.error"/>
+                        <div class="off-tarjeta-cuerpo">
+                            <div class="off-motivo">
+                                <i class="fa fa-comment-o" aria-hidden="true"/>
+                                <div><b>Motivo:</b> <t t-esc="item.error"/></div>
+                            </div>
+                            <div class="off-acciones-2">
+                                <button class="off-btn off-btn-chico" t-on-click="() => this.reintentar(item)">Reintentar</button>
+                                <button class="off-btn off-btn-chico off-btn-blanco" t-on-click="() => this.descartar(item)">Descartar</button>
+                            </div>
+                            <t t-if="lineasItem(item).length">
+                                <button class="off-enlace" t-on-click="() => this.toggleItem(item)">
+                                    <t t-esc="local.abiertoUuid === item.uuid ? 'Ocultar los productos' : 'Ver los productos'"/>
+                                </button>
+                                <t t-if="local.abiertoUuid === item.uuid" t-call="shalom_location_map.IndicadorConexionLineas"/>
+                            </t>
+                        </div>
                     </div>
-                    <div class="off-item-acciones" t-if="item.estado === 'error'">
-                        <button class="off-mini-btn" t-on-click="() => this.reintentar(item)">Reintentar</button>
-                        <button class="off-mini-btn off-mini-btn-danger" t-on-click="() => this.descartar(item)">Descartar</button>
+                </t>
+
+                <!-- (d) Esperando señal -->
+                <div class="off-seccion-cab">
+                    <div class="off-seccion-titulo">Esperando señal</div>
+                    <span t-attf-class="off-contador {{pendientes.length ? 'off-contador-pend' : ''}}" t-esc="pendientes.length"/>
+                </div>
+                <div t-if="!pendientes.length" class="off-vacio">
+                    <i class="fa fa-check" aria-hidden="true"/>
+                    <t t-esc="conError.length ? 'Lo demás ya está en el sistema.' : 'Nada esperando: todo está en el sistema.'"/>
+                </div>
+                <div t-foreach="pendientes" t-as="item" t-key="item.uuid" t-attf-class="off-tarjeta {{esPedido(item) ? 'off-tarjeta-pedido' : ''}}">
+                    <button class="off-tarjeta-cab" t-on-click="() => this.toggleItem(item)" t-att-aria-expanded="local.abiertoUuid === item.uuid ? 'true' : 'false'">
+                        <span class="off-tarjeta-ico">
+                            <i t-attf-class="fa {{esPedido(item) ? 'fa-shopping-cart' : item.tipo === 'observacion' ? 'fa-comment-o' : item.tipo === 'gps' ? 'fa-crosshairs' : item.tipo === 'descartar_carrito' ? 'fa-trash-o' : 'fa-check'}}" aria-hidden="true"/>
+                        </span>
+                        <span class="off-tarjeta-textos">
+                            <span class="off-tarjeta-titulo"><t t-esc="etiquetaItem(item).split(':')[0]"/> · <t t-esc="clienteItem(item)"/></span>
+                            <span class="off-tarjeta-sub">
+                                <t t-if="detalleItem(item)"><t t-esc="detalleItem(item)"/> · </t><t t-esc="horaItem(item)"/> · esperando señal
+                            </span>
+                        </span>
+                        <span class="off-tarjeta-total" t-if="totalItem(item)" t-esc="totalItem(item)"/>
+                        <i t-attf-class="fa {{local.abiertoUuid === item.uuid ? 'fa-chevron-up' : 'fa-chevron-down'}} off-tarjeta-flecha" aria-hidden="true"/>
+                    </button>
+                    <div class="off-tarjeta-cuerpo" t-if="local.abiertoUuid === item.uuid">
+                        <t t-if="lineasItem(item).length" t-call="shalom_location_map.IndicadorConexionLineas"/>
+                        <div class="off-check-sub" t-elif="item.resumen and item.resumen.texto" t-esc="item.resumen.texto"/>
+                        <button class="off-btn off-btn-chico off-btn-peligro" t-att-disabled="offline.enviando" t-on-click="() => this.eliminar(item)">
+                            <i class="fa fa-trash-o" aria-hidden="true"/>
+                            <t t-esc="esPedido(item) ? ' Eliminar este pedido (todavía no se envió)' : ' Eliminar (todavía no se envió)'"/>
+                        </button>
                     </div>
                 </div>
-                <button class="off-btn off-btn-ghost" t-if="pendientes.length" t-att-disabled="offline.enviando" t-on-click="enviarAhora">
+                <button class="off-btn off-btn-ghost" t-if="pendientes.length and offline.red !== 'sin_senal'" t-att-disabled="offline.enviando" t-on-click="enviarAhora">
                     <t t-esc="offline.enviando ? 'Enviando…' : 'Enviar ahora'"/>
                 </button>
-                <button class="off-btn off-btn-ghost" t-on-click="cerrar">Cerrar</button>
+
+                <button class="off-cerrar" t-on-click="cerrar">Cerrar</button>
+            </div>
+        </div>
+    </t>
+
+    <!-- Productos de un pedido guardado en el teléfono (vista previa) -->
+    <t t-name="shalom_location_map.IndicadorConexionLineas">
+        <div class="off-lineas">
+            <div t-foreach="lineasItem(item)" t-as="linea" t-key="linea_index" t-attf-class="off-linea {{linea.recompensa ? 'off-linea-regalo' : ''}}">
+                <span class="off-linea-cant"><t t-esc="linea.cantidad"/>×</span>
+                <span class="off-linea-nombre"><t t-if="linea.recompensa">Promoción: </t><t t-esc="linea.nombre"/></span>
+                <span class="off-linea-precio" t-esc="linea.recompensa ? 'regalo' : '$' + (linea.cantidad * linea.precio).toFixed(2)"/>
+            </div>
+            <div class="off-lineas-pie">
+                <span t-if="item.resumen and item.resumen.forma_pago">Forma de pago: <t t-esc="item.resumen.forma_pago"/></span>
+                <span t-else=""/>
+                <b t-if="totalItem(item)">Total <t t-esc="totalItem(item)"/></b>
             </div>
         </div>
     </t>

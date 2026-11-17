@@ -291,7 +291,7 @@ module.exports = (ctx) => {
         ok(pastilla && pastilla.classList.contains("off-pill-compacta"), "pastilla compacta en la cabecera del catálogo");
         click(pastilla);
         await esperar(() => q(".off-panel"));
-        ok(q(".off-panel") && /TODAS las rutas/.test(q(".off-panel").textContent), "abre el panel (Preparar mi día: todas las rutas)");
+        ok(q(".off-panel") && /todas las rutas/i.test(q(".off-panel").textContent), "abre el panel (Preparar mi día: todas las rutas)");
         const src = q(".product-card .product-thumb").getAttribute("src");
         ok(/image_512\?unique=20261101093000$/.test(src), "la foto usa la versión estable del producto (no la fecha del día)", src);
         m.destruir();
@@ -354,6 +354,101 @@ module.exports = (ctx) => {
         };
         ok(await probar(60) === true, "botón pegado a la izquierda: el menú abre hacia la derecha");
         ok(await probar(380) === false, "botón a la derecha: el menú abre hacia la izquierda, como siempre");
+    };
+
+    // -----------------------------------------------------------------
+    // Panel nuevo: checklist, vista previa y Eliminar
+    // -----------------------------------------------------------------
+    async function catalogoConPanel(extra = {}) {
+        const m = await montar(bundle.OrderScreen, {orderId: 5, clienteNombre: "Maxi Carne", onCerrar() {}, onConfirmado() {}}, handlersOrder(extra));
+        await esperar(() => !m.comp.state.cargando && qa(".product-card").length === 3);
+        await sleep(30); // cargarMetaPreparacion
+        return m;
+    }
+
+    escenarios.offline_panel_checklist = async function () {
+        console.log("\n[Panel] checklist: sin descargar / al día / conviene actualizar");
+        fijarOnLine(true);
+        const m = await catalogoConPanel();
+        const E = bundle.estadoOffline;
+        click(q(".order-topbar .off-pill"));
+        await esperar(() => q(".off-panel"));
+        const chip = () => (q(".off-chip") || {}).textContent.trim();
+        ok(chip() === "Sin descargar", "nunca descargó: 'Sin descargar'", chip());
+        ok(/Descargar datos del día/.test(q(".off-panel .off-btn").textContent), "botón 'Descargar datos del día'");
+        E.preparadoEn = Date.now();
+        E.rutasPreparadas = [1, 2];
+        E.rutasDisponibles = [1, 2];
+        E.productosGuardados = 2340;
+        await sleep(30);
+        ok(chip() === "Al día", "descargado hoy y sin rutas nuevas: 'Al día'", chip());
+        ok(/2 rutas · hoy/.test(q(".off-checklist").textContent) && /2,340 productos/.test(q(".off-checklist").textContent), "dice cuántas rutas y productos, y cuándo", q(".off-checklist").textContent);
+        ok(!q(".off-aviso"), "al día: no muestra el aviso de descarga");
+        E.rutasDisponibles = [1, 2, 3];
+        await sleep(30);
+        ok(chip() === "Conviene actualizar", "hay una ruta nueva: 'Conviene actualizar'", chip());
+        ok(/1 ruta nueva sin descargar/.test(q(".off-checklist").textContent), "avisa '1 ruta nueva sin descargar'");
+        ok(q(".off-aviso") && /todas las rutas/i.test(q(".off-aviso").textContent), "aviso de descarga como caja aparte");
+        E.rutasDisponibles = [1, 2];
+        E.preparadoEn = Date.now() - 26 * 3600 * 1000;
+        await sleep(30);
+        ok(chip() === "Conviene actualizar" && /ayer/.test(q(".off-checklist").textContent), "datos de ayer: 'Conviene actualizar' y dice 'ayer'");
+        m.destruir();
+    };
+
+    escenarios.offline_panel_vista_previa_y_eliminar = async function () {
+        console.log("\n[Panel] pedido sin señal: vista previa y Eliminar (nunca enviado)");
+        fijarOnLine(false);
+        const m = await catalogoConPanel();
+        click(qa(".qty-add-btn")[0]);
+        await esperar(() => m.comp.cantidadItems === 1);
+        m.comp.state.formasPagoDisponibles = [{value: "cash", label: "Efectivo"}];
+        m.comp.state.formaPagoSeleccionada = "cash";
+        await m.comp._confirmarPedidoDeVerdad();
+        const [item] = bundle.estadoOffline.cola;
+        ok(item && item.intento_envio === false, "sin señal nunca salió del teléfono", item && item.intento_envio);
+        ok(item && item.resumen && item.resumen.cliente === "Maxi Carne" && item.resumen.lineas[0].nombre === "Tinte Rubio 8.0", "guarda la vista previa (cliente y productos)", item && item.resumen);
+        // el catálogo se cerró: el panel se abre desde otra pastilla
+        const m2 = await montar(bundle.IndicadorConexion, {}, {});
+        globalThis.__conservarAlmacen = false;
+        bundle.estadoOffline.cola.push(item);
+        click(q(".off-pill"));
+        await esperar(() => q(".off-tarjeta"));
+        ok(/Pedido · Maxi Carne/.test(q(".off-tarjeta").textContent) && /\$10\.00/.test(q(".off-tarjeta").textContent), "tarjeta con cliente y total");
+        click(q(".off-tarjeta-cab"));
+        await esperar(() => q(".off-linea"));
+        ok(/Tinte Rubio 8\.0/.test(q(".off-lineas").textContent) && /Efectivo/.test(q(".off-lineas").textContent), "al tocarla muestra productos y forma de pago");
+        click(q(".off-btn-peligro"));
+        await esperar(() => !bundle.estadoOffline.cola.length, 1000);
+        ok(bundle.estadoOffline.cola.length === 0, "Eliminar lo saca de la cola");
+        ok(m2.log.every((c) => c.method !== "shalom_estado_eventos"), "sin preguntar al servidor (nunca se había enviado)");
+        ok(bundle.estadoLocalDeVisita(5) === null, "la visita vuelve a su estado anterior");
+        fijarOnLine(true);
+        m2.destruir();
+        m.destruir();
+    };
+
+    escenarios.offline_eliminar_ya_intentado = async function () {
+        console.log("\n[Panel] Eliminar algo que ya se intentó enviar");
+        fijarOnLine(true);
+        let enServidor = "ok";
+        const m = await catalogoConPanel({
+            "shalom.sync.evento.shalom_procesar_lote": () => { throw new Error("se cortó"); },
+            "shalom.sync.evento.shalom_estado_eventos": (a) => Object.fromEntries(a[0].map((u) => [u, enServidor])),
+        });
+        click(qa(".qty-add-btn")[0]);
+        await esperar(() => m.comp.cantidadItems === 1);
+        m.comp.state.formaPagoSeleccionada = "cash";
+        await m.comp._confirmarPedidoDeVerdad();
+        const [item] = bundle.estadoOffline.cola;
+        ok(item && item.intento_envio === true, "ya viajó al servidor una vez (la respuesta se perdió)");
+        fijarOnLine(false);
+        ok(await bundle.eliminarPendiente(item.uuid) === "sin_senal", "sin señal NO se deja eliminar");
+        ok(bundle.estadoOffline.cola.length === 1, "sigue en la cola");
+        fijarOnLine(true);
+        ok(await bundle.eliminarPendiente(item.uuid) === "ya_entro", "con señal: el servidor dice que ya entró");
+        ok(bundle.estadoOffline.cola.length === 0, "se saca de la cola como hecho (no se duplica ni se pierde el rastro)");
+        m.destruir();
     };
 };
 

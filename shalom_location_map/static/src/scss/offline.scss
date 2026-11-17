@@ -175,11 +175,15 @@
         max-width: 520px;
         max-height: 85vh;
         overflow-y: auto;
-        padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+        padding: 10px 16px calc(18px + env(safe-area-inset-bottom));
         border-radius: 18px 18px 0 0;
         background: var(--shalom-surface);
         color: var(--shalom-ink);
         box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.2);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        box-sizing: border-box;
     }
     @media (min-width: 900px) {
         .off-panel-overlay {
@@ -189,33 +193,225 @@
             border-radius: 18px;
         }
     }
-    .off-panel-titulo {
-        font-size: 1.05rem;
+    // -- Panel (diseño aprobado "Panel de conexión Ruta Shalom") --
+    .off-panel-asa {
+        align-self: center;
+        width: 40px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--shalom-line);
+    }
+
+    // (a) Estado de la conexión: tarjeta de color con ícono grande.
+    .off-estado {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px;
+        border-radius: 14px;
+    }
+    .off-estado-icono {
+        flex: 0 0 auto;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 1.25rem;
+    }
+    .off-estado-textos {
+        flex: 1;
+        min-width: 0;
+    }
+    .off-estado-titulo {
+        font-size: 1.1rem;
         font-weight: 700;
-        margin-bottom: 4px;
     }
-    .off-panel-sub {
-        font-size: 0.8rem;
-        color: var(--shalom-ink-muted);
-        margin-bottom: 14px;
+    .off-estado-sub {
+        font-size: 0.82rem;
+        color: var(--shalom-ink);
+        margin-top: 2px;
     }
-    .off-panel-seccion {
-        margin-top: 16px;
-        font-size: 0.72rem;
+    .off-estado-en_linea {
+        background: var(--shalom-completado-soft);
+        .off-estado-icono { background: var(--shalom-completado); }
+        .off-estado-titulo { color: var(--shalom-completado); }
+    }
+    .off-estado-debil {
+        background: var(--shalom-pendiente-soft);
+        .off-estado-icono { background: var(--shalom-pendiente); }
+        .off-estado-titulo { color: var(--shalom-pendiente); }
+    }
+    .off-estado-sin_senal {
+        background: var(--shalom-stock-danger-bg);
+        .off-estado-icono { background: var(--shalom-alerta); }
+        .off-estado-titulo { color: var(--shalom-stock-danger-ink); }
+    }
+
+    // Cabecera de cada sección: título en mayúsculas + chip/contador.
+    .off-seccion-cab {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: 4px;
+    }
+    .off-seccion-titulo {
+        font-size: 0.74rem;
         font-weight: 700;
         letter-spacing: 0.04em;
         text-transform: uppercase;
         color: var(--shalom-ink-muted);
     }
+    .off-seccion-titulo-error {
+        color: var(--shalom-alerta);
+    }
+    .off-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 0.74rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .off-chip-al_dia {
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+    }
+    .off-chip-actualizar {
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-pendiente);
+    }
+    .off-chip-sin_descargar {
+        background: var(--shalom-stock-danger-bg);
+        color: var(--shalom-stock-danger-ink);
+    }
+    .off-contador {
+        min-width: 22px;
+        height: 22px;
+        padding: 0 6px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: var(--shalom-ink-muted);
+    }
+    .off-contador-pend {
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-pendiente);
+    }
+    .off-contador-error {
+        background: var(--shalom-stock-danger-bg);
+        color: var(--shalom-stock-danger-ink);
+    }
+
+    // (b) Checklist "Datos en este teléfono".
+    .off-checklist {
+        border: 1px solid var(--shalom-line);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+    .off-check {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+    }
+    .off-check + .off-check {
+        border-top: 1px solid var(--shalom-line);
+    }
+    .off-check-ico {
+        flex: 0 0 auto;
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .off-check-textos {
+        flex: 1;
+        min-width: 0;
+    }
+    .off-check-titulo {
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    .off-check-sub {
+        font-size: 0.76rem;
+        color: var(--shalom-ink-muted);
+        margin-top: 1px;
+    }
+    .off-check-alerta {
+        font-size: 0.76rem;
+        font-weight: 700;
+        color: var(--shalom-pendiente);
+        margin-top: 2px;
+    }
+    .off-check-estado {
+        flex: 0 0 auto;
+        font-size: 1.3rem;
+    }
+    .off-check-ok { color: var(--shalom-completado); }
+    .off-check-viejo { color: var(--shalom-pendiente); }
+    .off-check-falta { color: var(--shalom-cancelado); }
+
+    // (c) Aviso de la descarga, separado del resto.
+    .off-aviso {
+        display: flex;
+        gap: 10px;
+        padding: 12px;
+        border-radius: 12px;
+        background: var(--shalom-info-soft);
+        color: var(--shalom-ink);
+        font-size: 0.82rem;
+        line-height: 1.4;
+    }
+    .off-aviso .fa {
+        color: var(--shalom-info);
+        font-size: 1.1rem;
+        margin-top: 1px;
+    }
+    .off-interruptor {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 2px;
+        cursor: pointer;
+    }
+    .off-interruptor input {
+        flex: 0 0 auto;
+        width: 22px;
+        height: 22px;
+        accent-color: var(--shalom-accent);
+    }
+    .off-interruptor-textos {
+        flex: 1;
+        min-width: 0;
+    }
+    .off-interruptor-titulo {
+        display: block;
+        font-size: 0.88rem;
+        font-weight: 600;
+    }
+
+    // Botones.
     .off-btn {
         width: 100%;
-        min-height: 44px;
-        margin-top: 8px;
+        min-height: 48px;
         border: none;
         border-radius: 12px;
         background: var(--shalom-accent);
         color: var(--shalom-accent-ink);
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         font-weight: 700;
         font-family: inherit;
         cursor: pointer;
@@ -227,10 +423,50 @@
     .off-btn-ghost {
         background: var(--shalom-surface-2);
         color: var(--shalom-ink);
+        border: 1px solid var(--shalom-line);
+    }
+    .off-btn-chico {
+        min-height: 44px;
+        font-size: 0.88rem;
+    }
+    .off-btn-blanco {
+        background: var(--shalom-surface);
+        color: var(--shalom-alerta);
+        border: 1px solid var(--shalom-line);
+    }
+    .off-btn-peligro {
+        background: var(--shalom-surface);
+        color: var(--shalom-alerta);
+        border: 1px solid var(--shalom-alerta);
+    }
+    .off-acciones-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .off-enlace {
+        border: none;
+        background: transparent;
+        color: var(--shalom-ink-muted);
+        font-size: 0.82rem;
+        font-weight: 600;
+        font-family: inherit;
+        text-decoration: underline;
+        cursor: pointer;
+        min-height: 36px;
+    }
+    .off-cerrar {
+        min-height: 44px;
+        border: none;
+        background: transparent;
+        color: var(--shalom-ink-muted);
+        font-size: 0.9rem;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
     }
     .off-progreso {
         height: 6px;
-        margin-top: 10px;
         border-radius: 999px;
         background: var(--shalom-surface-2);
         overflow: hidden;
@@ -240,47 +476,148 @@
         background: var(--shalom-accent);
         transition: width 0.3s ease;
     }
-    .off-item {
+
+    // (d) Tarjetas de lo que espera enviarse / necesita atención.
+    .off-vacio {
         display: flex;
+        align-items: center;
         gap: 10px;
-        align-items: flex-start;
-        padding: 10px 0;
-        border-bottom: 1px solid var(--shalom-line);
+        padding: 14px;
+        border-radius: 14px;
+        border: 1px dashed var(--shalom-line);
+        color: var(--shalom-ink-muted);
         font-size: 0.84rem;
     }
-    .off-item-info {
+    .off-vacio .fa {
+        color: var(--shalom-completado);
+    }
+    .off-tarjeta {
+        border: 1px solid var(--shalom-line);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--shalom-surface);
+    }
+    .off-tarjeta-pedido {
+        border-color: var(--shalom-pendiente);
+    }
+    .off-tarjeta-error {
+        border-color: var(--shalom-alerta);
+    }
+    .off-tarjeta-cab {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border: none;
+        background: transparent;
+        color: var(--shalom-ink);
+        font-family: inherit;
+        text-align: left;
+    }
+    button.off-tarjeta-cab {
+        cursor: pointer;
+    }
+    .off-tarjeta-pedido .off-tarjeta-cab {
+        background: var(--shalom-pendiente-soft);
+    }
+    .off-tarjeta-error .off-tarjeta-cab {
+        background: var(--shalom-stock-danger-bg);
+    }
+    .off-tarjeta-ico {
+        flex: 0 0 auto;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: var(--shalom-surface);
+        color: var(--shalom-ink-muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .off-tarjeta-pedido .off-tarjeta-ico { color: var(--shalom-pendiente); }
+    .off-tarjeta-error .off-tarjeta-ico { color: var(--shalom-alerta); }
+    .off-tarjeta-textos {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    .off-tarjeta-titulo {
+        font-size: 0.9rem;
+        font-weight: 700;
+    }
+    .off-tarjeta-sub {
+        font-size: 0.76rem;
+        color: var(--shalom-ink-muted);
+    }
+    .off-tarjeta-total {
+        flex: 0 0 auto;
+        font-size: 1rem;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+    }
+    .off-tarjeta-flecha {
+        flex: 0 0 auto;
+        color: var(--shalom-ink-muted);
+    }
+    .off-tarjeta-cuerpo {
+        padding: 10px 14px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .off-motivo {
+        display: flex;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: var(--shalom-surface-2);
+        font-size: 0.82rem;
+        line-height: 1.4;
+    }
+    .off-motivo .fa {
+        color: var(--shalom-alerta);
+        margin-top: 2px;
+    }
+    .off-lineas {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .off-linea {
+        display: flex;
+        gap: 10px;
+        font-size: 0.82rem;
+    }
+    .off-linea-cant {
+        flex: 0 0 auto;
+        min-width: 34px;
+        font-weight: 700;
+        color: var(--shalom-ink-muted);
+    }
+    .off-linea-nombre {
         flex: 1;
         min-width: 0;
     }
-    .off-item-meta {
-        font-size: 0.74rem;
-        color: var(--shalom-ink-muted);
-        margin-top: 2px;
-    }
-    .off-item-error {
-        font-size: 0.76rem;
-        color: var(--shalom-cancelado);
-        margin-top: 4px;
-    }
-    .off-item-acciones {
-        display: flex;
-        gap: 6px;
+    .off-linea-precio {
         flex: 0 0 auto;
+        font-variant-numeric: tabular-nums;
     }
-    .off-mini-btn {
-        height: 30px;
-        padding: 0 10px;
-        border: 1px solid var(--shalom-line);
-        border-radius: 8px;
-        background: var(--shalom-surface-2);
+    .off-linea-regalo {
+        color: var(--shalom-completado);
+    }
+    .off-lineas-pie {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        padding-top: 8px;
+        border-top: 1px solid var(--shalom-line);
+        font-size: 0.82rem;
+        color: var(--shalom-ink-muted);
+    }
+    .off-lineas-pie b {
         color: var(--shalom-ink);
-        font-size: 0.74rem;
-        font-weight: 600;
-        font-family: inherit;
-        cursor: pointer;
-    }
-    .off-mini-btn-danger {
-        color: var(--shalom-cancelado);
     }
 
     // Aviso fuerte "Pendiente de enviar" (decisión del usuario: "avisar

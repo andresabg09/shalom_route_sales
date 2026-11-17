@@ -298,7 +298,8 @@ export class RutaDetalle extends Component {
         // "Por enviar" / "Revisar") -- ver marcaOffline().
         this.offline = useState(estadoOffline);
         this._dejarDeOir = alTerminarEnvio((item, respuesta) => {
-            if (respuesta.estado === "ok" && this.state.visitasTodas.some((v) => v.id === item.datos.order_id)) {
+            const cambio = respuesta.estado === "ok" || respuesta.estado === "eliminado";
+            if (cambio && this.state.visitasTodas.some((v) => v.id === item.datos.order_id)) {
                 this.cargar({silencioso: true});
             }
         });

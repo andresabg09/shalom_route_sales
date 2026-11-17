@@ -46,6 +46,10 @@ export const estadoOffline = reactive({
     mensajePreparar: "",
     preparadoEn: null,
     fotosEn: null,
+    // Para el checklist "Datos en este teléfono" (ver datos_offline.js):
+    rutasPreparadas: [], // ids de ciclos guardados en el teléfono
+    rutasDisponibles: null, // ids de ciclos con pendientes (última lista con señal)
+    productosGuardados: 0,
 });
 
 let orm = null;
@@ -56,6 +60,9 @@ let fallosSeguidos = 0;
 let timerReintento = null;
 let contadorSeq = 0;
 const esperando = new Map(); // uuid -> [resolve]
+// Acciones que el vendedor está eliminando ahora mismo: no se envían
+// mientras se averigua si ya llegaron al servidor (ver eliminarPendiente).
+const eliminando = new Set();
 const oyentes = new Set();
 
 /** Arranca la cola una sola vez por pestaña. `ormCrudo` tiene que ser el
@@ -116,7 +123,7 @@ export function nuevoUuid() {
  * `datos` debe llevar order_id (la visita). `etiqueta`: texto para el
  * panel ("Pedido de Farmacia X"). Devuelve el uuid.
  */
-export async function encolar(tipo, datos, {etiqueta = ""} = {}) {
+export async function encolar(tipo, datos, {etiqueta = "", resumen = null} = {}) {
     contadorSeq = (contadorSeq + 1) % 1000;
     const item = {
         uuid: nuevoUuid(),
@@ -124,6 +131,12 @@ export async function encolar(tipo, datos, {etiqueta = ""} = {}) {
         tipo,
         datos,
         etiqueta,
+        // Solo para mostrar en el panel (cliente, productos, total...):
+        // NO se manda al servidor.
+        resumen,
+        // true en cuanto viaja al servidor al menos una vez: desde ahí,
+        // eliminarlo exige preguntar si ya entró (la respuesta pudo perderse).
+        intento_envio: false,
         creado_en: new Date().toISOString(),
         estado: "pendiente",
         intentos: 0,
@@ -214,7 +227,7 @@ export function enviarPendientes() {
 
 async function enviarLotes() {
     for (;;) {
-        const pendientes = estadoOffline.cola.filter((i) => i.estado === "pendiente");
+        const pendientes = estadoOffline.cola.filter((i) => i.estado === "pendiente" && !eliminando.has(i.uuid));
         if (!pendientes.length) {
             return;
         }
@@ -226,6 +239,12 @@ async function enviarLotes() {
             return;
         }
         const lote = pendientes.slice(0, TAMANO_LOTE);
+        for (const item of lote) {
+            if (!item.intento_envio) {
+                item.intento_envio = true;
+                await colaGuardar({...item});
+            }
+        }
         estadoOffline.enviando = true;
         let respuestas;
         try {
@@ -292,9 +311,69 @@ export async function reintentar(uuid) {
 
 /** Botón "Descartar" de una acción con error (con confirmación en la UI). */
 export async function descartar(uuid) {
+    const item = estadoOffline.cola.find((i) => i.uuid === uuid);
     await colaBorrar(uuid);
     estadoOffline.cola = estadoOffline.cola.filter((i) => i.uuid !== uuid);
     resolverEspera(uuid, {estado: "error", error: "Descartada por el vendedor."});
+    if (item) {
+        // Las pantallas vuelven a mostrar el estado anterior de la visita.
+        avisarOyentes(item, {estado: "eliminado"});
+    }
+}
+
+/**
+ * Botón "Eliminar" del panel: saca del teléfono una acción que todavía
+ * espera enviarse, SIN riesgo de perder el rastro de algo que ya llegó.
+ * Devuelve:
+ * - "eliminado": nunca había salido del teléfono (o el servidor confirma
+ *   que no la tiene) y se borró.
+ * - "ya_entro": el servidor ya la había recibido (se perdió la respuesta):
+ *   se saca de la cola como hecha; se corrige desde Ventas.
+ * - "sin_senal": ya se intentó enviar y sin señal no se puede averiguar
+ *   si llegó: no se borra.
+ * - "enviando": se está enviando justo ahora; probar en un momento.
+ * - "no_existe": ya no está en la cola (se envió mientras tanto).
+ */
+export async function eliminarPendiente(uuid) {
+    const item = estadoOffline.cola.find((i) => i.uuid === uuid);
+    if (!item) {
+        return "no_existe";
+    }
+    if (estadoOffline.enviando) {
+        return "enviando";
+    }
+    if (!item.intento_envio) {
+        await descartar(uuid);
+        return "eliminado";
+    }
+    if (!orm || sinConexion()) {
+        return "sin_senal";
+    }
+    eliminando.add(uuid);
+    try {
+        let estados;
+        try {
+            estados = await conTimeout(orm.call("shalom.sync.evento", "shalom_estado_eventos", [[uuid]]), TIMEOUT_PING_MS * 2);
+        } catch {
+            marcarRed(false);
+            return "sin_senal";
+        }
+        const enServidor = estados && estados[uuid];
+        if (enServidor === "ok") {
+            await colaBorrar(uuid);
+            estadoOffline.cola = estadoOffline.cola.filter((i) => i.uuid !== uuid);
+            resolverEspera(uuid, {estado: "ok", resultado: {}});
+            avisarOyentes(item, {estado: "ok"});
+            return "ya_entro";
+        }
+        if (enServidor === "procesando") {
+            return "enviando";
+        }
+        await descartar(uuid);
+        return "eliminado";
+    } finally {
+        eliminando.delete(uuid);
+    }
 }
 
 /** Lo que el teléfono todavía no pudo entregar para esta visita. */
@@ -386,6 +465,7 @@ export function _reiniciarSincronizadorParaPruebas() {
     clearTimeout(timerReintento);
     esperando.clear();
     oyentes.clear();
+    eliminando.clear();
     estadoOffline.cola = [];
     estadoOffline.red = "en_linea";
 }

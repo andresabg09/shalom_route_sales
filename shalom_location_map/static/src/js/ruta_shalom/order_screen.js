@@ -2265,6 +2265,25 @@ export class OrderScreen extends Component {
         return this.props.clienteNombre + " ($" + this.total.toFixed(2) + ")";
     }
 
+    /** Lo que el vendedor ve del pedido en el panel de conexión mientras
+     * espera enviarse (vista previa): NO se manda al servidor. */
+    _resumenCola() {
+        const forma = (this.state.formasPagoDisponibles || []).find(
+            (f) => f.value === this.state.formaPagoSeleccionada
+        );
+        return {
+            cliente: this.props.clienteNombre,
+            total: this.total,
+            forma_pago: forma ? forma.label : "",
+            lineas: this.itemsCarrito.map((item) => ({
+                nombre: item.producto.name,
+                cantidad: item.cantidad,
+                precio: item.esRecompensa ? 0 : item.producto.list_price,
+                recompensa: !!item.esRecompensa,
+            })),
+        };
+    }
+
     /** El pedido quedó en la cola del teléfono: desde acá nada vuelve a
      * escribir el carrito compartido (mismo corte que tras confirmar). */
     _marcarGuardadoEnTelefono() {
@@ -2323,7 +2342,7 @@ export class OrderScreen extends Component {
                         : false,
                     includes_itbms: this.state.incluyeItbms,
                 },
-                {etiqueta: this._etiquetaCola()}
+                {etiqueta: this._etiquetaCola(), resumen: this._resumenCola()}
             );
             const respuesta = await esperarResultado(uuid, ESPERA_PEDIDO_MS);
             if (respuesta.estado === "error") {
@@ -2436,7 +2455,7 @@ export class OrderScreen extends Component {
             const uuid = await encolar(
                 "guardar_borrador",
                 {order_id: this.props.orderId, lineas},
-                {etiqueta: this._etiquetaCola()}
+                {etiqueta: this._etiquetaCola(), resumen: this._resumenCola()}
             );
             const respuesta = await esperarResultado(uuid, ESPERA_PEDIDO_MS);
             if (respuesta.estado === "error") {

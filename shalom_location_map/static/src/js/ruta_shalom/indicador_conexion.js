@@ -2,10 +2,11 @@
 
 import {Component, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
-import {cargarMetaPreparacion, esErrorDeRed, prepararDia} from "./datos_offline";
+import {cargarMetaPreparacion, esErrorDeRed, prepararDia, resumenDatosTelefono} from "./datos_offline";
 import {
     comprobarRed,
     descartar,
+    eliminarPendiente,
     enviarPendientes,
     estadoOffline,
     iniciarSincronizador,
@@ -61,7 +62,7 @@ export class IndicadorConexion extends Component {
         // panelAbierto es de CADA pastilla (no del estado compartido): con
         // el catálogo abierto encima de la ruta hay dos pastillas montadas,
         // y con el estado compartido el panel se dibujaba dos veces.
-        this.local = useState({fotos: false, panelAbierto: false});
+        this.local = useState({fotos: false, panelAbierto: false, abiertoUuid: null});
         const ormCrudo = (this.env.services && this.env.services.orm) || this.orm;
         iniciarSincronizador(ormCrudo, this.notification);
         cargarMetaPreparacion();
@@ -111,6 +112,116 @@ export class IndicadorConexion extends Component {
         return this.offline.preparadoEn
             ? `Datos del día descargados ${haceCuanto(this.offline.preparadoEn)}.`
             : "Todavía no descargaste los datos de hoy en este teléfono.";
+    }
+
+    // -- Checklist "Datos en este teléfono" --
+
+    get datos() {
+        return resumenDatosTelefono(this.offline);
+    }
+
+    get etiquetaFrescura() {
+        return {al_dia: "Al día", actualizar: "Conviene actualizar", sin_descargar: "Sin descargar"}[this.datos.frescura];
+    }
+
+    get textoRutas() {
+        const d = this.datos;
+        if (!this.offline.preparadoEn) {
+            return "Sin descargar";
+        }
+        return d.rutasGuardadas + (d.rutasGuardadas === 1 ? " ruta · " : " rutas · ") + d.cuando;
+    }
+
+    get textoCatalogo() {
+        const d = this.datos;
+        if (!this.offline.preparadoEn) {
+            return "Sin descargar";
+        }
+        return d.productos.toLocaleString("en-US") + " productos · " + d.cuando;
+    }
+
+    get textoFotos() {
+        return this.offline.fotosEn
+            ? "Guardadas desde " + this.datos.fotosCuando + " · solo bajan las que cambien"
+            : "Sin descargar · opcional";
+    }
+
+    /** "ok" | "viejo" | "falta": ícono de cada fila del checklist. */
+    get iconoDatos() {
+        return {al_dia: "ok", actualizar: "viejo", sin_descargar: "falta"}[this.datos.frescura];
+    }
+
+    get textoBotonPreparar() {
+        if (this.offline.preparando) {
+            return "Descargando…";
+        }
+        return {
+            al_dia: "Todo al día · actualizar igual",
+            actualizar: "Actualizar datos del día",
+            sin_descargar: "Descargar datos del día",
+        }[this.datos.frescura];
+    }
+
+    get textoEstadoRed() {
+        return {
+            en_linea: this.datos.frescura === "al_dia"
+                ? "Todo lo que hagas se envía al momento."
+                : "Buen momento para actualizar los datos.",
+            debil: "Lo que hagas se guarda y se envía apenas la señal mejore.",
+            sin_senal: "Seguí vendiendo: todo queda guardado y se envía solo. No cierres la app.",
+        }[this.offline.red];
+    }
+
+    // -- Tarjetas de lo que espera enviarse --
+
+    esPedido(item) {
+        return item.tipo === "confirmar_pedido" || item.tipo === "guardar_borrador";
+    }
+
+    clienteItem(item) {
+        return (item.resumen && item.resumen.cliente) || item.etiqueta || "";
+    }
+
+    lineasItem(item) {
+        return (item.resumen && item.resumen.lineas) || [];
+    }
+
+    totalItem(item) {
+        const total = item.resumen && item.resumen.total;
+        return typeof total === "number" ? "$" + total.toFixed(2) : "";
+    }
+
+    detalleItem(item) {
+        const r = item.resumen || {};
+        if (this.esPedido(item)) {
+            const n = this.lineasItem(item).filter((l) => !l.recompensa).length;
+            return n ? n + (n === 1 ? " producto" : " productos") : "";
+        }
+        return r.detalle || "";
+    }
+
+    toggleItem(item) {
+        this.local.abiertoUuid = this.local.abiertoUuid === item.uuid ? null : item.uuid;
+    }
+
+    async eliminar(item) {
+        const que = this.esPedido(item) ? "este pedido" : "esta acción";
+        // eslint-disable-next-line no-alert
+        if (!window.confirm("¿Eliminar " + que + " de " + (this.clienteItem(item) || "este cliente") + "? No se va a enviar al sistema.")) {
+            return;
+        }
+        const resultado = await eliminarPendiente(item.uuid);
+        const mensajes = {
+            eliminado: ["Eliminado del teléfono: no se va a enviar.", "success"],
+            ya_entro: ["Ya había entrado al sistema: no se puede eliminar desde acá, corregilo desde Ventas.", "warning"],
+            sin_senal: ["Ya se intentó enviar y sin señal no se sabe si llegó. Volvé a intentarlo cuando haya señal.", "warning"],
+            enviando: ["Se está enviando justo ahora. Probá de nuevo en un momento.", "warning"],
+            no_existe: ["Ya se envió.", "info"],
+        };
+        const [texto, tipo] = mensajes[resultado] || ["", "info"];
+        if (texto) {
+            this.notification.add(texto, {type: tipo});
+        }
     }
 
     etiquetaItem(item) {

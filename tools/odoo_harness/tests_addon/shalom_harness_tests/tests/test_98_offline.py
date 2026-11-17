@@ -363,6 +363,20 @@ class TestOffline(ShalomCommon):
         self.assertIn("dayroute_id", vals, "el OCA viejo recalculaba la ruta del día por un simple cambio de estado")
 
 
+    def test_estado_eventos_solo_lectura_y_por_vendedor(self):
+        visita = self.visitas["A1"]
+        self._lote(self.u_a, self._ev("uuid-est-ok", "observacion", order_id=visita.id, texto="hola"))
+        cancelado = self.env.ref("fieldservice.fsm_stage_cancelled").id
+        self._lote(self.u_a, self._ev("uuid-est-err", "cambiar_etapa", order_id=self.visitas["A2"].id, stage_id=cancelado))
+        Libro = self.env["shalom.sync.evento"]
+        res = Libro.with_user(self.u_a).shalom_estado_eventos(["uuid-est-ok", "uuid-est-err", "uuid-nunca"])
+        self.assertEqual(res, {"uuid-est-ok": "ok", "uuid-est-err": "error", "uuid-nunca": "desconocido"})
+        # otro vendedor no ve los envíos ajenos; el gerente sí
+        self.assertEqual(Libro.with_user(self.u_b).shalom_estado_eventos(["uuid-est-ok"]), {"uuid-est-ok": "desconocido"})
+        self.assertEqual(Libro.with_user(self.u_mgr).shalom_estado_eventos(["uuid-est-ok"]), {"uuid-est-ok": "ok"})
+        self.assertEqual(Libro.with_user(self.u_a).shalom_estado_eventos("no-lista"), {})
+
+
 @tagged("post_install", "-at_install", "shalom_harness")
 class TestPaginaOffline(HttpCase):
     def test_service_worker_lleva_la_marca_y_lo_de_odoo(self):

@@ -78,6 +78,24 @@ class ShalomSyncEvento(models.Model):
         return {"ok": True}
 
     @api.model
+    def shalom_estado_eventos(self, uuids):
+        """Solo lectura: qué pasó con estas acciones en el servidor. Lo usa
+        el botón "Eliminar" del panel de conexión antes de borrar del
+        teléfono algo que ya se intentó enviar (la respuesta pudo perderse
+        con mala señal y la acción haber entrado igual).
+
+        Devuelve {uuid: "ok" | "error" | "procesando" | "desconocido"}.
+        Cada vendedor ve solo las suyas (un administrador, todas)."""
+        if not isinstance(uuids, list):
+            return {}
+        uuids = [str(u)[:64] for u in uuids[:MAX_EVENTOS_POR_LOTE] if u]
+        dominio = [("uuid", "in", uuids)]
+        if not self.env.user.has_group("fieldservice.group_fsm_manager"):
+            dominio.append(("user_id", "=", self.env.user.id))
+        encontrados = {ev.uuid: ev.estado for ev in self.sudo().search(dominio)}
+        return {u: encontrados.get(u, "desconocido") for u in uuids}
+
+    @api.model
     def shalom_procesar_lote(self, eventos):
         """eventos: [{uuid, tipo, datos, creado_en}] en el orden en que el
         vendedor los hizo. Devuelve [{uuid, estado, resultado | error}]
