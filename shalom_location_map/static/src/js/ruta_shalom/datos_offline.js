@@ -1,6 +1,13 @@
 /** @odoo-module **/
 
-import {guardarLocal, leerLocal, pedirAlmacenamientoPersistente} from "./almacen_local";
+import {
+    borrarLocal,
+    borrarTodoLocal,
+    guardarLocal,
+    leerLocal,
+    listarClaves,
+    pedirAlmacenamientoPersistente,
+} from "./almacen_local";
 import {conTimeout, sinConexion, TiempoAgotadoError} from "./red_utils";
 import {estadoOffline, marcarRed} from "./sincronizador";
 
@@ -103,6 +110,7 @@ export async function traerRutas(orm, ventana) {
     // Para el checklist del panel: qué rutas con pendientes existen (y
     // así cuántas todavía no están en el teléfono).
     estadoOffline.rutasDisponibles = (rutas || []).map((s) => s.id);
+    estadoOffline.rutasNombres = Object.fromEntries((rutas || []).map((s) => [s.id, s.route_name]));
     return rutas;
 }
 
@@ -338,11 +346,155 @@ export async function prepararRuta(orm, schedule) {
         escrituras.push(guardarLocal(`ultima_fp:${locationId}`, datos));
     }
     await Promise.all(escrituras);
-    await guardarLocal(`ruta_preparada:${schedule.id}`, Date.now());
+    const ahora = Date.now();
+    await guardarLocal(`ruta_preparada:${schedule.id}`, ahora);
+    // Ficha de lo que quedó guardado de esta ruta: para mostrarla en el
+    // panel (nombre, clientes, hora) y para la limpieza de lo viejo
+    // (qué visitas y clientes le pertenecen).
+    const visitas = Object.keys(paquete.visitas || {}).map(Number);
+    const clientes = Object.keys(paquete.pedidos || {}).map(Number);
+    const ficha = {nombre: schedule.route_name || "", clientes: visitas.length, en: ahora, visitas, clientes_ids: clientes};
+    await guardarLocal(`meta:ruta_${schedule.id}`, ficha);
+    estadoOffline.rutasMeta = {...estadoOffline.rutasMeta, [schedule.id]: {nombre: ficha.nombre, clientes: ficha.clientes, en: ahora}};
     if (!estadoOffline.rutasPreparadas.includes(schedule.id)) {
         estadoOffline.rutasPreparadas = [...estadoOffline.rutasPreparadas, schedule.id];
         await guardarLocal("meta:rutas_preparadas", estadoOffline.rutasPreparadas);
     }
+}
+
+/**
+ * Borra del teléfono lo que ya no sirve: rutas que ya no tienen clientes
+ * pendientes, y las visitas y clientes que no son de ninguna ruta vigente.
+ * `vigentes`: ids de las rutas con pendientes. `soloRutas`: no tocar
+ * visitas/clientes (si alguna ruta no se pudo bajar, sus datos viejos se
+ * conservan por las dudas). NUNCA toca la cola de lo que espera enviarse.
+ * Devuelve cuántas claves borró.
+ */
+export async function limpiarDatosViejos(vigentes, {soloRutas = false} = {}) {
+    const siguen = new Set(vigentes.map(String));
+    const visitas = new Set();
+    const clientes = new Set();
+    const borrar = [];
+    for (const clave of await listarClaves("meta:ruta_")) {
+        const id = clave.slice("meta:ruta_".length);
+        if (!siguen.has(id)) {
+            borrar.push(clave);
+            continue;
+        }
+        const ficha = await leerLocal(clave);
+        for (const v of (ficha && ficha.valor && ficha.valor.visitas) || []) {
+            visitas.add(String(v));
+        }
+        for (const c of (ficha && ficha.valor && ficha.valor.clientes_ids) || []) {
+            clientes.add(String(c));
+        }
+    }
+    for (const prefijo of ["ruta:", "ruta_preparada:"]) {
+        for (const clave of await listarClaves(prefijo)) {
+            if (!siguen.has(clave.slice(prefijo.length))) {
+                borrar.push(clave);
+            }
+        }
+    }
+    if (!soloRutas) {
+        for (const prefijo of ["visita:", "faltantes:"]) {
+            for (const clave of await listarClaves(prefijo)) {
+                if (!visitas.has(clave.slice(prefijo.length))) {
+                    borrar.push(clave);
+                }
+            }
+        }
+        for (const prefijo of ["ficha:", "pedidos:", "ultima_fp:"]) {
+            for (const clave of await listarClaves(prefijo)) {
+                if (!clientes.has(clave.slice(prefijo.length))) {
+                    borrar.push(clave);
+                }
+            }
+        }
+    }
+    await Promise.all(borrar.map((clave) => borrarLocal(clave)));
+    const metas = {...estadoOffline.rutasMeta};
+    for (const id of Object.keys(metas)) {
+        if (!siguen.has(String(id))) {
+            delete metas[id];
+        }
+    }
+    estadoOffline.rutasMeta = metas;
+    return borrar.length;
+}
+
+/** "Bajar solo lo nuevo": descarga únicamente las rutas con pendientes
+ * que todavía no están en el teléfono (el resto ya está de hoy). */
+export async function prepararSoloNuevas(orm) {
+    if (estadoOffline.preparando) {
+        return;
+    }
+    if (sinConexion()) {
+        throw new SinDatosLocalesError("preparar");
+    }
+    estadoOffline.preparando = true;
+    estadoOffline.progreso = 5;
+    try {
+        estadoOffline.red = "en_linea";
+        const rutas = await traerRutas(orm, ventanaRutas());
+        const tenidas = new Set(estadoOffline.rutasPreparadas);
+        const nuevas = (rutas || []).filter((s) => !tenidas.has(s.id));
+        let hechas = 0;
+        let fallidas = 0;
+        for (const s of nuevas) {
+            estadoOffline.mensajePreparar = `Ruta nueva: ${s.route_name}…`;
+            try {
+                await prepararRuta(orm, s);
+            } catch (error) {
+                fallidas += 1;
+            }
+            hechas += 1;
+            estadoOffline.progreso = 5 + Math.round((95 * hechas) / Math.max(1, nuevas.length));
+        }
+        estadoOffline.mensajePreparar = fallidas
+            ? `Se bajaron ${nuevas.length - fallidas} de ${nuevas.length} rutas nuevas. Probá de nuevo con mejor señal.`
+            : `Listo: ${nuevas.length} ruta(s) nueva(s) en el teléfono.`;
+        estadoOffline.progreso = 100;
+        return {rutas: nuevas.length - fallidas, total: nuevas.length, fallidas};
+    } finally {
+        estadoOffline.preparando = false;
+    }
+}
+
+/** Botón "Borrar" del panel: vacía TODO lo descargado. La cola de lo que
+ * espera enviarse queda intacta. */
+export async function borrarDatosDescargados() {
+    await borrarTodoLocal();
+    estadoOffline.preparadoEn = null;
+    estadoOffline.fotosEn = null;
+    estadoOffline.rutasPreparadas = [];
+    estadoOffline.rutasMeta = {};
+    estadoOffline.productosGuardados = 0;
+    estadoOffline.mensajePreparar = "";
+    await estimarEspacio();
+}
+
+/** Cuánto ocupan los datos de la app en el teléfono (si el navegador lo dice). */
+export async function estimarEspacio() {
+    try {
+        if (navigator.storage && navigator.storage.estimate) {
+            const {usage} = await navigator.storage.estimate();
+            estadoOffline.espacioUsado = typeof usage === "number" ? usage : null;
+            return estadoOffline.espacioUsado;
+        }
+    } catch {
+        // sin API: no se muestra
+    }
+    estadoOffline.espacioUsado = null;
+    return null;
+}
+
+export function textoMegas(bytes) {
+    if (typeof bytes !== "number") {
+        return "";
+    }
+    const mb = bytes / (1024 * 1024);
+    return mb < 1 ? "menos de 1 MB" : `${mb < 10 ? mb.toFixed(1) : Math.round(mb)} MB`;
 }
 
 /** Rutas que "Preparar mi día" descarga: TODAS las que tienen clientes
@@ -430,6 +582,8 @@ export async function prepararDia(orm, {fotos = false, schedules = null} = {}) {
         await guardarLocal("meta:rutas_preparadas", estadoOffline.rutasPreparadas);
         estadoOffline.productosGuardados = catalogo.productos.length;
         await guardarLocal("meta:productos", estadoOffline.productosGuardados);
+        // Lo viejo (ciclos terminados) se borra: el teléfono no acumula.
+        await limpiarDatosViejos(elegidas.map((s) => s.id), {soloRutas: fallidas > 0});
         if (fotos) {
             await precargarFotos(catalogo.productos, (hechas, total) =>
                 paso(`Fotos del catálogo: ${hechas} de ${total}…`, 70 + Math.round((30 * hechas) / Math.max(1, total)))
@@ -438,6 +592,7 @@ export async function prepararDia(orm, {fotos = false, schedules = null} = {}) {
             await guardarLocal("meta:fotos_en", estadoOffline.fotosEn);
         }
         const listas = elegidas.length - fallidas;
+        estimarEspacio();
         paso(
             fallidas
                 ? `Listo: ${listas} de ${elegidas.length} rutas (${fallidas} no se pudieron bajar: probá de nuevo con mejor señal) y ${catalogo.productos.length} productos.`
@@ -455,19 +610,34 @@ export async function prepararDia(orm, {fotos = false, schedules = null} = {}) {
 
 /** Fechas de la última preparación (para "Datos de hace X"). */
 export async function cargarMetaPreparacion() {
-    const [preparado, fotos, rutas, productos, listaRutas] = await Promise.all([
+    const [preparado, fotos, rutas, productos, listaRutas, clavesFichas] = await Promise.all([
         leerLocal("meta:preparado_en"),
         leerLocal("meta:fotos_en"),
         leerLocal("meta:rutas_preparadas"),
         leerLocal("meta:productos"),
         leerLocal("rutas"),
+        listarClaves("meta:ruta_"),
     ]);
+    const metas = {};
+    for (const clave of clavesFichas) {
+        const ficha = await leerLocal(clave);
+        if (ficha && ficha.valor) {
+            metas[Number(clave.slice("meta:ruta_".length))] = {
+                nombre: ficha.valor.nombre,
+                clientes: ficha.valor.clientes,
+                en: ficha.valor.en,
+            };
+        }
+    }
+    estadoOffline.rutasMeta = metas;
+    estimarEspacio();
     estadoOffline.preparadoEn = preparado ? preparado.valor : null;
     estadoOffline.fotosEn = fotos ? fotos.valor : null;
     estadoOffline.rutasPreparadas = rutas && Array.isArray(rutas.valor) ? rutas.valor : [];
     estadoOffline.productosGuardados = productos ? productos.valor || 0 : 0;
     if (estadoOffline.rutasDisponibles === null && listaRutas && Array.isArray(listaRutas.valor)) {
         estadoOffline.rutasDisponibles = listaRutas.valor.map((s) => s.id);
+        estadoOffline.rutasNombres = Object.fromEntries(listaRutas.valor.map((s) => [s.id, s.route_name]));
     }
 }
 
@@ -505,9 +675,29 @@ export function resumenDatosTelefono(estado, ahora = new Date()) {
     } else if (new Date(estado.preparadoEn).toDateString() !== ahora.toDateString() || rutasNuevas > 0) {
         frescura = "actualizar";
     }
+    const nombres = estado.rutasNombres || {};
+    const metas = estado.rutasMeta || {};
+    const rutasLista = (disponibles || [...preparadas]).map((id) => {
+        const meta = metas[id];
+        return {
+            id,
+            nombre: nombres[id] || (meta && meta.nombre) || `Ruta ${id}`,
+            descargada: preparadas.has(id),
+            clientes: meta ? meta.clientes : null,
+            hora: meta && meta.en
+                ? new Date(meta.en).toLocaleTimeString("es-PA", {hour: "numeric", minute: "2-digit"})
+                : "",
+        };
+    }).sort((a, b) => (a.descargada === b.descargada ? a.nombre.localeCompare(b.nombre) : a.descargada ? 1 : -1));
+    // Descargado hoy y solo faltan rutas nuevas: no hace falta bajar todo.
+    const soloNuevas = frescura === "actualizar" && rutasNuevas > 0
+        && new Date(estado.preparadoEn).toDateString() === ahora.toDateString();
     return {
         frescura,
         rutasGuardadas,
+        rutasTotal: disponibles ? disponibles.length : preparadas.size,
+        rutasLista,
+        soloNuevas,
         rutasNuevas,
         productos: estado.productosGuardados || 0,
         cuando: cuandoAmigable(estado.preparadoEn),

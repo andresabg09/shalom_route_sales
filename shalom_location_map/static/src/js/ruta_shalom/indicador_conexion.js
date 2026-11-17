@@ -2,7 +2,15 @@
 
 import {Component, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
-import {cargarMetaPreparacion, esErrorDeRed, prepararDia, resumenDatosTelefono} from "./datos_offline";
+import {
+    borrarDatosDescargados,
+    cargarMetaPreparacion,
+    esErrorDeRed,
+    prepararDia,
+    prepararSoloNuevas,
+    resumenDatosTelefono,
+    textoMegas,
+} from "./datos_offline";
 import {
     comprobarRed,
     descartar,
@@ -62,7 +70,13 @@ export class IndicadorConexion extends Component {
         // panelAbierto es de CADA pastilla (no del estado compartido): con
         // el catálogo abierto encima de la ruta hay dos pastillas montadas,
         // y con el estado compartido el panel se dibujaba dos veces.
-        this.local = useState({fotos: false, panelAbierto: false, abiertoUuid: null});
+        this.local = useState({
+            fotos: false,
+            panelAbierto: false,
+            abiertoUuid: null,
+            verRutas: false, // lista de rutas desplegada
+            confirmandoDescarga: false, // "Ya tienes todo descargado…"
+        });
         const ormCrudo = (this.env.services && this.env.services.orm) || this.orm;
         iniciarSincronizador(ormCrudo, this.notification);
         cargarMetaPreparacion();
@@ -129,6 +143,9 @@ export class IndicadorConexion extends Component {
         if (!this.offline.preparadoEn) {
             return "Sin descargar";
         }
+        if (this.offline.rutasDisponibles) {
+            return d.rutasGuardadas + " de " + d.rutasTotal + (d.rutasTotal === 1 ? " ruta · " : " rutas · ") + d.cuando;
+        }
         return d.rutasGuardadas + (d.rutasGuardadas === 1 ? " ruta · " : " rutas · ") + d.cuando;
     }
 
@@ -155,6 +172,10 @@ export class IndicadorConexion extends Component {
         if (this.offline.preparando) {
             return "Descargando…";
         }
+        if (this.datos.soloNuevas) {
+            const n = this.datos.rutasNuevas;
+            return "Bajar solo lo nuevo (" + n + (n === 1 ? " ruta)" : " rutas)");
+        }
         return {
             al_dia: "Todo al día · actualizar igual",
             actualizar: "Actualizar datos del día",
@@ -170,6 +191,39 @@ export class IndicadorConexion extends Component {
             debil: "Lo que hagas se guarda y se envía apenas la señal mejore.",
             sin_senal: "Seguí vendiendo: todo queda guardado y se envía solo. No cierres la app.",
         }[this.offline.red];
+    }
+
+    get textoEspacio() {
+        const megas = textoMegas(this.offline.espacioUsado);
+        return megas
+            ? megas + " en este teléfono · lo viejo se borra solo"
+            : "Lo viejo se borra solo cada vez que descargás";
+    }
+
+    toggleRutas() {
+        this.local.verRutas = !this.local.verRutas;
+    }
+
+    noDescargar() {
+        this.local.confirmandoDescarga = false;
+    }
+
+    async descargarIgual() {
+        this.local.confirmandoDescarga = false;
+        await this._descargar(false);
+    }
+
+    async borrarDatos() {
+        const pendientes = this.pendientes.length + this.conError.length;
+        const extra = pendientes
+            ? "\n\nLo que espera enviarse (" + pendientes + ") NO se borra: se sigue enviando solo."
+            : "";
+        // eslint-disable-next-line no-alert
+        if (!window.confirm("¿Borrar todo lo descargado de este teléfono? Sin señal no vas a poder ver rutas ni catálogo hasta volver a descargar." + extra)) {
+            return;
+        }
+        await borrarDatosDescargados();
+        this.notification.add("Datos descargados borrados del teléfono.", {type: "success"});
     }
 
     // -- Tarjetas de lo que espera enviarse --
@@ -251,6 +305,31 @@ export class IndicadorConexion extends Component {
     }
 
     async preparar() {
+        // Todo al día: preguntar antes (no hace falta volver a descargar).
+        if (this.datos.frescura === "al_dia" && !this.local.fotos) {
+            this.local.confirmandoDescarga = true;
+            return;
+        }
+        await this._descargar(this.datos.soloNuevas && !this.local.fotos);
+    }
+
+    async _descargar(soloNuevas) {
+        if (soloNuevas) {
+            try {
+                const r = await prepararSoloNuevas(ormDeLaCola() || this.orm);
+                if (r) {
+                    this.notification.add(
+                        r.fallidas
+                            ? "Se bajaron " + r.rutas + " de " + r.total + " rutas nuevas. Las demás: probá de nuevo con mejor señal."
+                            : "Listo: " + r.rutas + (r.rutas === 1 ? " ruta nueva guardada." : " rutas nuevas guardadas."),
+                        {type: r.fallidas ? "warning" : "success"}
+                    );
+                }
+            } catch (error) {
+                this.notification.add("Sin buena señal: no se pudieron bajar las rutas nuevas.", {type: "danger"});
+            }
+            return;
+        }
         try {
             const r = await prepararDia(ormDeLaCola() || this.orm, {fotos: this.local.fotos});
             if (r) {

@@ -450,5 +450,77 @@ module.exports = (ctx) => {
         ok(bundle.estadoOffline.cola.length === 0, "se saca de la cola como hecho (no se duplica ni se pierde el rastro)");
         m.destruir();
     };
+
+    // -----------------------------------------------------------------
+    // No duplicar, limpiar lo viejo y ver qué hay descargado
+    // -----------------------------------------------------------------
+    escenarios.offline_panel_rutas_y_confirmacion = async function () {
+        console.log("\n[Panel] qué rutas hay, 'solo lo nuevo' y confirmación al repetir");
+        fijarOnLine(true);
+        const preparadas = [];
+        const m = await catalogoConPanel({
+            "fsm.person.shalom_mis_rutas_programadas": () => [
+                {id: 1, route_name: "3 - Chilibre"}, {id: 2, route_name: "14 - Chiriquí"}, {id: 3, route_name: "22 - Arraiján"},
+            ],
+            "fsm.order.searchRead": () => [],
+            "fsm.route.read": () => [{id: 1, x_ruta_trazado: false}],
+            "fsm.route.schedule.shalom_paquete_offline": (a) => { preparadas.push(a[0]); return {visitas: {}, faltantes: {}, fichas: {}, pedidos: {}, ultima_fp: {}}; },
+        });
+        const E = bundle.estadoOffline;
+        Object.assign(E, {
+            preparadoEn: Date.now(), rutasPreparadas: [1, 2], rutasDisponibles: [1, 2, 3], productosGuardados: 10,
+            rutasNombres: {1: "3 - Chilibre", 2: "14 - Chiriquí", 3: "22 - Arraiján"},
+            rutasMeta: {1: {nombre: "3 - Chilibre", clientes: 22, en: Date.now()}, 2: {nombre: "14 - Chiriquí", clientes: 31, en: Date.now()}},
+        });
+        click(q(".order-topbar .off-pill"));
+        await esperar(() => q(".off-panel"));
+        ok(/2 de 3 rutas/.test(q(".off-checklist").textContent), "dice '2 de 3 rutas'", q(".off-checklist").textContent);
+        click(q(".off-check-boton"));
+        await esperar(() => qa(".off-ruta-fila").length === 3);
+        const filas = qa(".off-ruta-fila").map((f) => f.textContent.replace(/\s+/g, " ").trim());
+        ok(filas.length === 3 && /22 - Arraiján\s*Sin descargar/.test(filas[0]) && /22 clientes/.test(filas.join("|")), "lista cada ruta: ✓ con clientes y hora, o 'Sin descargar' (primero)", filas);
+        const boton = () => q(".off-panel > .off-btn");
+        ok(/Bajar solo lo nuevo \(1 ruta\)/.test(boton().textContent), "botón 'Bajar solo lo nuevo (1 ruta)'", boton().textContent);
+        click(boton());
+        await esperar(() => preparadas.length === 1 && !E.preparando, 2000);
+        ok(preparadas.join(",") === "3", "baja SOLO la ruta nueva, no todo de nuevo", preparadas);
+        await sleep(30);
+        ok((q(".off-chip") || {}).textContent.trim() === "Al día", "queda 'Al día'");
+        click(boton());
+        await esperar(() => q(".off-confirmacion"));
+        ok(q(".off-confirmacion") && /no ocupa espacio extra/.test(q(".off-confirmacion").textContent), "con todo al día pregunta antes de descargar de nuevo");
+        ok(preparadas.length === 1, "y no descargó nada todavía");
+        const no = qa(".off-confirmacion button").find((b) => /No, está bien/.test(b.textContent));
+        click(no);
+        await sleep(60);
+        ok(!q(".off-confirmacion"), "'No, está bien' cierra la pregunta");
+        m.destruir();
+    };
+
+    escenarios.offline_limpieza_y_borrar = async function () {
+        console.log("\n[Almacén] limpiar lo viejo y 'Borrar' sin tocar lo pendiente");
+        fijarOnLine(true);
+        const m = await catalogoConPanel();
+        const g = bundle.guardarLocal;
+        await g("meta:ruta_1", {nombre: "R1", clientes: 1, en: 1, visitas: [10], clientes_ids: [100]});
+        await g("meta:ruta_9", {nombre: "R9", clientes: 1, en: 1, visitas: [90], clientes_ids: [900]});
+        for (const k of ["ruta:1", "ruta:9", "ruta_preparada:1", "ruta_preparada:9", "visita:10", "visita:90", "faltantes:90", "pedidos:100", "pedidos:900", "ficha:900", "ultima_fp:900", "catalogo"]) {
+            await g(k, {x: 1});
+        }
+        await bundle.colaGuardar({uuid: "u-pend", seq: 1, tipo: "observacion", datos: {order_id: 5}, estado: "pendiente"});
+        const borradas = await bundle.limpiarDatosViejos([1]);
+        const quedan = (await bundle.listarClaves("")).sort();
+        // 8 de la ruta 9 + lo que el catálogo guardó de la visita 5 / cliente 7,
+        // que no es de ninguna ruta vigente
+        ok(borradas >= 8, "borra las claves de la ruta terminada (ruta, visitas y clientes)", borradas);
+        ok(["catalogo", "meta:ruta_1", "pedidos:100", "ruta:1", "ruta_preparada:1", "visita:10"].every((k) => quedan.includes(k)), "conserva la ruta vigente y el catálogo", quedan);
+        ok(!quedan.some((k) => /:9$|:90$|:900$|ruta_9/.test(k)), "no queda nada de la ruta vieja", quedan);
+        ok((await bundle.colaListar()).length === 1, "la cola de pendientes queda intacta");
+        await bundle.borrarDatosDescargados();
+        ok((await bundle.listarClaves("")).length === 0, "'Borrar' vacía todo lo descargado");
+        ok((await bundle.colaListar()).length === 1, "pero NO lo que espera enviarse");
+        ok(bundle.estadoOffline.preparadoEn === null && bundle.estadoOffline.rutasPreparadas.length === 0, "el panel queda en 'Sin descargar'");
+        m.destruir();
+    };
 };
 

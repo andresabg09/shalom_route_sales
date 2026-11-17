@@ -360,6 +360,84 @@
         flex: 0 0 auto;
         font-size: 1.3rem;
     }
+    // Fila "Rutas y clientes" (se despliega) y la lista de rutas.
+    .off-check-boton {
+        width: 100%;
+        border: none;
+        background: transparent;
+        color: var(--shalom-ink);
+        font-family: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .off-check-boton .off-check-textos > span {
+        display: block;
+    }
+    .off-rutas-lista {
+        border-top: 1px solid var(--shalom-line);
+        background: var(--shalom-bg);
+        max-height: 240px;
+        overflow-y: auto;
+    }
+    .off-rutas-lista + .off-check {
+        border-top: 1px solid var(--shalom-line);
+    }
+    .off-ruta-fila {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 14px 9px 60px;
+        font-size: 0.82rem;
+    }
+    .off-ruta-nombre {
+        flex: 1;
+        min-width: 0;
+    }
+    .off-ruta-falta .off-ruta-nombre {
+        font-weight: 600;
+        color: var(--shalom-pendiente);
+    }
+    .off-ruta-dato {
+        flex: 0 0 auto;
+        font-size: 0.74rem;
+        color: var(--shalom-ink-muted);
+    }
+    .off-ruta-dato-falta {
+        font-weight: 700;
+        color: var(--shalom-pendiente);
+    }
+    .off-borrar {
+        flex: 0 0 auto;
+        min-height: 34px;
+        padding: 0 10px;
+        border: 1px solid var(--shalom-line);
+        border-radius: 8px;
+        background: var(--shalom-surface);
+        color: var(--shalom-alerta);
+        font-size: 0.76rem;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+    }
+    // "Ya tienes todo descargado": confirmación antes de repetir.
+    .off-confirmacion {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 16px;
+        border: 1px solid var(--shalom-line);
+        background: var(--shalom-surface);
+        box-shadow: var(--shalom-shadow);
+    }
+    .off-confirmacion-cab {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+    }
+    .off-confirmacion-cab .fa {
+        font-size: 1.3rem;
+    }
     .off-check-ok { color: var(--shalom-completado); }
     .off-check-viejo { color: var(--shalom-pendiente); }
     .off-check-falta { color: var(--shalom-cancelado); }

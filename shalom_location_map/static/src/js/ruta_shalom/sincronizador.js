@@ -50,6 +50,9 @@ export const estadoOffline = reactive({
     rutasPreparadas: [], // ids de ciclos guardados en el teléfono
     rutasDisponibles: null, // ids de ciclos con pendientes (última lista con señal)
     productosGuardados: 0,
+    rutasNombres: {}, // {id: nombre} de la última lista de rutas
+    rutasMeta: {}, // {id: {nombre, clientes, en}} de cada ruta guardada
+    espacioUsado: null, // bytes que ocupa la app en el teléfono (si se sabe)
 });
 
 let orm = null;
@@ -468,4 +471,9 @@ export function _reiniciarSincronizadorParaPruebas() {
     eliminando.clear();
     estadoOffline.cola = [];
     estadoOffline.red = "en_linea";
+    Object.assign(estadoOffline, {
+        preparadoEn: null, fotosEn: null, rutasPreparadas: [], rutasDisponibles: null,
+        productosGuardados: 0, rutasNombres: {}, rutasMeta: {}, espacioUsado: null,
+        preparando: false, progreso: 0, mensajePreparar: "",
+    });
 }

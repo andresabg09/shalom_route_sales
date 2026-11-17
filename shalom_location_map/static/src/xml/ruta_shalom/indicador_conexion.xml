@@ -39,16 +39,28 @@
                     </span>
                 </div>
                 <div class="off-checklist">
-                    <div class="off-check">
+                    <button class="off-check off-check-boton" t-on-click="toggleRutas" t-att-aria-expanded="local.verRutas ? 'true' : 'false'">
                         <span class="off-check-ico"><i class="fa fa-map-o" aria-hidden="true"/></span>
-                        <div class="off-check-textos">
-                            <div class="off-check-titulo">Rutas y clientes</div>
-                            <div class="off-check-sub" t-esc="textoRutas"/>
-                            <div class="off-check-alerta" t-if="datos.rutasNuevas">
+                        <span class="off-check-textos">
+                            <span class="off-check-titulo">Rutas y clientes</span>
+                            <span class="off-check-sub" t-esc="textoRutas"/>
+                            <span class="off-check-alerta" t-if="datos.rutasNuevas">
                                 <t t-esc="datos.rutasNuevas"/> ruta<t t-if="datos.rutasNuevas !== 1">s</t> nueva<t t-if="datos.rutasNuevas !== 1">s</t> sin descargar
-                            </div>
+                            </span>
+                        </span>
+                        <i t-attf-class="fa {{local.verRutas ? 'fa-chevron-up' : 'fa-chevron-down'}} off-tarjeta-flecha" aria-hidden="true"/>
+                    </button>
+                    <!-- Cuáles rutas están en el teléfono y cuáles no -->
+                    <div class="off-rutas-lista" t-if="local.verRutas">
+                        <div t-if="!datos.rutasLista.length" class="off-ruta-fila off-check-sub">Todavía no hay rutas guardadas.</div>
+                        <div t-foreach="datos.rutasLista" t-as="ruta" t-key="ruta.id" t-attf-class="off-ruta-fila {{ruta.descargada ? '' : 'off-ruta-falta'}}">
+                            <i t-attf-class="fa {{ruta.descargada ? 'fa-check off-check-ok' : 'fa-circle-o off-check-viejo'}}" aria-hidden="true"/>
+                            <span class="off-ruta-nombre" t-esc="ruta.nombre"/>
+                            <span class="off-ruta-dato" t-if="ruta.descargada">
+                                <t t-if="ruta.clientes !== null"><t t-esc="ruta.clientes"/> clientes · </t><t t-esc="ruta.hora"/>
+                            </span>
+                            <span class="off-ruta-dato off-ruta-dato-falta" t-else="">Sin descargar</span>
                         </div>
-                        <i t-attf-class="fa off-check-estado off-check-{{iconoDatos}} {{iconoDatos === 'ok' ? 'fa-check-circle' : iconoDatos === 'viejo' ? 'fa-exclamation-circle' : 'fa-circle-o'}}" aria-hidden="true"/>
                     </div>
                     <div class="off-check">
                         <span class="off-check-ico"><i class="fa fa-cube" aria-hidden="true"/></span>
@@ -65,6 +77,14 @@
                             <div class="off-check-sub" t-esc="textoFotos"/>
                         </div>
                         <i t-attf-class="fa off-check-estado {{offline.fotosEn ? 'off-check-ok fa-check-circle' : 'off-check-falta fa-circle-o'}}" aria-hidden="true"/>
+                    </div>
+                    <div class="off-check">
+                        <span class="off-check-ico"><i class="fa fa-database" aria-hidden="true"/></span>
+                        <div class="off-check-textos">
+                            <div class="off-check-titulo">Espacio usado</div>
+                            <div class="off-check-sub" t-esc="textoEspacio"/>
+                        </div>
+                        <button class="off-borrar" t-if="offline.preparadoEn" t-att-disabled="offline.preparando" t-on-click="borrarDatos">Borrar</button>
                     </div>
                 </div>
 
@@ -84,12 +104,27 @@
                 </t>
                 <button
                     t-attf-class="off-btn {{datos.frescura === 'al_dia' and !offline.preparando ? 'off-btn-ghost' : ''}}"
+                    t-if="!local.confirmandoDescarga"
                     t-att-disabled="offline.preparando or offline.red === 'sin_senal'"
                     t-on-click="preparar"
                 >
                     <i t-attf-class="fa {{datos.frescura === 'al_dia' ? 'fa-refresh' : 'fa-download'}}" aria-hidden="true"/>
                     <t t-esc="' ' + textoBotonPreparar"/>
                 </button>
+                <!-- Todo al día: confirmar antes de volver a descargar -->
+                <div class="off-confirmacion" t-if="local.confirmandoDescarga" role="alertdialog" aria-label="Ya tienes todo descargado">
+                    <div class="off-confirmacion-cab">
+                        <i class="fa fa-check-circle off-check-ok" aria-hidden="true"/>
+                        <div>
+                            <div class="off-tarjeta-titulo">Ya tienes todo descargado</div>
+                            <div class="off-check-sub">Descargaste <t t-esc="datos.cuando"/>. Si descargas de nuevo, se reemplaza lo anterior: no ocupa espacio extra.</div>
+                        </div>
+                    </div>
+                    <div class="off-acciones-2">
+                        <button class="off-btn off-btn-chico off-btn-ghost" t-on-click="noDescargar">No, está bien</button>
+                        <button class="off-btn off-btn-chico" t-on-click="descargarIgual">Descargar igual</button>
+                    </div>
+                </div>
                 <t t-if="offline.preparando or offline.mensajePreparar">
                     <div class="off-progreso"><div class="off-progreso-barra" t-att-style="'width:' + offline.progreso + '%'"/></div>
                     <div class="off-check-sub" t-esc="offline.mensajePreparar"/>

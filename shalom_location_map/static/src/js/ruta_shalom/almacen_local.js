@@ -141,6 +141,19 @@ export async function borrarLocal(clave) {
     await operar("kv", "readwrite", (s) => s.delete(clave), () => undefined);
 }
 
+/** Claves guardadas que empiezan con `prefijo` (todas si es ""). */
+export async function listarClaves(prefijo = "") {
+    const claves = await operar("kv", "readonly", (s) => s.getAllKeys(), () => [...memoria.kv.keys()]);
+    return (claves || []).filter((clave) => String(clave).startsWith(prefijo));
+}
+
+/** Borra TODOS los datos descargados ("kv"). NUNCA toca la cola de lo
+ * que espera enviarse (store "cola"). */
+export async function borrarTodoLocal() {
+    memoria.kv.clear();
+    await operar("kv", "readwrite", (s) => s.clear(), () => undefined);
+}
+
 // ------------------------------------------------------------------
 // Cola de salida ("cola")
 // ------------------------------------------------------------------
