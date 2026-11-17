@@ -2,7 +2,7 @@
 <templates xml:space="preserve">
     <t t-name="shalom_location_map.OrderScreen">
         <div class="order-overlay" t-att-class="state.cerrando ? 'closing' : ''" t-ref="raiz">
-            <div class="order-topbar">
+            <div class="order-topbar" t-ref="topbar">
                 <button class="icon-btn" t-on-click="atras" title="Atrás">←</button>
                 <div class="order-topbar-title">
                     <div class="route-name" t-esc="state.pantalla === 'carrito' ? 'Carrito' : 'Tomar pedido'"/>
@@ -16,7 +16,7 @@
             <!-- Cabecera compacta: se esconde al bajar por el catálogo y
                  vuelve al subir (ver onScrollCatalogo en order_screen.js). -->
             <t t-set="med" t-value="medidor"/>
-            <div class="order-cabecera" t-att-class="clasesCabecera">
+            <div class="order-cabecera" t-att-class="clasesCabecera" t-ref="cabecera">
                 <div class="order-cabecera-dentro">
                     <div
                         class="nag-banner nag-compacto"
@@ -142,7 +142,8 @@
 
                 <div
                     class="view catalog-list"
-                    t-att-class="'vista-' + state.vistaCatalogo"
+                    t-att-class="'vista-' + state.vistaCatalogo + (cabeceraEsFlotante ? ' con-cabecera-flotante' : '')"
+                    t-ref="listaCatalogo"
                     t-on-scroll="onScrollCatalogo"
                 >
                     <div class="paginador" t-if="totalPaginas > 1">
@@ -254,10 +255,34 @@
             </t>
 
             <t t-elif="state.pantalla === 'carrito'">
-                <div class="view cart-list">
+                <!-- Lista o cuadrícula: el mismo botón (y la misma elección)
+                     que el catálogo. Orden: arriba lo primero que se agregó. -->
+                <div class="carrito-barra" t-if="itemsCarrito.length">
+                    <span class="catalogo-cuenta" t-esc="itemsCarrito.length + (itemsCarrito.length === 1 ? ' producto' : ' productos')"/>
+                    <div class="vista-toggle" role="group" aria-label="Vista del carrito">
+                        <button
+                            t-att-class="state.vistaCatalogo === 'lista' ? 'active' : ''"
+                            t-on-click="() => this.cambiarVistaCatalogo('lista')"
+                            title="Ver como lista"
+                            aria-label="Ver como lista"
+                        ><i class="fa fa-list" aria-hidden="true"/></button>
+                        <button
+                            t-att-class="state.vistaCatalogo === 'cuadricula' ? 'active' : ''"
+                            t-on-click="() => this.cambiarVistaCatalogo('cuadricula')"
+                            title="Ver como cuadrícula"
+                            aria-label="Ver como cuadrícula"
+                        ><i class="fa fa-th-large" aria-hidden="true"/></button>
+                    </div>
+                </div>
+                <div class="view cart-list" t-att-class="'vista-' + state.vistaCatalogo">
                     <div t-if="!itemsCarrito.length" class="shalom-vacio">El carrito está vacío.</div>
                     <div t-foreach="itemsCarrito" t-as="item" t-key="item.esRecompensa ? 'reward-' + item.reglaId : item.producto.id" class="cart-line">
-                        <div class="product-thumb-wrap">
+                        <div
+                            class="product-thumb-wrap"
+                            t-att-class="item.esRecompensa ? '' : 'con-zoom-foto'"
+                            t-on-click="() => this.abrirFotoLinea(item)"
+                            t-att-title="item.esRecompensa ? '' : 'Ver foto de ' + item.producto.name"
+                        >
                             <img
                                 t-if="!item.esRecompensa"
                                 class="product-thumb"

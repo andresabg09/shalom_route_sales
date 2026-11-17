@@ -175,7 +175,9 @@ function servicios(handlers) {
 const montados = [];
 async function montar(Comp, props, handlers) {
     const s = servicios(handlers);
-    sessionStorage.clear(); localStorage.clear();
+    // __conservarSesion: simula que Odoo recarga la app (Atrás real) sin
+    // perder lo que la pestaña guardó.
+    if (!globalThis.__conservarSesion) { sessionStorage.clear(); localStorage.clear(); }
     // Cada montaje arranca con la cola y el almacén offline vacíos (son
     // estado de módulo: si no, quedarían con el ORM falso del anterior).
     if (bundle._reiniciarSincronizadorParaPruebas) bundle._reiniciarSincronizadorParaPruebas();

@@ -1,6 +1,6 @@
 /** @odoo-module **/
 
-import {Component, onWillStart, onWillUnmount, useEffect, useRef, useState} from "@odoo/owl";
+import {Component, onMounted, onWillStart, onWillUnmount, useEffect, useRef, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {DateTimeInput} from "@web/core/datetime/datetime_input";
 import {normalizarAccionActWindow} from "./action_utils";
@@ -230,6 +230,37 @@ function shalomVistaCatalogoInicial() {
     return window.matchMedia && window.matchMedia("(min-width: 768px)").matches ? "cuadricula" : "lista";
 }
 
+// Dónde estaba el vendedor en el catálogo (página, búsqueda, categoría,
+// "Con stock" y scroll), por visita. Bug real reportado: con el Atrás de
+// Android (o del navegador) estando en la foto ampliada, Odoo recarga la
+// app entera (ver back_stack.js) y el catálogo volvía a la página 1 sin
+// filtros. Ahora se reconstruye exactamente donde estaba: el Atrás solo
+// cierra la foto. sessionStorage (vive lo que la pestaña); se borra al
+// cerrar el catálogo con sus propios controles o al confirmar.
+const VIDA_VISTA_GUARDADA_MS = 2 * 3600 * 1000;
+
+function claveVistaGuardada(orderId) {
+    return `shalom_catalogo_donde_${orderId}`;
+}
+
+function leerVistaGuardada(orderId) {
+    try {
+        const v = JSON.parse(window.sessionStorage.getItem(claveVistaGuardada(orderId)) || "null");
+        if (v && Date.now() - (v.en || 0) < VIDA_VISTA_GUARDADA_MS) {
+            return v;
+        }
+    } catch {
+        // sin almacenamiento o dato roto: se arranca de cero
+    }
+    return null;
+}
+
+// Cabecera que se esconde al bajar (histéresis): hay que bajar/subir un
+// trecho SEGUIDO para que cambie, así un vistazo arriba y abajo no la
+// hace aparecer y desaparecer.
+const CABECERA_ESCONDER_PX = 48;
+const CABECERA_MOSTRAR_PX = 72;
+
 export class OrderScreen extends Component {
     static template = "shalom_location_map.OrderScreen";
     static components = {ClienteForm, DateTimeInput, TemaSelector, RecorridoGuiado, IndicadorConexion};
@@ -256,6 +287,15 @@ export class OrderScreen extends Component {
         this.pasosRecorrido = PASOS_CATALOGO;
         this.fotoLienzoRef = useRef("fotoLienzo");
         this.fotoImgRef = useRef("fotoAmpliadaImg");
+        this.listaCatalogoRef = useRef("listaCatalogo");
+        this.topbarRef = useRef("topbar");
+        this.cabeceraRef = useRef("cabecera");
+        // Cabecera flotante (se desliza sobre la lista sin cambiar su alto):
+        // necesita medir su altura; sin ResizeObserver, como antes.
+        this.cabeceraFlotante = typeof ResizeObserver !== "undefined";
+        const donde = leerVistaGuardada(this.props.orderId);
+        this._scrollPendiente = donde ? donde.scroll || 0 : 0;
+        this._scrollActual = this._scrollPendiente;
         this.stream = null;
         this.intervaloEscaneo = null;
         this.detectorEnCurso = false;
@@ -288,12 +328,12 @@ export class OrderScreen extends Component {
             cargando: true,
             pantalla: carritoInicial ? "carrito" : "catalogo",
             productos: [],
-            busqueda: "",
-            categoriaSeleccionada: CATEGORIA_TODAS,
+            busqueda: (donde && donde.busqueda) || "",
+            categoriaSeleccionada: donde && donde.categoria !== undefined ? donde.categoria : CATEGORIA_TODAS,
             categMenuAbierto: false,
             busquedaCategoria: "",
-            soloConStock: false,
-            paginaActual: 1,
+            soloConStock: !!(donde && donde.soloConStock),
+            paginaActual: (donde && donde.pagina) || 1,
             vistaCatalogo: shalomVistaCatalogoInicial(),
             // Cabecera compacta: el medidor se despliega al tocarlo, y toda
             // la cabecera se esconde al bajar por el catálogo (vuelve al subir).
@@ -382,6 +422,51 @@ export class OrderScreen extends Component {
 
         this._restaurarBorradorCarritoSiCorresponde();
 
+        // Recordar dónde está el vendedor en el catálogo (ver
+        // leerVistaGuardada) cada vez que cambia la página o un filtro.
+        useEffect(
+            () => this._guardarDonde(),
+            () => [this.state.paginaActual, this.state.busqueda, this.state.categoriaSeleccionada, this.state.soloConStock]
+        );
+        // Cuando el catálogo ya está dibujado: página dentro del rango y
+        // el scroll donde estaba.
+        useEffect(
+            () => {
+                if (this.state.cargando || this.state.pantalla !== "catalogo") {
+                    return;
+                }
+                if (this.state.paginaActual > this.totalPaginas) {
+                    this.state.paginaActual = this.totalPaginas;
+                }
+                const lista = this.listaCatalogoRef.el;
+                if (this._scrollPendiente && lista) {
+                    const y = this._scrollPendiente;
+                    this._scrollPendiente = 0;
+                    lista.scrollTop = y;
+                    requestAnimationFrame(() => {
+                        if (this.listaCatalogoRef.el && this.listaCatalogoRef.el.scrollTop < y) {
+                            this.listaCatalogoRef.el.scrollTop = y;
+                        }
+                    });
+                }
+            },
+            () => [this.state.cargando, this.state.pantalla, this.listaCatalogoRef.el]
+        );
+        // Alturas de la barra superior y de la cabecera, para que la
+        // cabecera flote sobre la lista y la lista le deje su lugar.
+        onMounted(() => {
+            if (!this.cabeceraFlotante || !this.raizRef.el) {
+                return;
+            }
+            this._observadorAlturas = new ResizeObserver(() => this._medirCabecera());
+            for (const ref of [this.topbarRef, this.cabeceraRef]) {
+                if (ref.el) {
+                    this._observadorAlturas.observe(ref.el);
+                }
+            }
+            this._medirCabecera();
+        });
+
         // La pantalla aparece YA (con "Cargando catálogo…") y la carga
         // corre por detrás: antes no se veía nada hasta tener todo.
         onWillStart(() => {
@@ -399,6 +484,10 @@ export class OrderScreen extends Component {
         // irACarrito()/irACatalogo() más abajo.
         onWillUnmount(() => {
             this._destruido = true;
+            if (this._observadorAlturas) {
+                this._observadorAlturas.disconnect();
+            }
+            clearTimeout(this._guardarDondeTimer);
             this.detenerEscaneo();
             if (this._syncSondeo) {
                 this._syncSondeo.detener();
@@ -518,6 +607,10 @@ export class OrderScreen extends Component {
             cantidad: item.cantidad,
             es_recompensa: !!item.esRecompensa,
             regla_id: item.reglaId || false,
+            // Momento en que se agregó (para mostrar el carrito en ese
+            // orden en todos los dispositivos). El servidor guarda la
+            // línea tal cual.
+            orden: item.orden || 0,
         };
     }
 
@@ -529,18 +622,25 @@ export class OrderScreen extends Component {
     _carritoDesdeServidor(dictServidor) {
         const carrito = {};
         for (const [clave, linea] of Object.entries(dictServidor || {})) {
-            const enCatalogo = this.state.productos.find((p) => p.id === linea.product_id);
+            const enCatalogo = this.productoDeLinea(linea);
             carrito[clave] = {
-                producto: {
-                    id: linea.product_id,
-                    name: linea.name,
-                    list_price: linea.list_price,
-                    qty_available: enCatalogo ? enCatalogo.qty_available : 0,
-                    categ_id: enCatalogo ? enCatalogo.categ_id : false,
-                },
+                // Productos normales: el MISMO objeto del catálogo (trae la
+                // versión de la foto, foto_v: así la foto sale de lo
+                // guardado en el teléfono y no se vuelve a bajar).
+                producto:
+                    enCatalogo && !linea.es_recompensa
+                        ? enCatalogo
+                        : {
+                              id: linea.product_id,
+                              name: linea.name,
+                              list_price: linea.list_price,
+                              qty_available: enCatalogo ? enCatalogo.qty_available : 0,
+                              categ_id: enCatalogo ? enCatalogo.categ_id : false,
+                          },
                 cantidad: linea.cantidad,
                 esRecompensa: !!linea.es_recompensa,
                 reglaId: linea.regla_id || false,
+                orden: linea.orden || 0,
             };
         }
         return carrito;
@@ -1114,7 +1214,7 @@ export class OrderScreen extends Component {
     get productosParaCategorias() {
         const texto = this.state.busqueda.trim().toLowerCase();
         return this.state.productos.filter((producto) => {
-            if (this.state.soloConStock && this.stockLibre(producto) <= 0) {
+            if (this.state.soloConStock && !this.tieneStock(producto)) {
                 return false;
             }
             if (!texto) {
@@ -1197,6 +1297,50 @@ export class OrderScreen extends Component {
         this.state.paginaActual = 1;
     }
 
+    _guardarDonde() {
+        if (this._cerrado) {
+            return;
+        }
+        try {
+            window.sessionStorage.setItem(
+                claveVistaGuardada(this.props.orderId),
+                JSON.stringify({
+                    pagina: this.state.paginaActual,
+                    busqueda: this.state.busqueda,
+                    categoria: this.state.categoriaSeleccionada,
+                    soloConStock: this.state.soloConStock,
+                    scroll: Math.round(this._scrollActual || 0),
+                    en: Date.now(),
+                })
+            );
+        } catch {
+            // sin almacenamiento: solo se pierde la posición tras un Atrás
+        }
+    }
+
+    _borrarDonde() {
+        try {
+            window.sessionStorage.removeItem(claveVistaGuardada(this.props.orderId));
+        } catch {
+            // nada que borrar
+        }
+    }
+
+    /** Pone en la raíz las alturas de la barra superior y de la cabecera
+     * (--alto-topbar / --alto-cabecera), que usa el CSS de la cabecera
+     * flotante. */
+    _medirCabecera() {
+        const raiz = this.raizRef.el;
+        if (!raiz) {
+            return;
+        }
+        const topbar = this.topbarRef.el;
+        const cabecera = this.cabeceraRef.el;
+        this._altoCabecera = cabecera ? cabecera.offsetHeight : 0;
+        raiz.style.setProperty("--alto-topbar", `${topbar ? topbar.offsetHeight : 0}px`);
+        raiz.style.setProperty("--alto-cabecera", `${this._altoCabecera}px`);
+    }
+
     /** Se recalcula solo si cambió algo que lo afecta: el template lo
      * pide varias veces por dibujado (páginas, cuenta, lista) y filtrar
      * 700+ productos en cada uno se notaba al desplazarse. */
@@ -1223,7 +1367,7 @@ export class OrderScreen extends Component {
             ) {
                 return false;
             }
-            if (this.state.soloConStock && this.stockLibre(producto) <= 0) {
+            if (this.state.soloConStock && !this.tieneStock(producto)) {
                 return false;
             }
             if (!texto) {
@@ -1272,7 +1416,7 @@ export class OrderScreen extends Component {
         //     cuando terminó de cargar;
         //  3. al acercar (zoom), igual con la original (1920 px).
         // Nunca se reemplaza lo que se ve por algo que no cargó.
-        const v = producto.foto_v;
+        const v = this._versionFoto(producto);
         this.state.fotoAmpliada = {
             url: this._urlFoto(producto.id, TAMANO_FOTO_TARJETA, v),
             urlBase: this._urlFoto(producto.id, TAMANO_FOTO_TARJETA, v),
@@ -1545,7 +1689,16 @@ export class OrderScreen extends Component {
         if (this.state.categMenuAbierto) {
             clases.push("menu-abierto");
         }
+        if (this.cabeceraEsFlotante) {
+            clases.push("flotante");
+        }
         return clases.join(" ");
+    }
+
+    /** Solo en el catálogo ya cargado: flota sobre la lista y se desliza.
+     * En el carrito queda fija, como siempre. */
+    get cabeceraEsFlotante() {
+        return this.cabeceraFlotante && this.state.pantalla === "catalogo" && !this.state.cargando;
     }
 
     /** Bajar por la lista esconde la cabecera; subir (o volver arriba)
@@ -1553,26 +1706,44 @@ export class OrderScreen extends Component {
      * una pausa tras cada cambio: al esconderse/mostrarse cambia el alto
      * de la lista, y eso mismo dispara eventos de scroll. */
     onScrollCatalogo(ev) {
+        const lista = ev.currentTarget;
+        const actual = lista.scrollTop;
+        // Dónde está el vendedor (para volver acá tras un Atrás), con pausa.
+        this._scrollActual = actual;
+        clearTimeout(this._guardarDondeTimer);
+        this._guardarDondeTimer = setTimeout(() => this._guardarDonde(), 250);
         if (this.state.recorridoAbierto) {
             return;
         }
-        const lista = ev.currentTarget;
-        const actual = lista.scrollTop;
         const anterior = this._ultimoScrollCatalogo || 0;
         this._ultimoScrollCatalogo = actual;
-        if (Date.now() < (this._pausaCabeceraHasta || 0)) {
+        if (!this.cabeceraFlotante && Date.now() < (this._pausaCabeceraHasta || 0)) {
             return;
         }
+        // Bug real reportado ("aparece de golpe, la pantalla se mueve"):
+        // antes cambiaba con 6 px de movimiento y animando su altura, que
+        // corría toda la lista. Ahora la cabecera flota y se desliza (el
+        // contenido no se mueve), y hace falta un trecho seguido en el
+        // mismo sentido para que cambie.
+        const delta = actual - anterior;
+        if (!delta) {
+            return;
+        }
+        if (Math.sign(delta) !== Math.sign(this._recorridoCabecera || 0)) {
+            this._recorridoCabecera = 0;
+        }
+        this._recorridoCabecera = (this._recorridoCabecera || 0) + delta;
         let oculta = this.state.cabeceraOculta;
-        if (actual < 24) {
+        if (actual < Math.max(24, this._altoCabecera || 0)) {
             oculta = false;
-        } else if (actual - anterior > 6 && lista.scrollHeight - lista.clientHeight > 240) {
+        } else if (this._recorridoCabecera > CABECERA_ESCONDER_PX && lista.scrollHeight - lista.clientHeight > 240) {
             oculta = true;
-        } else if (anterior - actual > 6) {
+        } else if (this._recorridoCabecera < -CABECERA_MOSTRAR_PX) {
             oculta = false;
         }
         if (oculta !== this.state.cabeceraOculta) {
             this.state.cabeceraOculta = oculta;
+            this._recorridoCabecera = 0;
             this._pausaCabeceraHasta = Date.now() + 280;
         }
     }
@@ -1601,16 +1772,37 @@ export class OrderScreen extends Component {
         return urlFotoProducto(productId, campo, version);
     }
 
+    /** Versión de la foto de un producto: la que trae o, si no (líneas
+     * del carrito restauradas, recompensas), la del catálogo cargado. Sin
+     * versión la URL cambia cada día y no coincide con la foto guardada
+     * en el teléfono (bug real: el carrito tardaba en mostrar las fotos). */
+    _versionFoto(producto) {
+        if (producto.foto_v) {
+            return producto.foto_v;
+        }
+        const enCatalogo = this.productoDeLinea({product_id: producto.id});
+        return enCatalogo ? enCatalogo.foto_v : null;
+    }
+
     imagenUrl(producto) {
         // Tarjetas del catálogo y líneas del carrito. El tamaño en
         // pantalla (120-200 px) lo controla el CSS (.product-thumb).
-        return this._urlFoto(producto.id, TAMANO_FOTO_TARJETA, producto.foto_v);
+        return this._urlFoto(producto.id, TAMANO_FOTO_TARJETA, this._versionFoto(producto));
     }
 
-    /** Miniatura liviana (256px) para las listas; la foto grande queda para el catálogo. */
+    /** "Pedidos anteriores": la misma foto de las tarjetas (ya guardada en
+     * el teléfono) en vez de una miniatura aparte que había que bajar. */
     imagenPrecarga(linea) {
-        const producto = this.productoDeLinea(linea);
-        return this._urlFoto(linea.product_id, "image_256", producto && producto.foto_v);
+        return this._urlFoto(linea.product_id, TAMANO_FOTO_TARJETA, this._versionFoto({id: linea.product_id}));
+    }
+
+    /** Tocar la foto de una línea del carrito: la misma foto ampliada con
+     * zoom del catálogo (con el producto del catálogo, que trae foto_v). */
+    abrirFotoLinea(item) {
+        if (item.esRecompensa) {
+            return;
+        }
+        this.abrirFoto(this.productoDeLinea({product_id: item.producto.id}) || item.producto);
     }
 
     onImagenError(ev) {
@@ -1642,8 +1834,16 @@ export class OrderScreen extends Component {
         el.style.display = "none";
     }
 
+    /** Líneas del carrito en el orden en que se agregaron: arriba la más
+     * vieja, abajo la más nueva. Antes salían "en desorden": JavaScript
+     * ordena las claves numéricas (ids de producto) de menor a mayor.
+     * Las líneas guardadas antes de este cambio (sin "orden") quedan
+     * arriba, en su orden de siempre. */
     get itemsCarrito() {
-        return Object.values(this.state.carrito);
+        return Object.values(this.state.carrito)
+            .map((item, i) => [item, i])
+            .sort(([a, i], [b, j]) => (a.orden || 0) - (b.orden || 0) || i - j)
+            .map(([item]) => item);
     }
 
     /** Solo los productos pagos (sin las líneas de recompensa) -- lo
@@ -1702,6 +1902,17 @@ export class OrderScreen extends Component {
             return {texto: `Quedan ${libre}`, tono: "warning"};
         }
         return {texto: `Disponible: ${libre}`, tono: "success"};
+    }
+
+    /** Para el filtro "Con stock": hay en Dianke O en Nevada (cualquiera
+     * de las dos alcanza). Sin datos por bodega, el stock libre de siempre.
+     * Antes solo miraba el stock libre propio y dejaba afuera los
+     * productos que solo tienen Nevada. */
+    tieneStock(producto) {
+        if (producto.stock_dianke !== undefined) {
+            return (producto.stock_dianke || 0) > 0 || (producto.stock_nevada || 0) > 0;
+        }
+        return this.stockLibre(producto) > 0;
     }
 
     /** Etiquetas de las dos bodegas, como en Ventas: Dianke (verde =
@@ -1904,6 +2115,7 @@ export class OrderScreen extends Component {
             this.state.carrito[producto.id] = {
                 producto,
                 cantidad: (actual ? actual.cantidad : 0) + linea.cantidad,
+                orden: actual && actual.orden ? actual.orden : this._siguienteOrden(),
             };
             this._marcarCambioPendienteCarrito(producto.id);
             agregados += 1;
@@ -1970,11 +2182,19 @@ export class OrderScreen extends Component {
         return this.etiquetaPromo(productoId).includes("✅");
     }
 
+    /** Marca de orden para una línea nueva del carrito: siempre mayor que
+     * la anterior (aunque se agreguen varias en el mismo milisegundo). */
+    _siguienteOrden() {
+        this._ultimoOrden = Math.max(Date.now(), (this._ultimoOrden || 0) + 1);
+        return this._ultimoOrden;
+    }
+
     agregarProducto(producto) {
         const actual = this.state.carrito[producto.id];
         this.state.carrito[producto.id] = {
             producto,
             cantidad: (actual ? actual.cantidad : 0) + 1,
+            orden: actual && actual.orden ? actual.orden : this._siguienteOrden(),
         };
         this.actualizarPromos();
         this._guardarBorradorCarrito();
@@ -2168,6 +2388,7 @@ export class OrderScreen extends Component {
             cantidad: (actual ? actual.cantidad : 0) + unidadesACargar,
             esRecompensa: true,
             reglaId: recompensa.regla_id,
+            orden: actual && actual.orden ? actual.orden : this._siguienteOrden(),
         };
         this.state.recompensaMenuAbierto = false;
         this.notification.add(
@@ -2684,6 +2905,7 @@ export class OrderScreen extends Component {
         // (VisitSheet.cerrarPedido(), llamado abajo vía onCerrar) --
         // ver el comentario grande al principio del archivo.
         this._borrarBorradorCarrito();
+        this._borrarDonde();
         this.props.onCerrar();
     }
 }

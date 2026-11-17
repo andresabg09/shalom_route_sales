@@ -35,6 +35,36 @@
     .order-cabecera.menu-abierto .order-cabecera-dentro {
         overflow: visible;
     }
+    // Catálogo: la cabecera FLOTA sobre la lista y se esconde deslizándose
+    // hacia arriba (transform), sin cambiar el alto de la lista. Bug real
+    // reportado: al animar la altura, toda la lista se corría "de golpe".
+    // La lista le deja su lugar arriba (--alto-cabecera, medido en
+    // order_screen.js); la barra superior queda por encima y la tapa.
+    .order-topbar {
+        position: relative;
+        z-index: 4;
+        background: var(--shalom-bg);
+    }
+    .order-cabecera.flotante {
+        position: absolute;
+        top: var(--alto-topbar, 0px);
+        left: 0;
+        right: 0;
+        z-index: 3;
+        background: var(--shalom-bg);
+        grid-template-rows: 1fr;
+        transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+        will-change: transform;
+    }
+    .order-cabecera.flotante.oculta {
+        grid-template-rows: 1fr;
+        transform: translateY(-100%);
+        pointer-events: none;
+    }
+    .catalog-list.con-cabecera-flotante {
+        padding-top: calc(var(--alto-cabecera, 0px) + 10px);
+        scroll-padding-top: var(--alto-cabecera, 0px);
+    }
 
     // ------------------------------------------------------------------
     // Aviso de datos faltantes en una sola línea
@@ -486,22 +516,35 @@
             height: 38px;
             font-size: 0.88rem;
         }
+        // Bug real reportado (tablet): los −/+ eran grandes y al número le
+        // quedaba poco lugar: 2-4 dígitos se cortaban. Botones más chicos
+        // y el número se queda con todo el espacio libre ("9999" entra
+        // completo desde la tarjeta más angosta, 155 px; medido en Chromium).
+        .qty-row {
+            gap: 4px;
+            width: 100%;
+        }
         .qty-stepper {
+            flex: 1 1 auto;
             padding: 2px;
             gap: 2px;
         }
         .qty-stepper button {
-            min-width: 34px;
-            height: 34px;
-            font-size: 1.05rem;
+            flex: 0 0 28px;
+            width: 28px;
+            min-width: 28px;
+            height: 32px;
+            font-size: 1rem;
         }
         .qty-input {
-            font-size: 0.95rem;
+            font-size: 0.9rem;
+            padding: 0;
         }
         .qty-trash-btn {
-            width: 36px;
-            height: 36px;
-            font-size: 0.9rem;
+            flex: 0 0 30px;
+            width: 30px;
+            height: 32px;
+            font-size: 0.85rem;
         }
     }
     @media (min-width: 768px) {
@@ -775,5 +818,114 @@
         background: var(--shalom-surface-2);
         color: var(--shalom-ink-muted);
         cursor: default;
+    }
+}
+
+// ----------------------------------------------------------------------
+// Carrito en lista o cuadrícula (mismo botón y misma elección que el
+// catálogo; las tarjetas de la cuadrícula siguen las medidas de
+// .catalog-list.vista-cuadricula). Tocar la foto la abre en grande.
+// ----------------------------------------------------------------------
+.o_shalom_ruta_app {
+    .carrito-barra {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--shalom-line);
+    }
+    .carrito-barra .catalogo-cuenta {
+        display: inline;
+    }
+    .cart-line .product-thumb-wrap.con-zoom-foto {
+        cursor: zoom-in;
+    }
+
+    .cart-list.vista-cuadricula {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+        gap: 10px;
+        align-content: start;
+
+        > .shalom-vacio {
+            grid-column: 1 / -1;
+        }
+    }
+    .cart-list.vista-cuadricula .cart-line {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        min-width: 0;
+        margin: 0;
+        padding: 8px;
+        border-radius: var(--shalom-radius-md);
+
+        .product-thumb-wrap {
+            width: 100%;
+            height: 150px;
+            margin: 0;
+        }
+        .product-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .name {
+            font-size: 0.8rem;
+            line-height: 1.25;
+            min-height: 2.5em;
+        }
+        .addr {
+            font-size: 0.75rem;
+        }
+        .promo-badge {
+            padding: 2px 6px;
+            font-size: 0.72rem;
+            white-space: normal;
+        }
+        .qty-row {
+            margin-top: auto;
+            width: 100%;
+        }
+        // El número con todo el ancho libre (la basura va abajo, aparte).
+        .qty-stepper {
+            flex: 1 1 auto;
+            justify-content: space-between;
+            gap: 2px;
+            padding: 2px;
+        }
+        .qty-stepper button {
+            flex: 0 0 30px;
+            width: 30px;
+            height: 32px;
+        }
+        .qty-input {
+            flex: 1 1 0;
+            width: 0;
+            min-width: 0;
+            padding: 0;
+            font-size: 0.95rem;
+        }
+        .cart-line-bottom-row {
+            flex-wrap: wrap;
+            gap: 4px 8px;
+        }
+        .qty-trash-btn {
+            font-size: 0.78rem;
+        }
+    }
+    @media (min-width: 768px) {
+        .cart-list.vista-cuadricula {
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 12px;
+        }
+        .cart-list.vista-cuadricula .cart-line .product-thumb-wrap {
+            height: 180px;
+        }
     }
 }
