@@ -1894,6 +1894,31 @@ class FSMOrder(models.Model):
             return (ultima.x_jornada or 1) + 1
         return ultima.x_jornada or 1
 
+    # Campos cuyo cambio SÍ debe recalcular la "ruta del día" de
+    # fieldservice_route (los mismos que usa su versión corregida, ver
+    # _manage_fsm_route abajo).
+    _SHALOM_CAMPOS_RUTA_DEL_DIA = {"person_id", "scheduled_date_start"}
+
+    def _manage_fsm_route(self, vals):
+        """fieldservice_route (OCA), en versiones anteriores a su arreglo
+        del 17/08/2026 ("one dayroute per worker and day"), recalculaba la
+        "ruta del día" (fsm.route.dayroute) en CUALQUIER escritura de una
+        visita con vendedor y fecha: pasarla a Completada, guardar el
+        carrito, el latido del catálogo... Con un máximo de pedidos en la
+        ruta, eso la metía en una ruta del día "excedida" y Odoo rechazaba
+        TODO ("La ruta del día está excediendo el número máximo de pedidos
+        de la ruta") -- bug real reportado: un pedido que no se podía
+        confirmar de ninguna forma.
+
+        Esta app no usa rutas del día (ver _shalom_pasar_visitas en
+        shalom_gerente.py). Igual que la versión corregida de OCA: solo se
+        recalcula si la escritura cambia el vendedor o la fecha programada
+        (o al crear la visita, que siempre trae esos campos). Si no, la
+        visita se queda en la ruta del día que ya tenía, sin tocar nada."""
+        if not self._SHALOM_CAMPOS_RUTA_DEL_DIA & set(vals):
+            return vals
+        return super()._manage_fsm_route(vals)
+
     def write(self, vals):
         if self.env.context.get("shalom_validar_cierre_visita"):
             self._validar_cierre_visita(vals)

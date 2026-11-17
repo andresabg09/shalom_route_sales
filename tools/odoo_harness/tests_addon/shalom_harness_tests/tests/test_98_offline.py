@@ -2,6 +2,7 @@
 """Modo offline: registro de carritos descartados (Fase 1) y cola de
 salida idempotente (Fase 3)."""
 import json
+from unittest import mock
 from datetime import timedelta
 
 from odoo import fields
@@ -303,6 +304,63 @@ class TestOffline(ShalomCommon):
         self.assertGreater(despues[self.p_tinte.id], antes[self.p_tinte.id])
         self.assertEqual(despues[self.p_oxi.id], antes[self.p_oxi.id])
         self.assertEqual(Orden.shalom_marcas_fotos([]), {})
+
+
+    # ------------------------------------------------------------------
+    # Bug real: "La ruta del día está excediendo el número máximo de
+    # pedidos" al confirmar (fieldservice_route anterior al 17/08/2026)
+    # ------------------------------------------------------------------
+    def _write_fieldservice_route_viejo(self):
+        """write() de fieldservice_route ANTES de su arreglo: recalculaba la
+        ruta del día en CUALQUIER escritura (el del servidor del cliente)."""
+        from odoo.addons.fieldservice_route.models.fsm_order import FSMOrder as FSMOrderOCA
+
+        def write_viejo(this, vals):
+            for rec in this:
+                if (vals.get("person_id") or rec.person_id) and (
+                    vals.get("scheduled_date_start") or rec.scheduled_date_start
+                ):
+                    vals = rec._manage_fsm_route(vals)
+            return super(FSMOrderOCA, this).write(vals)
+
+        return mock.patch.object(FSMOrderOCA, "write", write_viejo)
+
+    def _visita_con_ruta_del_dia(self, clave):
+        visita = self.visitas[clave]
+        dias = [self.env.ref(f"fieldservice_route.fsm_route_day_{i}").id for i in range(7)]
+        visita.fsm_route_id.sudo().day_ids = [(6, 0, dias)]  # la ruta "corre" todos los días
+        visita.sudo().write({"person_id": self.per_a.id, "scheduled_date_start": fields.Datetime.now()})
+        self.assertTrue(visita.dayroute_id, "la visita queda en una ruta del día")
+        return visita
+
+    def test_confirmar_no_toca_la_ruta_del_dia(self):
+        visita = self._visita_con_ruta_del_dia("A1")
+        ruta_del_dia = visita.dayroute_id
+        Dayroute = self.env["fsm.route.dayroute"].sudo()
+        cuantas = Dayroute.search_count([])
+        # escrituras que no cambian vendedor ni fecha: no se recalcula nada
+        self.assertEqual(visita._manage_fsm_route({"stage_id": 1}), {"stage_id": 1})
+        with self._write_fieldservice_route_viejo():
+            [r] = self._lote(self.u_a, self._ev("uuid-ruta-dia", "confirmar_pedido", order_id=visita.id,
+                                                lineas=self.lineas((self.p_tinte, 1)), payment_method="efectivo"))
+        self.assertEqual(r["estado"], "ok", r)
+        visita.invalidate_recordset()
+        self.assertTrue(visita.stage_id.is_closed)
+        self.assertEqual(visita.dayroute_id, ruta_del_dia, "sigue en la misma ruta del día")
+        self.assertEqual(Dayroute.search_count([]), cuantas, "no se creó ninguna ruta del día nueva")
+
+    def test_sin_el_arreglo_la_ruta_del_dia_se_recalculaba(self):
+        """Prueba de que el escenario de arriba reproduce el bug: con el
+        _manage_fsm_route original de OCA, la misma escritura de estado SÍ
+        mueve/crea rutas del día (lo que en el servidor terminaba en el
+        error de capacidad)."""
+        from odoo.addons.fieldservice_route.models.fsm_order import FSMOrder as FSMOrderOCA
+
+        visita = self._visita_con_ruta_del_dia("A2")
+        self.env["fsm.route"].browse(visita.fsm_route_id.id).sudo().max_order = 1
+        visita.dayroute_id.invalidate_recordset()
+        vals = FSMOrderOCA._manage_fsm_route(visita, {"stage_id": 1})
+        self.assertIn("dayroute_id", vals, "el OCA viejo recalculaba la ruta del día por un simple cambio de estado")
 
 
 @tagged("post_install", "-at_install", "shalom_harness")
