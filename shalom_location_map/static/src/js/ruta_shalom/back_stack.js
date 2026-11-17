@@ -237,6 +237,26 @@ function leerYLimpiarRetorno() {
 }
 
 /**
+ * Agrega datos al nivel `tipo` más reciente de la lista guardada (sin
+ * tocar el historial). Lo usa el catálogo al confirmar el pedido
+ * ({confirmado: true}): si después llega un Atrás real y Odoo recarga
+ * todo, la hoja de visita sabe que no tiene que reabrir el catálogo de un
+ * pedido ya enviado -- aunque la visita leída del teléfono (modo offline)
+ * todavía diga "pendiente".
+ */
+export function marcarNivel(tipo, cambios) {
+    const pila = leerPilaCruda();
+    for (let i = pila.length - 1; i >= 0; i--) {
+        if (pila[i] && pila[i].tipo === tipo) {
+            Object.assign(pila[i], cambios);
+            guardarPilaCruda(pila);
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * Se llama UNA sola vez, en ShalomRutaApp.setup() -- antes de armar el
  * estado inicial, para que la reconstrucción salga bien en el primer
  * render (sin un flash del hub antes de la pantalla real). Lee la

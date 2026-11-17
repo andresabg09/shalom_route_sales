@@ -147,10 +147,18 @@ export class VisitSheet extends Component {
             // Reconstrucción tras un Atrás: si el pedido de esta visita ya
             // se confirmó (Atrás desde la pantalla de resultado), no se
             // reabre el catálogo encima de una visita Completada.
+            // También si el catálogo quedó marcado "confirmado" en la pila
+            // (marcarNivel en order_screen.js): la visita leída del teléfono
+            // puede seguir diciendo "pendiente" (modo offline), y ese caso
+            // reabría el catálogo de un pedido ya enviado.
             const v = this.state.visita;
-            if (this.state.tomandoPedido && v && v.saleId && v.estado === "completado") {
+            const yaConfirmado = !!(nivelInicial && nivelInicial.confirmado);
+            if (this.state.tomandoPedido && (yaConfirmado || (v && v.saleId && v.estado === "completado"))) {
                 this.state.tomandoPedido = false;
-                cerrarNivel();
+                // el catálogo y lo que quedara encima (carrito)
+                for (let i = 0; i < this.props.pilaRestante.length; i++) {
+                    cerrarNivel();
+                }
             }
         });
         onWillStart(() => this._chequearCarritoActivo());

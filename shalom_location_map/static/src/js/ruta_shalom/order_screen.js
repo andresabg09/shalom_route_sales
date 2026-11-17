@@ -5,7 +5,7 @@ import {useService} from "@web/core/utils/hooks";
 import {DateTimeInput} from "@web/core/datetime/datetime_input";
 import {normalizarAccionActWindow} from "./action_utils";
 import {cerrarConAnimacion} from "./animacion_utils";
-import {abrirNivel, cerrarNivel, marcarRetorno} from "./back_stack";
+import {abrirNivel, cerrarNivel, marcarNivel, marcarRetorno} from "./back_stack";
 import {ClienteForm} from "./cliente_form";
 import {TemaSelector} from "./tema_selector";
 import {PASOS_CATALOGO, RecorridoGuiado, marcarRecorrido, recorridoPendiente} from "./recorrido";
@@ -218,6 +218,18 @@ const CLAVE_VISTA_CATALOGO = "shalom_catalogo_vista";
 let CACHE_CATALOGO = null; // {ts, productos, estrategias}
 const CACHE_CATALOGO_MS = 15 * 60 * 1000;
 
+// Catálogo SIEMPRE en orden alfabético (pedido explícito), también al
+// filtrar por categoría o buscar. El orden del servidor ("name asc") usa la
+// colación de la base de datos: mayúsculas antes que minúsculas, tildes al
+// final... por eso a veces se veía desordenado. Español, sin distinguir
+// mayúsculas ni tildes, y números en orden natural ("Tinte 2" antes que
+// "Tinte 10").
+const COLADOR_NOMBRES = new Intl.Collator("es", {sensitivity: "base", numeric: true});
+
+export function ordenarAlfabetico(productos) {
+    return [...(productos || [])].sort((a, b) => COLADOR_NOMBRES.compare(a.name || "", b.name || "") || a.id - b.id);
+}
+
 function shalomVistaCatalogoInicial() {
     try {
         const guardada = window.localStorage.getItem(CLAVE_VISTA_CATALOGO);
@@ -323,6 +335,14 @@ export class OrderScreen extends Component {
                 ? this.props.pilaRestante[0]
                 : null;
         const carritoInicial = !!(nivelInicial && nivelInicial.tipo === "carrito");
+        // La foto en grande y la hoja de "Pedidos anteriores" no se
+        // reabren solas: si quedaron en la pila (Odoo recargó por otro
+        // motivo que no fue el Atrás que las cierra), se sacan para no
+        // dejar un Atrás "muerto" de más.
+        const restante = this.props.pilaRestante || [];
+        for (let i = restante.length - 1; i >= 0 && ["foto", "precarga"].includes(restante[i].tipo); i--) {
+            cerrarNivel();
+        }
 
         this.state = useState({
             cargando: true,
@@ -1071,7 +1091,7 @@ export class OrderScreen extends Component {
             }
         }
         if (cache) {
-            this.state.productos = cache.productos;
+            this.state.productos = ordenarAlfabetico(cache.productos);
             this.state.estrategiaPorProducto = cache.estrategias;
         }
         try {
@@ -1141,8 +1161,8 @@ export class OrderScreen extends Component {
                 return;
             }
             this.state.estrategiaPorProducto = estrategiaPorProducto || {};
-            this.state.productos = productos;
-            CACHE_CATALOGO = {ts: Date.now(), productos, estrategias: this.state.estrategiaPorProducto};
+            this.state.productos = ordenarAlfabetico(productos);
+            CACHE_CATALOGO = {ts: Date.now(), productos: this.state.productos, estrategias: this.state.estrategiaPorProducto};
         } catch (error) {
             if (!silencioso || avisarError) {
                 this.notification.add(
@@ -2046,7 +2066,13 @@ export class OrderScreen extends Component {
         return this._pedidosAnterioresPromesa;
     }
 
+    // La hoja de "Pedidos anteriores" es su propio nivel de navegación
+    // (como la foto en grande): el Atrás de Android cierra SOLO la hoja.
+    // Antes cerraba el catálogo entero.
     async abrirPrecarga() {
+        if (!this.state.precargaAbierta) {
+            abrirNivel({tipo: "precarga"});
+        }
         this.state.precargaAbierta = true;
         this.state.pedidoPrecargaAbierto = null;
         if (!this.state.locationId) {
@@ -2067,7 +2093,11 @@ export class OrderScreen extends Component {
     }
 
     cerrarPrecarga() {
+        if (!this.state.precargaAbierta) {
+            return;
+        }
         this.state.precargaAbierta = false;
+        cerrarNivel();
     }
 
     seleccionarPedidoPrecarga(pedidoId) {
@@ -2141,7 +2171,7 @@ export class OrderScreen extends Component {
             {type: agregados ? "success" : "warning"}
         );
         if (agregados) {
-            this.state.precargaAbierta = false;
+            this.cerrarPrecarga();
         }
     }
 
@@ -2671,6 +2701,9 @@ export class OrderScreen extends Component {
                 this._cambiosPendientes = {};
                 this._eliminadosPendientes.clear();
                 this._borrarBorradorCarrito();
+                // Si desde el resultado llega un Atrás real, no reabrir el
+                // catálogo de este pedido ya enviado (ver marcarNivel).
+                marcarNivel("catalogo", {confirmado: true});
                 this.state.resultadoJuego = resultado.juego;
                 return;
             }
