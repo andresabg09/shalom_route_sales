@@ -4,7 +4,7 @@
  *   node simular.js offline_fotos offline_carrito_reintento offline_sin_red
  */
 module.exports = (ctx) => {
-    const {escenarios, bundle, montar, handlersOrder, ok, q, qa, click, esperar, sleep, window} = ctx;
+    const {escenarios, bundle, montar, handlersOrder, ok, q, qa, click, esperar, sleep, window, tarjeta, botonAgregar} = ctx;
 
     // Node 22 trae su propio `navigator` global (el código del bundle ve
     // ése, no el de jsdom): se fija en los dos.
@@ -29,7 +29,7 @@ module.exports = (ctx) => {
         console.log("\n[Offline F0] fotos del catálogo livianas y cacheables");
         fijarOnLine(true);
         const m = await montarCatalogo();
-        const img = q(".product-card .product-thumb");
+        const img = tarjeta(1).querySelector(".product-thumb");
         const src = img && img.getAttribute("src");
         ok(/\/image_512\?unique=\d{4}-\d{2}-\d{2}$/.test(src || ""), "tarjeta pide image_512 con unique=<fecha>", src);
         ok(img && img.getAttribute("loading") === "lazy", "tarjeta con loading=lazy");
@@ -65,11 +65,11 @@ module.exports = (ctx) => {
                 "fsm.order.shalom_marcas_fotos": (a) => Object.fromEntries(a[0].map((id) => [id, "20261101093000"])),
             }));
             await esperar(() => !m.comp.state.cargando && qa(".product-card").length === 3);
-            const tarjeta = q(".product-card .product-thumb").getAttribute("src");
+            const fotoTarjeta = tarjeta(1).querySelector(".product-thumb").getAttribute("src");
             m.comp.abrirFoto(m.comp.state.productos.find((p) => p.id === 1));
             await sleep(30);
             const img = q(".foto-ampliada-lienzo img");
-            ok(img && img.getAttribute("src") === tarjeta, "abre con la MISMA foto de la tarjeta (sin esperar red)", [img && img.getAttribute("src"), tarjeta]);
+            ok(img && img.getAttribute("src") === fotoTarjeta, "abre con la MISMA foto de la tarjeta (sin esperar red)", [img && img.getAttribute("src"), fotoTarjeta]);
             ok(img && img.getAttribute("alt") === "", "el nombre nunca va en el lugar de la foto (alt vacío)");
             const media = pedidas.find((i) => /image_1024\?unique=20261101093000$/.test(i.src));
             ok(!!media, "pide la de 1024 px por detrás, con versión (queda en caché)", pedidas.map((i) => i.src));
@@ -172,7 +172,7 @@ module.exports = (ctx) => {
             },
         });
         const {comp, log} = m;
-        click(qa(".qty-add-btn")[0]);
+        click(botonAgregar(1));
         await esperar(() => comp.cantidadItems === 1);
         // primer envío falla
         await esperar(() => log.some((c) => c.method === "shalom_actualizar_carrito"), 3000);
@@ -230,7 +230,7 @@ module.exports = (ctx) => {
             onCerrar: () => { cerrado++; }, onConfirmado: () => { confirmado++; },
         }, handlersOrder(extra));
         await esperar(() => !m.comp.state.cargando && qa(".product-card").length === 3);
-        click(qa(".qty-add-btn")[0]);
+        click(botonAgregar(1));
         await esperar(() => m.comp.cantidadItems === 1);
         m.comp.state.formaPagoSeleccionada = "cash";
         return {m, confirmados: () => confirmado, cerrados: () => cerrado};
@@ -404,7 +404,7 @@ module.exports = (ctx) => {
         click(pastilla);
         await esperar(() => q(".off-panel"));
         ok(q(".off-panel") && /todas las rutas/i.test(q(".off-panel").textContent), "abre el panel (Preparar mi día: todas las rutas)");
-        const src = q(".product-card .product-thumb").getAttribute("src");
+        const src = tarjeta(1).querySelector(".product-thumb").getAttribute("src");
         ok(/image_512\?unique=20261101093000$/.test(src), "la foto usa la versión estable del producto (no la fecha del día)", src);
         m.destruir();
     };
@@ -512,7 +512,7 @@ module.exports = (ctx) => {
         console.log("\n[Panel] pedido sin señal: vista previa y Eliminar (nunca enviado)");
         fijarOnLine(false);
         const m = await catalogoConPanel();
-        click(qa(".qty-add-btn")[0]);
+        click(botonAgregar(1));
         await esperar(() => m.comp.cantidadItems === 1);
         m.comp.state.formasPagoDisponibles = [{value: "cash", label: "Efectivo"}];
         m.comp.state.formaPagoSeleccionada = "cash";
@@ -548,7 +548,7 @@ module.exports = (ctx) => {
             "shalom.sync.evento.shalom_procesar_lote": () => { throw new Error("se cortó"); },
             "shalom.sync.evento.shalom_estado_eventos": (a) => Object.fromEntries(a[0].map((u) => [u, enServidor])),
         });
-        click(qa(".qty-add-btn")[0]);
+        click(botonAgregar(1));
         await esperar(() => m.comp.cantidadItems === 1);
         m.comp.state.formaPagoSeleccionada = "cash";
         await m.comp._confirmarPedidoDeVerdad();

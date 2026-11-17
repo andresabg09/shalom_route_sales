@@ -198,6 +198,11 @@ const PRODUCTOS = [
     {id: 2, name: "Oxigenta 20 vol con un nombre larguisimo que ocupa dos lineas en pantalla de celular", list_price: 4.5, barcode: "222", default_code: "O1", qty_available: 3, free_qty: 2, categ_id: [2, "Oxigentas"]},
     {id: 3, name: "Shampoo", list_price: 8, barcode: "333", default_code: "S1", qty_available: 0, free_qty: 0, categ_id: [3, "Cuidado"]},
 ];
+// El catálogo se muestra en orden alfabético (no por id): las pruebas
+// buscan cada producto por su nombre, no por su posición en pantalla.
+const NOMBRE_PRODUCTO = Object.fromEntries(PRODUCTOS.map((p) => [p.id, p.name]));
+const tarjeta = (id) => qa(".product-card").find((c) => c.querySelector(".name") && c.querySelector(".name").textContent.trim() === NOMBRE_PRODUCTO[id]);
+const botonAgregar = (id) => (tarjeta(id) ? tarjeta(id).querySelector(".qty-add-btn") : null);
 const REFS = {n: 5, record: 400, tipico: 200, t75: 150, t100: 200};
 function evaluar(lineas) {
     const total = lineas.reduce((t, l) => t + PRODUCTOS.find((p) => p.id === l.product_id).list_price * l.qty, 0);
@@ -263,24 +268,24 @@ escenarios.order = async function () {
     const {comp, log} = m;
     await esperar(() => !comp.state.cargando && qa(".product-card").length === 3);
     ok(qa(".product-card").length === 3, "catálogo renderiza 3 productos");
-    const chips = qa(".product-card")[0].querySelectorAll(".stock-chips .stock-badge");
+    const chips = tarjeta(1).querySelectorAll(".stock-chips .stock-badge");
     ok(chips.length === 1, "producto 1: el chip de existencia es solo el de Dianke", chips.length);
     ok(chips[0] && chips[0].textContent.includes("Disponible: 40"), "chip Dianke = 'Disponible: 40'", chips[0] && chips[0].textContent);
-    const nev = qa(".product-card")[0].querySelector(".product-thumb-wrap .nevada-overlay");
+    const nev = tarjeta(1).querySelector(".product-thumb-wrap .nevada-overlay");
     ok(nev && nev.textContent.includes("Nevada: 1,200"), "Nevada va SOBRE la foto: 'Nevada: 1,200' (toLocaleString en-US)", nev && nev.textContent);
-    ok(qa(".product-card")[0].querySelector(".nevada-dot.tono-nevada"), "Nevada con existencia -> punto amarillo");
-    ok(qa(".product-card")[2].querySelector(".nevada-dot.tono-neutral"), "Nevada en 0 -> punto gris");
-    const bulto = (i) => qa(".product-card")[i].querySelector(".bulto-chip");
-    ok(bulto(0) && bulto(0).textContent.trim() === "Bulto: 24 unidades", "producto 1 muestra 'Bulto: 24 unidades'", bulto(0) && bulto(0).textContent);
-    ok(bulto(1) && bulto(1).textContent.trim() === "Bulto: 1 unidad", "bulto de 1 -> singular", bulto(1) && bulto(1).textContent);
-    ok(!bulto(2) && !qa(".product-card")[2].querySelector(".bulto-row"), "producto sin bulto (0) no muestra nada");
-    ok(qa(".product-card")[2].querySelector(".stock-chips .tono-danger"), "producto 3 (sin existencia) -> chip rojo");
+    ok(tarjeta(1).querySelector(".nevada-dot.tono-nevada"), "Nevada con existencia -> punto amarillo");
+    ok(tarjeta(3).querySelector(".nevada-dot.tono-neutral"), "Nevada en 0 -> punto gris");
+    const bulto = (id) => tarjeta(id).querySelector(".bulto-chip");
+    ok(bulto(1) && bulto(1).textContent.trim() === "Bulto: 24 unidades", "producto 1 muestra 'Bulto: 24 unidades'", bulto(1) && bulto(1).textContent);
+    ok(bulto(2) && bulto(2).textContent.trim() === "Bulto: 1 unidad", "bulto de 1 -> singular", bulto(2) && bulto(2).textContent);
+    ok(!bulto(3) && !tarjeta(3).querySelector(".bulto-row"), "producto sin bulto (0) no muestra nada");
+    ok(tarjeta(3).querySelector(".stock-chips .tono-danger"), "producto 3 (sin existencia) -> chip rojo");
     ok(q(".marca-empujar") && q(".marca-no-ofrecer"), "marcas EMPUJAR / NO OFRECER presentes");
     ok(!q(".medidor"), "sin carrito no hay medidor");
 
     // agregar al carrito (clic real)
-    click(qa(".qty-add-btn")[0]);                // 1 x $10
-    click(qa(".product-card")[1].querySelector(".qty-add-btn")); // oxigenta 4.5
+    click(botonAgregar(1));                // 1 x $10
+    click(botonAgregar(2)); // oxigenta 4.5
     await esperar(() => comp.cantidadItems === 2);
     ok(comp.cantidadItems === 2, "carrito con 2 unidades");
     ok(await esperar(() => q(".medidor"), 1500), "aparece el medidor tras el debounce de 300 ms + RPC");
@@ -289,21 +294,33 @@ escenarios.order = async function () {
     ok(evalCalls[0] && evalCalls[0].args[0] === 7 && evalCalls[0].args[1][0].product_id !== undefined, "args evaluar = [locationId, lineas{product_id,qty,es_recompensa,regla_id}]", evalCalls[0] && evalCalls[0].args);
     console.log("    medidor:", texto(".medidor"));
     ok(qa(".medidor-estrellas span").length === 3, "3 estrellas en el medidor");
-    ok(/Te faltan \$136 para bronce/.test(texto(".medidor-mensaje") || ""), "mensaje 'Te faltan $136 para bronce (75%)'", texto(".medidor-mensaje"));
+    // Catálogo compacto: el medidor muestra un resumen corto y el mensaje
+    // completo al tocarlo.
+    ok(/Faltan \$136/.test(texto(".medidor-mensaje-corto") || ""), "resumen corto 'Faltan $136'", texto(".medidor-mensaje-corto"));
+    click(q(".medidor"));
+    await esperar(() => q(".medidor-mensaje"), 1000);
+    ok(/Te faltan \$136 para bronce/.test(texto(".medidor-mensaje") || ""), "al tocar el medidor: 'Te faltan $136 para bronce (75%)'", texto(".medidor-mensaje"));
 
     // precargar
-    click(q(".precarga-btn"));
-    await esperar(() => qa(".precarga-pedido").length === 2);
-    ok(qa(".precarga-pedido").length === 2, "hoja de precarga lista 2 pedidos");
+    click(q(".catalogo-anteriores"));
+    // Hoja de "Pedidos anteriores" (catálogo compacto): una pestaña por
+    // pedido y "Agregar los que faltan", que suma SOLO lo que no está.
+    await esperar(() => qa(".precarga-pestana").length === 2);
+    ok(qa(".precarga-pestana").length === 2, "hoja de precarga lista 2 pedidos");
     ok(log.some((c) => c.method === "shalom_pedidos_anteriores" && c.args[0] === 7), "RPC shalom_pedidos_anteriores([locationId])");
-    // desplegar pedido 90
-    click(qa(".precarga-pedido-cab")[0]);
+    click(qa(".precarga-pestana")[0]);
     await esperar(() => qa(".precarga-linea").length === 2);
-    ok(qa(".precarga-linea").length === 2, "pedido 90 despliega 2 líneas (una de producto fuera de catálogo)");
-    // Agregar todo del pedido 90: 12 tintes
-    click(qa(".precarga-todo-btn")[0]);
+    ok(qa(".precarga-linea").length === 2, "pedido 90 muestra 2 líneas (una de producto fuera de catálogo)");
+    ok(/Ya en el pedido/.test(qa(".precarga-linea")[0].textContent) && /Ya no está en el catálogo/.test(qa(".precarga-linea")[1].textContent), "marca lo que ya está y lo que ya no está en el catálogo");
+    const faltanBtn = q(".precarga-faltan-btn");
+    ok(faltanBtn && faltanBtn.disabled && /Todo ya está en el pedido/.test(faltanBtn.textContent), "nada que agregar: no duplica lo que ya está");
+    ok(comp.state.carrito[1] && comp.state.carrito[1].cantidad === 1, "el tinte sigue con 1 (no se suma de nuevo)", comp.state.carrito[1] && comp.state.carrito[1].cantidad);
+    // sacar el tinte y agregar "lo que falta": vuelve con 12
+    comp.quitarDelCarrito(1);
+    await sleep(30);
+    click(q(".precarga-faltan-btn"));
     await sleep(50);
-    ok(comp.state.carrito[1] && comp.state.carrito[1].cantidad === 13, "'Agregar todo' suma 12 al 1 que ya había (=13)", comp.state.carrito[1] && comp.state.carrito[1].cantidad);
+    ok(comp.state.carrito[1] && comp.state.carrito[1].cantidad === 12, "'Agregar el que falta' suma las 12 del pedido anterior", comp.state.carrito[1] && comp.state.carrito[1].cantidad);
     ok(comp.state.precargaAbierta === false, "hoja de precarga se cierra tras agregar");
     ok(m.notas.some((n) => /Se agregaron 1 producto/.test(n.msg)), "notificación 'Se agregaron 1 producto(s)'", m.notas);
     await esperar(() => comp._cambiosPendientes && Object.keys(comp._cambiosPendientes).length === 0, 2500);
@@ -360,9 +377,9 @@ escenarios.order_dup_key = async function () {
     console.log("\n[OrderScreen] pedido anterior con el mismo producto en 2 líneas (t-key duplicada)");
     const m = await montar(bundle.OrderScreen, {orderId: 5, clienteNombre: "Cliente X", onCerrar() {}, onConfirmado() {}}, handlersOrder());
     await esperar(() => !m.comp.state.cargando && qa(".product-card").length === 3);
-    click(q(".precarga-btn"));
-    await esperar(() => qa(".precarga-pedido").length === 2);
-    click(qa(".precarga-pedido-cab")[1]);
+    click(q(".catalogo-anteriores"));
+    await esperar(() => qa(".precarga-pestana").length === 2);
+    click(qa(".precarga-pestana")[1]);
     await sleep(80);
     ok(m.errores.length === 0 && qa(".precarga-linea").length === 2, "despliega las 2 líneas sin error", {errores: m.errores, lineas: qa(".precarga-linea").length, raizViva: !!q(".order-overlay")});
     m.destruir();
@@ -374,7 +391,7 @@ escenarios.order_sin_juego = async function () {
     const m = await montar(bundle.OrderScreen, {orderId: 5, clienteNombre: "Cliente X", onCerrar: () => cerrado++, onConfirmado: () => {}},
         handlersOrder({"fsm.order.shalom_confirmar_pedido": {sale_order_id: 1, sale_order_name: "S1", total: 10, juego: null}}));
     await esperar(() => !m.comp.state.cargando && qa(".product-card").length === 3);
-    click(qa(".qty-add-btn")[0]);
+    click(botonAgregar(1));
     await esperar(() => q(".cart-footer"));
     click(q(".cart-footer"));
     await esperar(() => m.comp.state.pantalla === "carrito");
@@ -418,7 +435,7 @@ escenarios.order_eval_vs_cierre = async function () {
     console.log("\n[OrderScreen] evaluación con debounce vs cierre de la pantalla");
     const m = await montar(bundle.OrderScreen, {orderId: 5, clienteNombre: "Cliente X", onCerrar() {}, onConfirmado() {}}, handlersOrder());
     await esperar(() => !m.comp.state.cargando);
-    click(qa(".qty-add-btn")[0]);        // arma el timer de 300 ms
+    click(botonAgregar(1));        // arma el timer de 300 ms
     m.app.destroy();                      // se desmonta antes de que dispare
     const antes = m.log.filter((c) => c.method === "shalom_evaluar_pedido").length;
     await sleep(700);
@@ -443,7 +460,7 @@ escenarios.order_eval_carrera = async function () {
         },
     }));
     await esperar(() => !m.comp.state.cargando && qa(".product-card").length === 3);
-    click(qa(".qty-add-btn")[0]);                 // $10 -> 0 estrellas (1ª llamada, lenta)
+    click(botonAgregar(1));                 // $10 -> 0 estrellas (1ª llamada, lenta)
     await sleep(350);
     for (let i = 0; i < 20; i++) m.comp.cambiarCantidad(1, 1);   // $210 -> 2 estrellas (2ª llamada, rápida)
     await sleep(1600);
@@ -756,12 +773,12 @@ escenarios.back = async function () {
     click(q(".cta-order"));
     await esperar(() => qa(".product-card").length === 3);
     ok(JSON.stringify(JSON.parse(sessionStorage.getItem("shalom_pila_navegacion")).map((n) => n.tipo)) === '["ruta","visita","catalogo"]', "pila tras abrir catálogo = ruta,visita,catalogo");
-    click(qa(".qty-add-btn")[0]);
+    click(botonAgregar(1));
     await esperar(() => q(".cart-footer"));
 
     // --- (1) hoja de precarga abierta + Atrás real
-    click(q(".precarga-btn"));
-    await esperar(() => qa(".precarga-pedido").length === 2);
+    click(q(".catalogo-anteriores"));
+    await esperar(() => qa(".precarga-pestana").length === 2);
     console.log("    history.state con la hoja de precarga abierta:", JSON.stringify(window.history.state), "| pila:", sessionStorage.getItem("shalom_pila_navegacion"));
     window.history.back();
     await sleep(100);
@@ -772,7 +789,7 @@ escenarios.back = async function () {
     const sobrevivePrecarga = !!q(".precarga-card");
     const catalogoAbierto = !!q(".order-overlay");
     console.log(`    tras 'recarga de Odoo': catálogo abierto=${catalogoAbierto}, hoja de precarga=${sobrevivePrecarga}, hoja de visita=${!!q(".sheet")}`);
-    ok(catalogoAbierto, "[limitación de diseño, no bug de código] Atrás con la precarga abierta cierra solo la hoja", {catalogoAbierto});
+    ok(catalogoAbierto, "Atrás con la hoja de Pedidos anteriores abierta cierra solo la hoja", {catalogoAbierto});
     app.destroy();
 
     // --- (2) pantalla de resultado + Atrás real
@@ -786,7 +803,7 @@ escenarios.back = async function () {
     click(q(".cta-order"));
     await esperar(() => qa(".product-card").length === 3);
     if (!qa(".qty-add-btn").length) console.log("    DEBUG body:", document.body.innerHTML.slice(0, 600));
-    click(qa(".qty-add-btn")[0]);
+    click(botonAgregar(1));
     await esperar(() => q(".cart-footer"));
     click(q(".cart-footer"));
     await esperar(() => q(".order-overlay .cta-order"));
@@ -816,6 +833,7 @@ escenarios.back = async function () {
 for (const f of fs.readdirSync(__dirname).filter((x) => /^escenarios_.*\.js$/.test(x)).sort()) {
     require(path.join(__dirname, f))({
         escenarios, bundle, montar, handlersOrder, ok, q, qa, click, texto, esperar, sleep, window, localStorage, sessionStorage, owl, MOD,
+        tarjeta, botonAgregar,
         fallo: () => { fallos++; },
     });
 }

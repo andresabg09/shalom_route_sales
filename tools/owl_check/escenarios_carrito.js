@@ -148,6 +148,30 @@ module.exports = (ctx) => {
         m2.destruir();
     };
 
+    escenarios.catalogo_orden_alfabetico = async function () {
+        console.log("\n[Catálogo] siempre en orden alfabético (también al filtrar o buscar)");
+        // Orden en que lo devuelve la base de datos (colación "C"):
+        // mayúsculas primero y tildes al final.
+        const nombres = ["Tinte 10", "Tinte 2", "Zapato", "aceite", "brillo", "Ácido"];
+        const productos = nombres.map((name, i) => ({
+            id: i + 1, name, list_price: 1, barcode: "", default_code: "", qty_available: 5, free_qty: 5,
+            categ_id: i % 2 ? [1, "Tintes"] : [2, "Cuidado"],
+        }));
+        const m = await catalogo({"product.product.searchRead": () => productos.map((p) => ({...p}))});
+        const {comp} = m;
+        const lista = () => comp.productosFiltrados.map((p) => p.name).join(" | ");
+        ok(lista() === "aceite | Ácido | brillo | Tinte 2 | Tinte 10 | Zapato", "todo el catálogo: A-Z en español", lista());
+        ok(qa(".product-card .name").map((n) => n.textContent.trim())[0] === "aceite", "la pantalla muestra el mismo orden");
+        comp.elegirCategoria(1);
+        await sleep(10);
+        ok(lista() === "aceite | Ácido | Tinte 2", "por categoría: A-Z", lista());
+        comp.elegirCategoria("todas");
+        comp.state.busqueda = "tinte";
+        await sleep(10);
+        ok(lista() === "Tinte 2 | Tinte 10", "al buscar: A-Z", lista());
+        m.destruir();
+    };
+
     escenarios.catalogo_cabecera_sin_saltos = async function () {
         console.log("\n[Catálogo] la cabecera no aparece y desaparece con movimientos chicos");
         const m = await catalogo();
