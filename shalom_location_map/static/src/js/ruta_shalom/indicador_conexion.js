@@ -199,6 +199,13 @@ export class IndicadorConexion extends Component {
         return this.offline.fotosTotal > 0 && this.offline.fotosGuardadas >= this.offline.fotosTotal;
     }
 
+    get avisoSegundoPlano() {
+        if (!this.offline.preparando && this.fotosCompletas) {
+            return "";
+        }
+        return "La pantalla se mantiene encendida mientras se descarga. Si sales de la app, en Android las fotos siguen en segundo plano; si no, se retoma al volver.";
+    }
+
     get textoFotos() {
         const {fotosGuardadas, fotosTotal} = this.offline;
         if (!fotosTotal) {

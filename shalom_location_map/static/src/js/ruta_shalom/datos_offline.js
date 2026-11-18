@@ -559,6 +559,87 @@ export async function precargarFotos(productos, onProgreso) {
     return hechas;
 }
 
+// Pantalla encendida mientras se descarga (así el teléfono no congela la
+// página). Se pide de nuevo al volver a la app si sigue descargando.
+let pantallaLock = null;
+let pantallaPedidos = 0;
+
+async function pedirPantalla() {
+    if (pantallaLock || !pantallaPedidos || typeof navigator === "undefined" || !navigator.wakeLock) {
+        return;
+    }
+    try {
+        pantallaLock = await navigator.wakeLock.request("screen");
+        pantallaLock.addEventListener("release", () => {
+            pantallaLock = null;
+        });
+    } catch {
+        pantallaLock = null; // sin permiso o batería baja: no es crítico
+    }
+}
+
+/** Mantiene la pantalla encendida hasta llamar a la función devuelta. */
+export function mantenerPantalla() {
+    pantallaPedidos += 1;
+    pedirPantalla();
+    let suelto = false;
+    return () => {
+        if (suelto) {
+            return;
+        }
+        suelto = true;
+        pantallaPedidos = Math.max(0, pantallaPedidos - 1);
+        if (!pantallaPedidos && pantallaLock) {
+            const lock = pantallaLock;
+            pantallaLock = null;
+            lock.release().catch(() => {});
+        }
+    };
+}
+
+const FOTOS_POR_LOTE_SEGUNDO_PLANO = 200;
+const PREFIJO_BG_FOTOS = "shalom-fotos-";
+
+/** Background Fetch (Chrome/Android): el sistema baja las fotos aunque se
+ * apague la pantalla o se cierre la app; el service worker las guarda.
+ * Devuelve false si no se puede (se baja desde la página). */
+async function fotosEnSegundoPlano(faltan) {
+    try {
+        if (typeof navigator === "undefined" || !navigator.serviceWorker) {
+            return false;
+        }
+        const registro = await navigator.serviceWorker.ready;
+        if (!registro || !registro.backgroundFetch) {
+            return false;
+        }
+        const activos = (await registro.backgroundFetch.getIds()).filter((id) => id.startsWith(PREFIJO_BG_FOTOS));
+        if (activos.length) {
+            return true; // ya hay lotes bajando: solo se espera
+        }
+        for (let i = 0; i < faltan.length; i += FOTOS_POR_LOTE_SEGUNDO_PLANO) {
+            const lote = faltan.slice(i, i + FOTOS_POR_LOTE_SEGUNDO_PLANO);
+            await registro.backgroundFetch.fetch(
+                `${PREFIJO_BG_FOTOS}${Date.now()}-${i}`,
+                lote.map((p) => urlAbsoluta(urlFotoProducto(p.id, "image_512", p.foto_v))),
+                {title: "Fotos de Ruta Shalom", downloadTotal: lote.length * 60000}
+            );
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function hayLotesEnSegundoPlano() {
+    try {
+        const registro = await navigator.serviceWorker.ready;
+        const ids = registro.backgroundFetch ? await registro.backgroundFetch.getIds() : [];
+        return ids.some((id) => id.startsWith(PREFIJO_BG_FOTOS));
+    } catch {
+        return false;
+    }
+}
+
 const FOTO_VERSION_VIEJA = /^\d{14}$/; // versión por fecha (antes de la huella)
 let productosDeFotos = [];
 let completandoFotos = null;
@@ -602,6 +683,7 @@ export function completarFotos(productos) {
 }
 
 async function bajarFotosFaltantes() {
+    const soltarPantalla = mantenerPantalla();
     try {
         const cache = await abrirCacheFotos();
         const lista = productosDeFotos.filter(tieneVersionVigente);
@@ -616,6 +698,15 @@ async function bajarFotosFaltantes() {
             const faltan = lista
                 .filter((p) => !ya.has(p.id))
                 .sort((a, b) => (b.stock_dianke > 0 || b.stock_nevada > 0 ? 1 : 0) - (a.stock_dianke > 0 || a.stock_nevada > 0 ? 1 : 0));
+            if (faltan.length && !sinConexion() && (await fotosEnSegundoPlano(faltan))) {
+                // El sistema baja las fotos; acá solo se sigue el avance.
+                while (!sinConexion() && (await hayLotesEnSegundoPlano())) {
+                    await new Promise((r) => setTimeout(r, 3000));
+                    estadoOffline.fotosGuardadas = (await contarFotosGuardadas(cache, lista)).length;
+                }
+                estadoOffline.fotosGuardadas = (await contarFotosGuardadas(cache, lista)).length;
+                break;
+            }
             let siguiente = 0;
             const trabajador = async () => {
                 while (siguiente < faltan.length) {
@@ -638,6 +729,8 @@ async function bajarFotosFaltantes() {
         }
     } catch (error) {
         console.error("shalom: no se pudieron completar las fotos", error);
+    } finally {
+        soltarPantalla();
     }
 }
 
@@ -645,6 +738,7 @@ async function bajarFotosFaltantes() {
  * fotos que falten. Si el catálogo guardado es de antes de las versiones por
  * huella (o no hay), con señal lo refresca primero. */
 export async function completarFotosGuardadas(orm) {
+    ormParaReanudar = orm || ormParaReanudar;
     if (sinConexion()) {
         return;
     }
@@ -662,11 +756,35 @@ export async function completarFotosGuardadas(orm) {
     }
 }
 
+let ormParaReanudar = null;
+
+/** Volvió la señal o la app: repasar lo que falte (fotos y, si "Preparar
+ * mi día" quedó a medias, seguir con eso). */
+async function reanudarDescargas() {
+    if (sinConexion()) {
+        return;
+    }
+    if (pantallaPedidos) {
+        pedirPantalla(); // el sistema suelta el bloqueo al ocultar la app
+    }
+    if (ormParaReanudar) {
+        const interrumpido = await leerLocal("meta:preparando");
+        if (interrumpido && interrumpido.valor && !estadoOffline.preparando) {
+            prepararDia(ormParaReanudar, {reanudarDesde: interrumpido.valor}).catch(() => {});
+            return;
+        }
+        completarFotosGuardadas(ormParaReanudar);
+    } else if (productosDeFotos.length) {
+        completarFotos();
+    }
+}
+
 if (typeof window !== "undefined" && window.addEventListener) {
-    // Volvió la señal: seguir con las fotos que quedaron pendientes.
-    window.addEventListener("online", () => {
-        if (productosDeFotos.length) {
-            completarFotos();
+    window.addEventListener("online", reanudarDescargas);
+    window.addEventListener("pageshow", reanudarDescargas);
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+            reanudarDescargas();
         }
     });
 }
@@ -821,6 +939,7 @@ export async function prepararSoloNuevas(orm) {
         estadoOffline.progreso = 100;
         return {rutas: nuevas.length - fallidas, total: nuevas.length, fallidas};
     } finally {
+        soltarPantalla();
         estadoOffline.preparando = false;
     }
 }
@@ -895,7 +1014,7 @@ function ventanaRutas() {
  * (solo las que faltan; ~100 MB la primera vez). `opciones.schedules`: rutas a
  * preparar (si no, las de rutasParaPreparar). Actualiza estadoOffline.
  */
-export async function prepararDia(orm, {schedules = null} = {}) {
+export async function prepararDia(orm, {schedules = null, reanudarDesde = null} = {}) {
     if (estadoOffline.preparando) {
         return;
     }
@@ -904,6 +1023,11 @@ export async function prepararDia(orm, {schedules = null} = {}) {
     }
     estadoOffline.preparando = true;
     estadoOffline.progreso = 0;
+    ormParaReanudar = orm;
+    const soltarPantalla = mantenerPantalla();
+    // Marca de "a medias": si la app se congela, al volver sigue donde iba.
+    const inicio = reanudarDesde || Date.now();
+    await guardarLocal("meta:preparando", inicio);
     const paso = (mensaje, progreso) => {
         estadoOffline.mensajePreparar = mensaje;
         estadoOffline.progreso = progreso;
@@ -927,7 +1051,10 @@ export async function prepararDia(orm, {schedules = null} = {}) {
             while (siguiente < elegidas.length) {
                 const s = elegidas[siguiente++];
                 try {
-                    await prepararRuta(orm, s);
+                    const meta = reanudarDesde ? estadoOffline.rutasMeta[s.id] : null;
+                    if (!(meta && meta.en >= reanudarDesde)) {
+                        await prepararRuta(orm, s);
+                    }
                 } catch (error) {
                     // Una ruta que no baja no frena las demás: se informa al final.
                     fallidas += 1;
@@ -958,6 +1085,7 @@ export async function prepararDia(orm, {schedules = null} = {}) {
         await limpiarDatosViejos(elegidas.map((s) => s.id), {soloRutas: fallidas > 0});
         await limpiarFotosViejas(catalogo.productos);
         // Las fotos se bajan siempre (solo las que faltan).
+        await guardarLocal("meta:preparando", null); // terminó lo de datos
         await completarFotos(catalogo.productos);
         if (estadoOffline.fotosTotal) {
             paso(`Fotos del catálogo: ${estadoOffline.fotosGuardadas} de ${estadoOffline.fotosTotal}…`, 95);

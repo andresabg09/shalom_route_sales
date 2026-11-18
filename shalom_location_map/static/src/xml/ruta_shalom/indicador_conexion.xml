@@ -95,6 +95,10 @@
                 </div>
 
                 <!-- (c) Aviso y opciones de la descarga (no hace falta si ya está todo al día) -->
+                <div class="off-aviso" t-if="avisoSegundoPlano and (offline.preparando or (offline.fotosTotal and !fotosCompletas))">
+                    <i class="fa fa-info-circle" aria-hidden="true"/>
+                    <div t-esc="avisoSegundoPlano"/>
+                </div>
                 <t t-if="datos.frescura !== 'al_dia' or offline.preparando">
                     <div class="off-aviso">
                         <i class="fa fa-info-circle" aria-hidden="true"/>

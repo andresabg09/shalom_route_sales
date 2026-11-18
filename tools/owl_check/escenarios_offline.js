@@ -201,6 +201,63 @@ module.exports = (ctx) => {
         }
     };
 
+    escenarios.offline_fotos_segundo_plano = async function () {
+        console.log("\n[Fotos] segundo plano (Background Fetch) y pantalla encendida");
+        fijarOnLine(true);
+        const guardado = new Map();
+        const cacheFalsa = {
+            match: async (u) => guardado.get(typeof u === "string" ? u : u.url),
+            put: async (u, r) => { guardado.set(u, r); },
+            keys: async () => [...guardado.keys()].map((url) => ({url})),
+            delete: async (pedido) => guardado.delete(pedido.url),
+        };
+        const cachesReal = globalThis.caches;
+        const fetchReal = globalThis.fetch;
+        const swDescriptor = Object.getOwnPropertyDescriptor(globalThis.navigator, "serviceWorker");
+        const wlDescriptor = Object.getOwnPropertyDescriptor(globalThis.navigator, "wakeLock");
+        const lotes = [];
+        let activos = [];
+        let wlPedido = 0;
+        let wlSuelto = 0;
+        let enPagina = 0;
+        globalThis.caches = {open: async () => cacheFalsa, delete: async () => true};
+        globalThis.fetch = async () => { enPagina += 1; return {status: 200, headers: {get: () => "image/jpeg"}}; };
+        Object.defineProperty(globalThis.navigator, "wakeLock", {configurable: true, value: {request: async () => {
+            wlPedido += 1;
+            return {addEventListener() {}, release: async () => { wlSuelto += 1; }};
+        }}});
+        Object.defineProperty(globalThis.navigator, "serviceWorker", {configurable: true, value: {ready: Promise.resolve({
+            backgroundFetch: {
+                getIds: async () => activos,
+                fetch: async (id, urls) => {
+                    lotes.push({id, urls});
+                    activos = [id];
+                    // el sistema baja y el SW guarda; luego el lote termina
+                    setTimeout(() => { urls.forEach((u) => guardado.set(u, {})); activos = []; }, 10);
+                },
+            },
+        })}});
+        try {
+            const productos = [1, 2, 3].map((id) => ({id, foto_v: "abcdef012345678" + id}));
+            await bundle.completarFotos(productos);
+            ok(lotes.length === 1 && lotes[0].urls.length === 3 && lotes[0].id.startsWith("shalom-fotos-"), "con Background Fetch pide un lote con las 3 fotos", lotes);
+            ok(enPagina === 0, "no baja desde la página cuando el sistema lo hace");
+            ok(bundle.estadoOffline.fotosGuardadas === 3, "el panel cuenta lo que guardó el segundo plano", bundle.estadoOffline.fotosGuardadas);
+            ok(wlPedido >= 1 && wlSuelto === wlPedido, "pide la pantalla encendida y la suelta al terminar", [wlPedido, wlSuelto]);
+            // sin Background Fetch: cae a la descarga normal
+            guardado.clear();
+            Object.defineProperty(globalThis.navigator, "serviceWorker", {configurable: true, value: {ready: Promise.resolve({})}});
+            await bundle.completarFotos(productos);
+            ok(enPagina === 3 && guardado.size === 3, "sin Background Fetch baja desde la página", enPagina);
+        } finally {
+            globalThis.caches = cachesReal;
+            globalThis.fetch = fetchReal;
+            for (const [k, d] of [["serviceWorker", swDescriptor], ["wakeLock", wlDescriptor]]) {
+                if (d) { Object.defineProperty(globalThis.navigator, k, d); } else { delete globalThis.navigator[k]; }
+            }
+        }
+    };
+
     // -----------------------------------------------------------------
     escenarios.offline_carrito_reintento = async function () {
         console.log("\n[Offline F0] si falla el envío del carrito, los cambios no se pierden");

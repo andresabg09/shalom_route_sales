@@ -22,7 +22,7 @@ Mismo mecanismo que usa el módulo `mail` para agregar sus notificaciones:
 se extiende _get_service_worker_content(), no se reemplaza nada."""
 from odoo.addons.web.controllers import webmanifest
 
-VERSION_PAGINA_OFFLINE = "shalom-offline-2"
+VERSION_PAGINA_OFFLINE = "shalom-offline-3"
 
 # Mismo nombre que CACHE_FOTOS en static/src/js/ruta_shalom/datos_offline.js
 CACHE_FOTOS = "shalom-fotos-v1"
@@ -75,6 +75,31 @@ SW_FOTOS = """
         }
         return respuesta;
     };
+    // Fotos bajadas por el sistema en segundo plano (Background Fetch, Chrome
+    // en Android): llegan aunque la pantalla esté apagada o la app cerrada;
+    // acá se guardan en la misma caché. Solo lotes propios ("shalom-fotos-").
+    const guardarLoteSegundoPlano = async (registro) => {
+        const cache = await caches.open(CACHE_FOTOS);
+        for (const registroFoto of await registro.matchAll()) {
+            try {
+                const respuesta = await registroFoto.responseReady;
+                const tipo = respuesta.headers.get("content-type") || "";
+                const clave = claveFoto(registroFoto.request);
+                if (clave && respuesta.status === 200 && tipo.startsWith("image/")) {
+                    await cache.put(clave, respuesta);
+                }
+            } catch (error) {
+                // esa foto falló: se pedirá la próxima vez que se abra la app
+            }
+        }
+    };
+    const alTerminarLote = (event) => {
+        if (event.registration.id.startsWith("shalom-fotos-")) {
+            event.waitUntil(guardarLoteSegundoPlano(event.registration).catch(() => {}));
+        }
+    };
+    self.addEventListener("backgroundfetchsuccess", alTerminarLote);
+    self.addEventListener("backgroundfetchfail", alTerminarLote);
     self.addEventListener("fetch", (event) => {
         let clave = null;
         try {
