@@ -1087,20 +1087,45 @@ class FSMOrder(models.Model):
         """Versión de la foto de cada producto, para la URL de la imagen
         (/web/image/...?unique=<versión>) del catálogo de la app: con una
         versión estable, el teléfono guarda cada foto UNA vez y la reusa
-        los días siguientes; solo la vuelve a bajar si el producto o su
-        plantilla cambian en Odoo (la foto suele vivir en la plantilla).
-        Antes la versión era la fecha del día: todo el catálogo de fotos
-        se volvía a bajar cada mañana.
+        los días siguientes.
 
-        Devuelve {product_id: "AAAAMMDDhhmmss"} (la más nueva de las dos
-        fechas de modificación). Solo lee fechas: sudo() para no depender
-        de permisos sobre la plantilla."""
+        La versión es la HUELLA de la foto misma (checksum del adjunto que
+        guarda la imagen): solo cambia si cambian la imagen. Bug real
+        reportado ("al día siguiente las fotos no aparecen hasta bajarlas
+        de nuevo con datos"): antes era la fecha de modificación del
+        producto, que Odoo cambia por cosas que no son la foto (el costo
+        promedio al entrar mercancía, precios, existencias...), así que
+        cada día todo el catálogo parecía "nuevo" y se volvía a bajar.
+
+        La foto vive en la variante (image_variant_1920) si tiene una
+        propia; si no, en la plantilla (image_1920), igual que Odoo.
+        Devuelve {product_id: "<huella>"}; "sin" si no tiene foto. Solo
+        lee: sudo() para no depender de permisos sobre adjuntos."""
         if not product_ids:
             return {}
+        productos = self.env["product.product"].sudo().browse(product_ids).exists()
+        if not productos:
+            return {}
+        Adjunto = self.env["ir.attachment"].sudo()
+        huella_variante = {
+            a["res_id"]: a["checksum"]
+            for a in Adjunto.search_read(
+                [("res_model", "=", "product.product"), ("res_field", "=", "image_variant_1920"), ("res_id", "in", productos.ids)],
+                ["res_id", "checksum"],
+            )
+        }
+        plantillas = productos.product_tmpl_id
+        huella_plantilla = {
+            a["res_id"]: a["checksum"]
+            for a in Adjunto.search_read(
+                [("res_model", "=", "product.template"), ("res_field", "=", "image_1920"), ("res_id", "in", plantillas.ids)],
+                ["res_id", "checksum"],
+            )
+        }
         resultado = {}
-        for producto in self.env["product.product"].sudo().browse(product_ids).exists():
-            fechas = [f for f in (producto.write_date, producto.product_tmpl_id.write_date) if f]
-            resultado[producto.id] = max(fechas).strftime("%Y%m%d%H%M%S") if fechas else "0"
+        for producto in productos:
+            huella = huella_variante.get(producto.id) or huella_plantilla.get(producto.product_tmpl_id.id)
+            resultado[producto.id] = huella[:16] if huella else "sin"
         return resultado
 
     @api.model

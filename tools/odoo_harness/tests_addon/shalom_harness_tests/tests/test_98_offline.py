@@ -288,21 +288,30 @@ class TestOffline(ShalomCommon):
     # ------------------------------------------------------------------
     # Ajustes: versión estable de las fotos del catálogo
     # ------------------------------------------------------------------
-    def test_marcas_fotos_cambian_solo_si_cambia_el_producto(self):
+    def test_marcas_fotos_cambian_solo_si_cambia_la_foto(self):
+        """Bug real: la versión era la fecha de modificación del producto,
+        que cambia sola (costo promedio, precios...) y hacía bajar todo el
+        catálogo de fotos cada día. Ahora es la huella de la foto."""
+        png_rojo = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+        png_azul = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPj/HwADBwIAMCbHYQAAAABJRU5ErkJggg=="
+        self.p_tinte.product_tmpl_id.image_1920 = png_rojo
         Orden = self.env["fsm.order"].with_user(self.u_a)
         antes = Orden.shalom_marcas_fotos([self.p_tinte.id, self.p_oxi.id])
         self.assertEqual(set(antes), {self.p_tinte.id, self.p_oxi.id})
-        self.assertRegex(antes[self.p_tinte.id], r"^\d{14}$")
-        self.assertEqual(Orden.shalom_marcas_fotos([self.p_tinte.id]), {self.p_tinte.id: antes[self.p_tinte.id]})
-        # cambia la plantilla (donde suele estar la foto): cambia la marca
-        self.env.cr.execute(
-            "UPDATE product_template SET write_date = write_date + interval '1 day' WHERE id = %s",
-            (self.p_tinte.product_tmpl_id.id,),
-        )
-        self.p_tinte.product_tmpl_id.invalidate_recordset(["write_date"])
+        self.assertRegex(antes[self.p_tinte.id], r"^[0-9a-f]{16}$")
+        self.assertEqual(antes[self.p_oxi.id], "sin", "sin foto")
+        # el producto cambia (costo, precio) pero la foto no: misma versión
+        self.p_tinte.write({"standard_price": 61.0, "list_price": 101.0})
+        self.p_tinte.product_tmpl_id.write({"name": "Tinte 100 nuevo nombre"})
+        self.assertEqual(Orden.shalom_marcas_fotos([self.p_tinte.id])[self.p_tinte.id], antes[self.p_tinte.id])
+        # cambia la foto: cambia la versión (y solo la de ese producto)
+        self.p_tinte.product_tmpl_id.image_1920 = png_azul
         despues = Orden.shalom_marcas_fotos([self.p_tinte.id, self.p_oxi.id])
-        self.assertGreater(despues[self.p_tinte.id], antes[self.p_tinte.id])
-        self.assertEqual(despues[self.p_oxi.id], antes[self.p_oxi.id])
+        self.assertNotEqual(despues[self.p_tinte.id], antes[self.p_tinte.id])
+        self.assertEqual(despues[self.p_oxi.id], "sin")
+        # foto propia de la variante: manda la de la variante
+        self.p_oxi.image_variant_1920 = png_rojo
+        self.assertRegex(Orden.shalom_marcas_fotos([self.p_oxi.id])[self.p_oxi.id], r"^[0-9a-f]{16}$")
         self.assertEqual(Orden.shalom_marcas_fotos([]), {})
 
 
