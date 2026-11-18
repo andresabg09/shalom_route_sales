@@ -196,7 +196,9 @@ export class VisitSheet extends Component {
      * error en silencio (sin señal, etc.): el botón se queda como
      * estaba hasta el próximo chequeo. */
     async _chequearCarritoActivo() {
-        if (this.state.tomandoPedido) {
+        if (this.state.tomandoPedido || this.props.orderId < 0) {
+            // (orderId < 0: cliente creado sin señal, todavía no existe en
+            // el servidor)
             // Mientras el catálogo está abierto ACÁ MISMO, no tiene
             // sentido este chequeo -- se retoma solo al volver a esta
             // hoja (cerrarPedido()).

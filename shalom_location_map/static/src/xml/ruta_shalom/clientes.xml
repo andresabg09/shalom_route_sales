@@ -45,7 +45,7 @@
                     >
                         <div class="cliente-avatar" t-esc="iniciales(cliente)"/>
                         <div class="stop-info">
-                            <div class="name" t-esc="cliente.name"/>
+                            <div class="name"><t t-esc="cliente.name"/><t t-if="esSinEnviar(cliente)"><span class="off-nuevo">NUEVO</span><span class="off-marca"><i class="fa fa-cloud-upload" aria-hidden="true"/> Sin enviar</span></t></div>
                             <div class="addr" t-esc="cliente.street"/>
                             <div class="addr" t-if="cliente.street2" t-esc="cliente.street2"/>
                             <div class="route-tag" t-if="cliente.fsm_route_name" t-esc="cliente.fsm_route_name + (cliente.x_orden_ruta ? ' · parada ' + cliente.x_orden_ruta : '')"/>
@@ -58,6 +58,36 @@
             </div>
 
             <button class="fab-add" t-on-click="abrirAlta" title="Agregar cliente nuevo">+</button>
+        </div>
+
+        <!-- Cliente creado (mockup aprobado "Cliente nuevo sin señal", lámina 2) -->
+        <div class="cc-overlay" t-if="state.creado" t-on-click.self="cerrarCreado">
+            <div class="cc-hoja" role="dialog" aria-label="Cliente creado">
+                <div class="cc-asa"/>
+                <div class="cc-cabeza">
+                    <div class="cc-ok"><i class="fa fa-check" aria-hidden="true"/></div>
+                    <div>
+                        <div class="cc-titulo">Cliente creado</div>
+                        <div class="cc-nombre" t-esc="state.creado.nombre"/>
+                    </div>
+                </div>
+                <div class="cc-datos">
+                    <div><span>Ruta</span><b t-esc="state.creado.rutaNombre"/></div>
+                    <div><span>Parada</span><b t-esc="textoParadaCreado"/></div>
+                </div>
+                <div class="cc-aviso" t-if="state.creado.estado === 'pendiente'">
+                    <i class="fa fa-clock-o" aria-hidden="true"/>
+                    <span>Guardado en el teléfono. Se envía solo cuando vuelva la señal, junto con su pedido.</span>
+                </div>
+                <div class="cc-aviso" t-if="!puedeTomarPedido">
+                    <i class="fa fa-info-circle" aria-hidden="true"/>
+                    <span>Su ruta no tiene un ciclo en curso: el pedido se le podrá hacer cuando oficina lo genere.</span>
+                </div>
+                <button class="cc-pedido" t-if="puedeTomarPedido" t-on-click="tomarPedidoCreado">
+                    <i class="fa fa-shopping-cart" aria-hidden="true"/> Tomar pedido ahora
+                </button>
+                <button class="cc-listo" t-on-click="cerrarCreado">Listo</button>
+            </div>
         </div>
 
         <ClienteForm

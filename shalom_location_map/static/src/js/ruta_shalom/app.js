@@ -123,6 +123,18 @@ export class ShalomRutaApp extends Component {
         this.irA("clientes");
     }
 
+    /** "Tomar pedido ahora" (cliente recién creado, con o sin señal): abre
+     * su ruta, su visita y el catálogo directo. Empuja los mismos niveles
+     * que el camino normal (ruta -> visita -> catálogo) y usa la misma
+     * reconstrucción de siempre (pilaRestante), así el Atrás funciona igual. */
+    abrirPedidoDeCliente(schedule, orderId) {
+        this.volverARutas();
+        this.abrirRuta(schedule);
+        abrirNivel({tipo: "visita", orderId});
+        abrirNivel({tipo: "catalogo"});
+        this.state.pilaRestante = [{tipo: "visita", orderId}, {tipo: "catalogo"}];
+    }
+
     /** Desde la búsqueda dentro de una ruta: salta a OTRA ruta. */
     cambiarRuta(schedule) {
         this.volverARutas();

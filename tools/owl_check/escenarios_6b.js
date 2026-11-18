@@ -207,69 +207,64 @@ module.exports = (ctx) => {
         return Object.assign({
             "fsm.person.shalom_mis_rutas": [{id: 3, name: "Ruta Norte"}],
             "fsm.location.shalom_puede_marcar_distribuidora": true,
-            "fsm.location.read": () => [{id: 7, name: "Manley", phone: "233-4455", street: "calle 1", street2: "", partner_id: [1, "p"], fsm_route_id: false, partner_latitude: 8.9, partner_longitude: -79.5, x_es_distribuidora: false}],
-            "res.partner.read": () => [{vat: "", mobile: "6678-1234", email: "", image_1920: false, x_nombre_contacto: ""}],
-            "fsm.location.searchRead": [],
+            // Ficha completa en una llamada (también se guarda en el teléfono).
+            "fsm.location.shalom_fichas_cliente_form": (a) => ({[a[0][0]]: {id: a[0][0], name: "Manley", phone: "233-4455", street: "calle 1", street2: "", partner_id: [1, "p"], fsm_route_id: false, partner_latitude: 8.9, partner_longitude: -79.5, x_es_distribuidora: false, vat: "", mobile: "6678-1234", email: "", x_nombre_contacto: "", tiene_foto: false}}),
+            "fsm.location.shalom_clientes_de_rutas": {},
         }, extra);
     }
+
+    // Guardar va por la cola (evento editar_cliente -> shalom_guardar_cliente).
+    const guardados = (m) => m.log.filter((c) => c.method === "shalom_guardar_cliente").map((c) => ({modelo: "fsm.location", vals: c.args[1]}));
 
     escenarios.cliente_distribuidora = async function () {
         console.log("\n[ClienteForm] casilla 'Es distribuidora' (solo el dueño)");
         let guardado = 0;
         // 1) el dueño: casilla visible, la marca y guarda
         let m = await montar(bundle.ClienteForm, {modo: "editar", locationId: 7, onGuardado: () => { guardado++; }, onCancelar() {}}, handlersForm());
-        const escrituras = [];
-        m.comp.orm.write = (modelo, ids, vals) => { escrituras.push({modelo, ids, vals}); return Promise.resolve(true); };
-        await esperar(() => !m.comp.state.cargando && q(".clf-dist-check"));
+                await esperar(() => !m.comp.state.cargando && q(".clf-dist-check"));
         ok(!!q(".clf-dist-check"), "el dueño ve la casilla");
         ok(/Es distribuidora/.test(texto(".clf-dist-check")) && /solo se le escribe, no se visita/.test(texto(".clf-dist-check")), "texto: 'Es distribuidora (solo se le escribe, no se visita)'", texto(".clf-dist-check"));
         ok(q(".clf-dist-input").checked === false, "arranca desmarcada (el cliente no lo es)");
-        const leida = m.log.find((c) => c.method === "read" && c.model === "fsm.location");
-        ok(leida && leida.args[1].includes("x_es_distribuidora"), "el campo se lee junto con la ficha", leida && leida.args[1]);
+        const leida = m.log.find((c) => c.method === "shalom_fichas_cliente_form");
+        ok(leida && leida.args[0][0] === 7, "el campo se lee junto con la ficha", leida && leida.args);
         click(q(".clf-dist-input"));
         await sleep(20);
         ok(m.comp.state.esDistribuidora === true && q(".clf-dist-input").checked === true, "tocar la marca");
         click(qa(".clf-foot button")[1]);
-        await esperar(() => escrituras.length >= 1, 1500);
-        const wLoc = escrituras.find((e) => e.modelo === "fsm.location");
-        ok(wLoc && wLoc.vals.x_es_distribuidora === true, "al guardar escribe x_es_distribuidora=true en fsm.location", wLoc && wLoc.vals);
+        await esperar(() => guardados(m).length >= 1, 1500);
+        const wLoc = guardados(m)[0];
+        ok(wLoc && wLoc.vals.es_distribuidora === true, "al guardar manda es_distribuidora=true (por la cola)", wLoc && wLoc.vals);
         await esperar(() => guardado === 1, 1500);
         ok(guardado === 1, "guardar cierra el formulario");
         m.destruir();
 
         // 2) sin cambios: no manda el campo
-        const sin = [];
-        m = await montar(bundle.ClienteForm, {modo: "editar", locationId: 7, onGuardado() {}, onCancelar() {}}, handlersForm());
-        m.comp.orm.write = (modelo, ids, vals) => { sin.push({modelo, vals}); return Promise.resolve(true); };
+                m = await montar(bundle.ClienteForm, {modo: "editar", locationId: 7, onGuardado() {}, onCancelar() {}}, handlersForm());
         await esperar(() => !m.comp.state.cargando && q(".clf-dist-check"));
         click(qa(".clf-foot button")[1]);
-        await esperar(() => sin.length >= 1, 1500);
-        ok(sin.length >= 1 && !("x_es_distribuidora" in sin.find((e) => e.modelo === "fsm.location").vals), "si no la toca, no manda el campo (el servidor no lo ve)", sin);
+        await esperar(() => guardados(m).length >= 1, 1500);
+        ok(guardados(m).length >= 1 && !("es_distribuidora" in guardados(m)[0].vals), "si no la toca, no manda el campo (el servidor no lo ve)", guardados(m));
         m.destruir();
 
         // 3) ya es distribuidora: sale marcada y se puede quitar
-        const quitar = [];
-        m = await montar(bundle.ClienteForm, {modo: "editar", locationId: 7, onGuardado() {}, onCancelar() {}}, handlersForm({
-            "fsm.location.read": () => [{id: 7, name: "Manley", phone: "", street: "", street2: "", partner_id: [1, "p"], fsm_route_id: false, partner_latitude: 0, partner_longitude: 0, x_es_distribuidora: true}],
+                m = await montar(bundle.ClienteForm, {modo: "editar", locationId: 7, onGuardado() {}, onCancelar() {}}, handlersForm({
+            "fsm.location.shalom_fichas_cliente_form": () => ({7: {id: 7, name: "Manley", phone: "", street: "", street2: "", partner_id: [1, "p"], fsm_route_id: false, partner_latitude: 0, partner_longitude: 0, x_es_distribuidora: true, vat: "", mobile: "", email: "", x_nombre_contacto: "", tiene_foto: false}}),
         }));
-        m.comp.orm.write = (modelo, ids, vals) => { quitar.push({modelo, vals}); return Promise.resolve(true); };
         await esperar(() => !m.comp.state.cargando && q(".clf-dist-check"));
         ok(q(".clf-dist-input").checked === true, "una distribuidora llega marcada");
         click(q(".clf-dist-input"));
         click(qa(".clf-foot button")[1]);
-        await esperar(() => quitar.length >= 1, 1500);
-        ok(quitar.find((e) => e.modelo === "fsm.location").vals.x_es_distribuidora === false, "desmarcarla escribe x_es_distribuidora=false");
+        await esperar(() => guardados(m).length >= 1, 1500);
+        ok(guardados(m)[0].vals.es_distribuidora === false, "desmarcarla manda es_distribuidora=false");
         m.destruir();
 
         // 4) un vendedor (el servidor dice que no puede): sin casilla y nunca manda el campo
-        const vend = [];
-        m = await montar(bundle.ClienteForm, {modo: "editar", locationId: 7, onGuardado() {}, onCancelar() {}}, handlersForm({"fsm.location.shalom_puede_marcar_distribuidora": false}));
-        m.comp.orm.write = (modelo, ids, vals) => { vend.push({modelo, vals}); return Promise.resolve(true); };
+                m = await montar(bundle.ClienteForm, {modo: "editar", locationId: 7, onGuardado() {}, onCancelar() {}}, handlersForm({"fsm.location.shalom_puede_marcar_distribuidora": false}));
         await esperar(() => !m.comp.state.cargando);
         ok(!q(".clf-dist-check"), "un vendedor no ve la casilla");
         click(qa(".clf-foot button")[1]);
-        await esperar(() => vend.length >= 1, 1500);
-        ok(!("x_es_distribuidora" in vend.find((e) => e.modelo === "fsm.location").vals), "y su guardado no incluye el campo");
+        await esperar(() => guardados(m).length >= 1, 1500);
+        ok(!("es_distribuidora" in guardados(m)[0].vals), "y su guardado no incluye el campo");
         m.destruir();
 
         // 5) la pregunta de permiso falla (servidor viejo): sin casilla, el formulario funciona

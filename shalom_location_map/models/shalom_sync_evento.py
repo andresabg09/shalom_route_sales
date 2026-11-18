@@ -42,6 +42,11 @@ MAX_EVENTOS_POR_LOTE = 20
 ERRORES_DE_NEGOCIO = (UserError, ValidationError, AccessError, MissingError)
 
 
+class AltaEnProceso(Exception):
+    """El cliente nuevo del que depende esta acción se está procesando en
+    otro envío ahora mismo: el teléfono la reintenta en un rato."""
+
+
 class ShalomSyncEvento(models.Model):
     _name = "shalom.sync.evento"
     _description = "Acción enviada desde la app del vendedor (cola offline)"
@@ -62,6 +67,12 @@ class ShalomSyncEvento(models.Model):
     resultado_json = fields.Text()
     error = fields.Text()
     precio_cambiado = fields.Boolean(help="Se respetó el precio de la visita y era distinto del vigente.")
+    # Cliente creado sin señal (evento crear_cliente): ids provisorios
+    # (negativos) que el teléfono usó para el cliente y su visita. Las
+    # acciones siguientes (pedido, estado, edición...) llegan con esos ids
+    # y se traducen a los reales (ver _shalom_resolver_temporales).
+    tmp_location_id = fields.Integer(index=True, copy=False)
+    tmp_order_id = fields.Integer(index=True, copy=False)
 
     _sql_constraints = [
         ("uuid_unico", "unique(uuid)", "Esta acción ya se recibió."),
@@ -125,16 +136,33 @@ class ShalomSyncEvento(models.Model):
             # realidad no existe) o se está procesando ahora mismo.
             return {"uuid": uuid, "estado": "en_proceso"}
 
+        # Ids provisorios (cliente creado sin señal) -> reales.
+        originales = datos
+        error_resolucion = None
+        try:
+            datos = self._shalom_resolver_temporales(datos)
+        except AltaEnProceso:
+            return {"uuid": uuid, "estado": "en_proceso"}
+        except UserError as error:
+            error_resolucion = self._shalom_mensaje_error(error)
         order_id = datos.get("order_id")
-        visita = self.env["fsm.order"].browse(order_id).exists() if isinstance(order_id, int) else self.env["fsm.order"]
+        visita = (
+            self.env["fsm.order"].browse(order_id).exists()
+            if isinstance(order_id, int) and order_id > 0
+            else self.env["fsm.order"]
+        )
         vals = {
             "tipo": tipo,
             "user_id": self.env.user.id,
             "order_id": visita.id or False,
-            "payload_json": json.dumps(datos)[:200000],
+            "payload_json": json.dumps(self._shalom_sin_foto(originales))[:200000],
             "creado_en_telefono": self._shalom_fecha(ev.get("creado_en")),
             "estado": "procesando",
         }
+        for campo in ("tmp_location_id", "tmp_order_id"):
+            valor = originales.get(campo)
+            if tipo == "crear_cliente" and isinstance(valor, int) and valor < 0:
+                vals[campo] = valor
         try:
             with self.env.cr.savepoint():
                 if previo:
@@ -145,6 +173,10 @@ class ShalomSyncEvento(models.Model):
         except psycopg2.IntegrityError:
             # El mismo uuid lo está guardando otro envío en paralelo.
             return {"uuid": uuid, "estado": "en_proceso"}
+
+        if error_resolucion:
+            registro.write({"estado": "error", "error": error_resolucion})
+            return {"uuid": uuid, "estado": "error", "error": error_resolucion}
 
         try:
             with self.env.cr.savepoint():
@@ -245,6 +277,111 @@ class ShalomSyncEvento(models.Model):
         visita.shalom_limpiar_carrito(carrito, uuid)
         return {}
 
+    # -- Clientes creados o editados sin señal --
+
+    def _shalom_ubicacion(self, datos):
+        location_id = datos.get("location_id")
+        ubicacion = (
+            self.env["fsm.location"].browse(location_id).exists()
+            if isinstance(location_id, int) and location_id > 0
+            else self.env["fsm.location"]
+        )
+        if not ubicacion:
+            raise UserError(_("El cliente ya no existe (¿lo archivaron o borraron desde oficina?)."))
+        return ubicacion
+
+    def _shalom_ev_crear_cliente(self, visita, datos, uuid):
+        """Alta rápida hecha en el teléfono (con o sin señal). La ruta es
+        obligatoria: es la que le crea la visita para hacerle el pedido."""
+        route_id = datos.get("route_id")
+        if not isinstance(route_id, int) or route_id <= 0:
+            raise UserError(_("Elegí la ruta del cliente: es la que le crea la visita para el pedido."))
+        Ubicacion = self.env["fsm.location"]
+        texto = lambda clave: (datos.get(clave) or "").strip() or False  # noqa: E731
+        lat, lng = datos.get("lat"), datos.get("lng")
+        creado = Ubicacion.shalom_crear_cliente_rapido(
+            datos.get("name") or "",
+            texto("phone"),
+            texto("street"),
+            texto("street2"),
+            texto("vat"),
+            texto("mobile"),
+            texto("email"),
+            datos.get("image_1920") or False,
+            lat if isinstance(lat, (int, float)) else False,
+            lng if isinstance(lng, (int, float)) else False,
+            route_id,
+            datos.get("cliente_anterior_id") if isinstance(datos.get("cliente_anterior_id"), int) else False,
+            texto("nombre_contacto"),
+        )
+        ubicacion = Ubicacion.browse(creado["id"])
+        ciclo, visita_nueva = ubicacion._shalom_visita_en_ocurrencia_activa()
+        return {
+            "location_id": ubicacion.id,
+            "partner_id": creado.get("partner_id"),
+            "order_id": visita_nueva.id or False,
+            "schedule_id": ciclo.id or False,
+            "route_id": route_id,
+            "parada": ubicacion.x_orden_ruta or 0,
+            "name": ubicacion.name,
+        }
+
+    def _shalom_ev_editar_cliente(self, visita, datos, uuid):
+        ubicacion = self._shalom_ubicacion(datos)
+        valores = datos.get("valores") if isinstance(datos.get("valores"), dict) else {}
+        return ubicacion.shalom_guardar_cliente(valores)
+
+    def _shalom_ev_gps_cliente(self, visita, datos, uuid):
+        ubicacion = self._shalom_ubicacion(datos)
+        lat, lng = datos.get("lat"), datos.get("lng")
+        if not isinstance(lat, (int, float)) or not isinstance(lng, (int, float)):
+            raise UserError(_("Coordenadas GPS inválidas."))
+        ubicacion.shalom_actualizar_gps(lat, lng)
+        return {}
+
+    # -- Ids provisorios --
+
+    def _shalom_resolver_temporales(self, datos):
+        """Cambia los ids negativos (cliente y visita creados sin señal) por
+        los reales, buscando el alta ya procesada de ESTE mismo usuario."""
+        cambios = {}
+        for campo, clase in (("order_id", "order"), ("location_id", "location"), ("cliente_anterior_id", "location")):
+            valor = datos.get(campo)
+            if isinstance(valor, int) and valor < 0:
+                cambios[campo] = self._shalom_id_real(valor, clase)
+        return {**datos, **cambios} if cambios else datos
+
+    def _shalom_id_real(self, provisorio, clase):
+        campo = f"tmp_{clase}_id"
+        alta = self.sudo().search(
+            [("user_id", "=", self.env.user.id), ("tipo", "=", "crear_cliente"), (campo, "=", provisorio)],
+            order="id desc",
+            limit=1,
+        )
+        if not alta:
+            raise UserError(_("Todavía no llegó el cliente nuevo de esta acción: se reintenta sola."))
+        if alta.estado == "procesando":
+            raise AltaEnProceso()
+        if alta.estado != "ok":
+            raise UserError(_("El cliente nuevo de esta acción no se pudo crear. Revisalo primero en 'Necesita atención'."))
+        real = (self._shalom_json(alta.resultado_json) or {}).get(f"{clase}_id")
+        if not real:
+            raise UserError(_("El cliente nuevo no tiene visita en un ciclo en curso de su ruta: no se le puede cargar esto."))
+        return real
+
+    @staticmethod
+    def _shalom_sin_foto(datos):
+        """Para el registro: la foto (pesada) no se copia."""
+        if not isinstance(datos, dict):
+            return datos
+        copia = dict(datos)
+        if copia.get("image_1920"):
+            copia["image_1920"] = "[foto]"
+        valores = copia.get("valores")
+        if isinstance(valores, dict) and valores.get("image_1920"):
+            copia["valores"] = {**valores, "image_1920": "[foto]"}
+        return copia
+
     # ------------------------------------------------------------------
     # Administración → Registro (envíos con aviso)
     # ------------------------------------------------------------------
@@ -267,6 +404,9 @@ class ShalomSyncEvento(models.Model):
             "observacion": _("Nota"),
             "gps": _("GPS"),
             "descartar_carrito": _("Descartar carrito"),
+            "crear_cliente": _("Crear cliente"),
+            "editar_cliente": _("Editar cliente"),
+            "gps_cliente": _("GPS del cliente"),
         }
         resultado = []
         for ev in eventos:

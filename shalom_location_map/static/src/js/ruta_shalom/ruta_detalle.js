@@ -299,7 +299,11 @@ export class RutaDetalle extends Component {
         this.offline = useState(estadoOffline);
         this._dejarDeOir = alTerminarEnvio((item, respuesta) => {
             const cambio = respuesta.estado === "ok" || respuesta.estado === "eliminado";
-            if (cambio && this.state.visitasTodas.some((v) => v.id === item.datos.order_id)) {
+            const esDeAca =
+                this.state.visitasTodas.some((v) => v.id === item.datos.order_id) ||
+                // un cliente nuevo de esta ruta ya llegó: se trae el real
+                (item.tipo === "crear_cliente" && item.datos.schedule_id_local === this.props.schedule.id);
+            if (cambio && esDeAca) {
                 this.cargar({silencioso: true});
             }
         });
@@ -662,6 +666,8 @@ export class RutaDetalle extends Component {
                     direccion: loc ? loc.street : "",
                     direccion2: loc ? loc.street2 : "",
                     metaVenta: loc ? loc.x_venta_mas_alta : 0,
+                    // Cliente creado sin señal, todavía en la cola.
+                    provisoria: !!o.provisoria,
                 };
             });
             // Lo hecho sin señal en este teléfono (pedido, cambio de
@@ -713,6 +719,13 @@ export class RutaDetalle extends Component {
 
     /** Marca de la tarjeta: null | {texto, error}. */
     marcaOffline(visita) {
+        if (visita.provisoria) {
+            const alta = estadoOffline.cola.find((i) => i.tipo === "crear_cliente" && i.datos.tmp_order_id === visita.id);
+            if (alta && alta.estado === "error") {
+                return {texto: "Revisar", error: true};
+            }
+            return {texto: "Sin enviar · cliente y pedido esperan señal", error: false};
+        }
         const local = estadoLocalDeVisita(visita.id);
         if (!local) {
             return null;
@@ -802,15 +815,17 @@ export class RutaDetalle extends Component {
     _vistaDeVisitas(todasLasVisitas) {
         // El cliente al que se llegó desde la búsqueda se ve aunque no
         // tenga ventas; el resto de los sin ventas sigue oculto.
+        // Los clientes recién creados sin señal se ven siempre (los creó este
+        // vendedor para hacerles el pedido ya).
         const todas = this.state.verSinVentas
             ? todasLasVisitas
-            : todasLasVisitas.filter((v) => !this._esSinVentas(v) || v.id === this._visibleForzadaId);
+            : todasLasVisitas.filter((v) => !this._esSinVentas(v) || v.id === this._visibleForzadaId || v.provisoria);
         if (!this.props.schedule.tiene_cartera || this.state.modoCartera !== "mi") {
             return todas;
         }
         const yo = this.props.schedule.mi_persona_id;
         return todas
-            .filter((v) => v.carteraPersonaId === yo)
+            .filter((v) => v.carteraPersonaId === yo || v.provisoria)
             .sort(
                 (a, b) =>
                     (a.carteraFecha || "").localeCompare(b.carteraFecha || "") ||

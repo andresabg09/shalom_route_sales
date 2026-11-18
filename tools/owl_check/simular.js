@@ -124,6 +124,10 @@ function servicios(handlers) {
         gps: (d) => ["fsm.order", "action_capturar_gps", [[d.order_id], d.lat, d.lng]],
         cambiar_etapa: (d) => ["fsm.order", "write", [[d.order_id], {stage_id: d.stage_id}]],
         observacion: (d) => ["fsm.order", "write", [[d.order_id], {x_observaciones_visita: d.texto}]],
+        // Clientes (cola offline): crear/editar/GPS van por la cola.
+        crear_cliente: (d) => ["fsm.location", "shalom_crear_cliente_rapido", [d.name, d.phone, d.street, d.street2, d.vat, d.mobile, d.email, d.image_1920, d.lat, d.lng, d.route_id, d.cliente_anterior_id, d.nombre_contacto]],
+        editar_cliente: (d) => ["fsm.location", "shalom_guardar_cliente", [[d.location_id], d.valores]],
+        gps_cliente: (d) => ["fsm.location", "shalom_actualizar_gps", [[d.location_id], d.lat, d.lng]],
     };
     const loteLegado = async (eventos) => {
         const res = [];

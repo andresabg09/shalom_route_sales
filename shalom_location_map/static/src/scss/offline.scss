@@ -773,3 +773,184 @@
         background: var(--shalom-cancelado);
     }
 }
+
+// =====================================================================
+// Cliente nuevo y edición sin señal (mockup aprobado "Cliente nuevo sin
+// señal Ruta Shalom": 3 láminas)
+// =====================================================================
+.o_shalom_ruta_app {
+    // Lámina 1: aviso sin señal y ruta obligatoria
+    .clf-aviso-offline {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin: 12px 22px 0;
+        padding: 10px 12px;
+        border-radius: var(--shalom-radius-sm);
+        background: var(--shalom-pendiente-soft);
+        color: var(--shalom-ink);
+        font-size: 0.78rem;
+        line-height: 1.35;
+        flex: none;
+        .fa {
+            color: var(--shalom-pendiente);
+            margin-top: 2px;
+        }
+    }
+    .clf-requerido {
+        color: var(--shalom-accent);
+    }
+    .clf-dropdown-btn.clf-dropdown-error {
+        border-color: var(--shalom-alerta);
+        background: var(--shalom-stock-danger-bg);
+    }
+    .clf-dropdown-btn:disabled {
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
+        cursor: not-allowed;
+    }
+    .clf-error-texto {
+        margin-top: 6px;
+        font-size: 0.74rem;
+        color: var(--shalom-stock-danger-ink);
+    }
+
+    // Lámina 2: hoja "Cliente creado" con "Tomar pedido ahora"
+    .cc-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1250;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.38);
+    }
+    .cc-hoja {
+        width: 100%;
+        max-width: 560px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        padding: 10px 16px calc(24px + env(safe-area-inset-bottom));
+        border-radius: 20px 20px 0 0;
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.2);
+    }
+    .cc-asa {
+        align-self: center;
+        width: 56px;
+        height: 5px;
+        border-radius: 99px;
+        background: var(--shalom-line);
+    }
+    .cc-cabeza {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .cc-ok {
+        width: 48px;
+        height: 48px;
+        flex: 0 0 auto;
+        border-radius: 50%;
+        background: var(--shalom-completado-soft);
+        color: var(--shalom-completado);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+    }
+    .cc-titulo {
+        font-size: 1.1rem;
+        font-weight: 700;
+    }
+    .cc-nombre {
+        font-size: 0.88rem;
+        color: var(--shalom-ink-muted);
+    }
+    .cc-datos {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 14px;
+        border: 1px solid var(--shalom-line);
+        border-radius: 14px;
+        font-size: 0.82rem;
+        > div {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        span:first-child {
+            color: var(--shalom-ink-muted);
+        }
+        b {
+            text-align: right;
+        }
+    }
+    .cc-aviso {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: var(--shalom-pendiente-soft);
+        font-size: 0.8rem;
+        line-height: 1.35;
+        .fa {
+            color: var(--shalom-pendiente);
+            margin-top: 2px;
+        }
+    }
+    .cc-pedido {
+        min-height: 52px;
+        border: none;
+        border-radius: 14px;
+        background: var(--shalom-accent);
+        color: var(--shalom-accent-ink);
+        font-family: inherit;
+        font-size: 1rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        cursor: pointer;
+    }
+    .cc-listo {
+        min-height: 46px;
+        border: 1px solid var(--shalom-line);
+        border-radius: 14px;
+        background: var(--shalom-surface);
+        color: var(--shalom-ink);
+        font-family: inherit;
+        font-size: 0.94rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    @media (min-width: 900px) {
+        .cc-overlay {
+            align-items: center;
+            padding: 24px;
+        }
+        .cc-hoja {
+            border-radius: 18px;
+        }
+    }
+
+    // Lámina 3: la parada nueva en la ruta
+    .off-nuevo {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: 6px;
+        background: var(--shalom-surface-2);
+        color: var(--shalom-ink-muted);
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        vertical-align: middle;
+    }
+}

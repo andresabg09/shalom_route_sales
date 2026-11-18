@@ -1,7 +1,7 @@
 /** @odoo-module **/
 
 import {reactive} from "@odoo/owl";
-import {colaBorrar, colaGuardar, colaListar} from "./almacen_local";
+import {colaBorrar, colaGuardar, colaListar, guardarLocal} from "./almacen_local";
 import {conTimeout, esperaConBackoff, sinConexion} from "./red_utils";
 
 /**
@@ -241,7 +241,16 @@ async function enviarLotes() {
             esperaSinRespuesta(pendientes);
             return;
         }
-        const lote = pendientes.slice(0, TAMANO_LOTE);
+        // Un evento con foto (pesado) viaja solo: así un envío lento no
+        // frena a los pedidos que vienen detrás.
+        const conFoto = (i) => !!(i.datos && (i.datos.image_1920 || (i.datos.valores && i.datos.valores.image_1920)));
+        let lote = pendientes.slice(0, TAMANO_LOTE);
+        const primeraFoto = lote.findIndex(conFoto);
+        if (primeraFoto === 0) {
+            lote = lote.slice(0, 1);
+        } else if (primeraFoto > 0) {
+            lote = lote.slice(0, primeraFoto);
+        }
         for (const item of lote) {
             if (!item.intento_envio) {
                 item.intento_envio = true;
@@ -276,6 +285,17 @@ async function enviarLotes() {
                 continue;
             }
             if (respuesta.estado === "ok") {
+                if (item.tipo === "crear_cliente") {
+                    // Cliente creado sin señal: de qué ids reales eran los
+                    // provisorios (pantallas que todavía los usan, ver
+                    // datos_offline.idRealDe).
+                    const r = respuesta.resultado || {};
+                    const mapa = {location_id: r.location_id || false, order_id: r.order_id || false, schedule_id: r.schedule_id || false};
+                    await Promise.all([
+                        guardarLocal(`provisorio:${item.datos.tmp_order_id}`, mapa),
+                        guardarLocal(`provisorio:${item.datos.tmp_location_id}`, mapa),
+                    ]).catch(() => {});
+                }
                 await colaBorrar(item.uuid);
                 estadoOffline.cola = estadoOffline.cola.filter((i) => i.uuid !== item.uuid);
                 resolverEspera(item.uuid, {estado: "ok", resultado: respuesta.resultado || {}});

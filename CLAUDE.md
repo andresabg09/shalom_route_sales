@@ -216,12 +216,24 @@ the short version:
     idempotente por uuid. "Salir sin guardar" queda en
     `shalom.cotizacion.registro` (Administración → Registro, 7 días, restaurar).
   - **Paquete por ruta:** `fsm.route.schedule.shalom_paquete_offline`.
+  - **Clientes sin señal** (`clientes_offline.js`): crear y editar van por la
+    cola (`crear_cliente`, `editar_cliente`, `gps_cliente`). Sin señal, el
+    cliente y su visita usan **ids negativos provisorios**. Lo que viene después
+    (pedido, estado, edición) viaja con esos ids y el servidor los cambia por
+    los reales (`shalom.sync.evento._shalom_resolver_temporales`, campos
+    `tmp_location_id`/`tmp_order_id`). La "capa local" (parada NUEVO · Sin
+    enviar, cliente en Clientes, hoja de visita) sale de la cola misma. Al crear,
+    la ruta es obligatoria. Hoja "Cliente creado" con "Tomar pedido ahora"
+    (`app.abrirPedidoDeCliente`).
   - **Página sin señal:** `views/offline_page.xml` + `controllers/offline_sw.py`.
     Si se cambia esa página, subir `VERSION_PAGINA_OFFLINE`.
   - **Fotos del catálogo en el teléfono:** `controllers/offline_sw.py` agrega al
     service worker de Odoo una caché propia (`shalom-fotos-v1`, solo
     `image_256`/`image_512` con `?unique=`); `datos_offline.js` la llena y la
-    limpia (`precargarFotos`, `limpiarFotosViejas`). Las de 1024/1920 px (zoom)
+    limpia (`precargarFotos`, `limpiarFotosViejas`). La versión de cada foto
+    (`shalom_marcas_fotos`) es la huella (checksum) de la imagen, no la fecha del
+    producto: la fecha cambia sola (costo promedio, precios) y hacía bajar todo
+    de nuevo cada día. Las de 1024/1920 px (zoom)
     van por internet. La foto ampliada abre con la de 512 y mejora sola.
   - **Pruebas:**
     - `tools/owl_check/escenarios_offline.js`

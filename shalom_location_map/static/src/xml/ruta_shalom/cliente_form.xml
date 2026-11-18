@@ -18,9 +18,16 @@
                     </button>
                     <div class="clf-head-title" t-esc="props.modo === 'crear' ? 'Cliente nuevo' : 'Editar cliente'"/>
                 </div>
-                <p class="clf-hint" t-if="props.modo === 'crear'">
-                    Alta rápida desde la calle -- si no elegís ruta, oficina la
-                    asigna después.
+                <!-- Sin señal (mockup aprobado "Cliente nuevo sin señal"): se
+                     guarda en el teléfono y se envía solo. -->
+                <div class="clf-aviso-offline" t-if="sinSenal">
+                    <i class="fa fa-wifi" aria-hidden="true"/>
+                    <span t-if="props.modo === 'crear'">Sin señal: el cliente se guarda en el teléfono y le podés hacer el pedido ya. Se envía solo cuando vuelva la señal.</span>
+                    <span t-else="">Sin señal: los cambios se guardan en el teléfono y se envían solos cuando vuelva la señal.</span>
+                </div>
+                <p class="clf-hint" t-elif="props.modo === 'crear'">
+                    Alta rápida desde la calle: elegí la ruta, es la que le crea
+                    la visita para hacerle el pedido.
                 </p>
 
                 <div class="clf-body">
@@ -105,10 +112,10 @@
 
                         <div class="clf-row2">
                             <div class="clf-field">
-                                <label class="clf-label">Ruta</label>
+                                <label class="clf-label">Ruta<span class="clf-requerido" t-if="props.modo === 'crear'"> *</span></label>
                                 <div class="clf-dropdown-wrap">
-                                    <button class="clf-dropdown-btn" t-on-click="toggleMenuRuta">
-                                        <span t-esc="etiquetaRutaActual"/>
+                                    <button class="clf-dropdown-btn" t-att-class="state.faltaRuta ? 'clf-dropdown-error' : ''" t-on-click="toggleMenuRuta">
+                                        <span t-esc="props.modo === 'crear' and state.rutaId === 'sin_asignar' ? 'Elegí la ruta' : etiquetaRutaActual"/>
                                         <i class="fa fa-chevron-down" aria-hidden="true"/>
                                     </button>
                                     <div class="clf-dropdown-menu" t-if="state.rutaMenuAbierto">
@@ -120,6 +127,7 @@
                                         />
                                         <div class="clf-dropdown-list">
                                             <button
+                                                t-if="props.modo !== 'crear'"
                                                 t-attf-class="clf-dropdown-item {{state.rutaId === 'sin_asignar' ? 'clf-dropdown-item-active' : ''}}"
                                                 t-on-click="() => this.elegirRuta('sin_asignar')"
                                             >Sin asignar</button>
@@ -134,13 +142,16 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="clf-error-texto" t-if="state.faltaRuta">
+                                    <i class="fa fa-exclamation-circle" aria-hidden="true"/> Elegí la ruta: es la que le crea la visita para hacerle el pedido.
+                                </div>
                             </div>
 
-                            <div class="clf-field" t-if="state.rutaId !== 'sin_asignar'">
+                            <div class="clf-field" t-if="state.rutaId !== 'sin_asignar' or props.modo === 'crear'">
                                 <label class="clf-label">Va después de</label>
                                 <div class="clf-dropdown-wrap">
-                                    <button class="clf-dropdown-btn" t-on-click="toggleMenuClienteAnterior">
-                                        <span t-esc="etiquetaClienteAnteriorActual"/>
+                                    <button class="clf-dropdown-btn" t-on-click="toggleMenuClienteAnterior" t-att-disabled="state.rutaId === 'sin_asignar'">
+                                        <span t-esc="state.rutaId === 'sin_asignar' ? 'Primero elegí la ruta' : etiquetaClienteAnteriorActual"/>
                                         <i class="fa fa-chevron-down" aria-hidden="true"/>
                                     </button>
                                     <div class="clf-dropdown-menu" t-if="state.clienteAnteriorMenuAbierto">

@@ -14,7 +14,7 @@
                     onIrAClientes.bind="irAClientesConBusqueda"
                 />
                 <Cotizaciones t-if="state.screen === 'cotizaciones'"/>
-                <Clientes t-if="state.screen === 'clientes'"/>
+                <Clientes t-if="state.screen === 'clientes'" onTomarPedido.bind="abrirPedidoDeCliente"/>
             </div>
 
             <div class="bottomnav">

@@ -6,6 +6,10 @@ import {cerrarConAnimacion} from "./animacion_utils";
 import {abrirNivel, cerrarNivel} from "./back_stack";
 import {capturarMejorPosicionGps} from "./gps_utils";
 import {normalizarBusqueda} from "./busqueda_utils";
+import {achicarFoto, crearCliente, editarCliente, esProvisorio, gpsCliente} from "./clientes_offline";
+import {leerConRespaldo, traerClientesDeRuta, traerFichaClienteForm, traerMisRutas} from "./datos_offline";
+import {sinConexion} from "./red_utils";
+import {iniciarSincronizador} from "./sincronizador";
 
 /**
  * Formulario ampliado de cliente (Fase 4, ronda de feedback): un solo
@@ -69,6 +73,9 @@ export class ClienteForm extends Component {
     setup() {
         this.orm = useService("orm");
         this.notification = useService("notification");
+        // Guardar va por la cola: que esté andando aunque el formulario se
+        // abra desde Administración o directo en la pestaña Clientes.
+        iniciarSincronizador((this.env.services && this.env.services.orm) || this.orm, this.notification);
         this.state = useState({
             cargando: this.props.modo === "editar",
             guardando: false,
@@ -104,6 +111,9 @@ export class ClienteForm extends Component {
             esDistribuidora: false,
             esDistribuidoraOriginal: false,
             formModificado: false,
+            // Crear: la ruta es obligatoria (es la que le crea la visita
+            // para hacerle el pedido). true = "Guardar" sin ruta.
+            faltaRuta: false,
             confirmandoSalida: false,
             cerrando: false,
         });
@@ -147,18 +157,27 @@ export class ClienteForm extends Component {
         this.state.formModificado = true;
     }
 
+    /** Sin señal también: todo lo que lee el formulario tiene copia en el
+     * teléfono ("Preparar mi día", ver datos_offline.js). */
     async cargarRutas() {
-        this.state.rutas = await this.orm.call("fsm.person", "shalom_mis_rutas", []);
+        try {
+            this.state.rutas = (await traerMisRutas(this.orm)) || [];
+        } catch (error) {
+            this.state.rutas = [];
+            this.notification.add("Sin señal y sin tus rutas guardadas en el teléfono. Usá \"Preparar mi día\" con señal.", {type: "warning"});
+        }
+    }
+
+    get sinSenal() {
+        return sinConexion();
     }
 
     /** ¿Este usuario puede marcar distribuidoras? Si la pregunta falla,
      * simplemente no se ofrece la casilla. */
     async cargarPermisoDistribuidora() {
         try {
-            this.state.puedeMarcarDistribuidora = !!(await this.orm.call(
-                "fsm.location",
-                "shalom_puede_marcar_distribuidora",
-                []
+            this.state.puedeMarcarDistribuidora = !!(await leerConRespaldo("puede_distribuidora", () =>
+                this.orm.call("fsm.location", "shalom_puede_marcar_distribuidora", [])
             ));
         } catch (error) {
             this.state.puedeMarcarDistribuidora = false;
@@ -168,61 +187,36 @@ export class ClienteForm extends Component {
     async cargarCliente() {
         this.state.cargando = true;
         try {
-            const [loc] = await this.orm.read(
-                "fsm.location",
-                [this.props.locationId],
-                [
-                    "name",
-                    "phone",
-                    "street",
-                    "street2",
-                    "partner_id",
-                    "fsm_route_id",
-                    "partner_latitude",
-                    "partner_longitude",
-                    "x_es_distribuidora",
-                ]
-            );
+            const loc = await traerFichaClienteForm(this.orm, this.props.locationId);
             this.state.esDistribuidora = !!loc.x_es_distribuidora;
             this.state.esDistribuidoraOriginal = !!loc.x_es_distribuidora;
             this.state.campos.name = loc.name || "";
             this.state.campos.phone = loc.phone || "";
             this.state.campos.street = loc.street || "";
             this.state.campos.street2 = loc.street2 || "";
+            this.state.campos.vat = loc.vat || "";
+            this.state.campos.mobile = loc.mobile || "";
+            this.state.campos.email = loc.email || "";
+            this.state.campos.nombreContacto = loc.x_nombre_contacto || "";
             this.state.rutaId = loc.fsm_route_id ? loc.fsm_route_id[0] : RUTA_SIN_ASIGNAR;
-            // Se cargan las coordenadas YA guardadas del cliente -- son
-            // las que este mismo formulario va a reenviar en guardar()
-            // junto con el resto de los datos (ver el comentario grande
-            // ahí) para que un geo_localize() automático por dirección
-            // no las pise en silencio. Si no se cargaran acá, cualquier
-            // cliente al que no se le toque el GPS en esta sesión
-            // quedaría con partner_latitude/longitude en 0 al guardar.
             this.state.lat = loc.partner_latitude || false;
             this.state.lng = loc.partner_longitude || false;
-
             if (loc.partner_id) {
                 this.state.partnerId = loc.partner_id[0];
-                const [partner] = await this.orm.read(
-                    "res.partner",
-                    [loc.partner_id[0]],
-                    ["vat", "mobile", "email", "image_1920", "x_nombre_contacto"]
-                );
-                this.state.campos.vat = partner.vat || "";
-                this.state.campos.mobile = partner.mobile || "";
-                this.state.campos.email = partner.email || "";
-                this.state.campos.nombreContacto = partner.x_nombre_contacto || "";
-                if (partner.image_1920) {
+                if (loc.tiene_foto) {
                     this.state.fotoPreviewUrl = `/web/image/res.partner/${loc.partner_id[0]}/image_256`;
                 }
             }
-
             if (this.state.rutaId !== RUTA_SIN_ASIGNAR) {
                 await this.cargarClientesDeRuta(this.state.rutaId);
             }
         } catch (error) {
-            this.notification.add("No se pudo cargar la ficha del cliente.", {
-                type: "danger",
-            });
+            this.notification.add(
+                sinConexion()
+                    ? "Sin señal, y este cliente no está guardado en el teléfono. Usá \"Preparar mi día\" con señal."
+                    : "No se pudo cargar la ficha del cliente.",
+                {type: "danger"}
+            );
         } finally {
             this.state.cargando = false;
         }
@@ -231,17 +225,14 @@ export class ClienteForm extends Component {
     async cargarClientesDeRuta(rutaId) {
         this.state.cargandoClientesDeRuta = true;
         try {
-            const clientes = await this.orm.searchRead(
-                "fsm.location",
-                [["fsm_route_id", "=", rutaId]],
-                ["name", "x_orden_ruta"],
-                {order: "x_orden_ruta asc"}
-            );
+            const clientes = await traerClientesDeRuta(this.orm, rutaId);
             // El cliente que se está editando no puede ir "después de
             // sí mismo".
             this.state.clientesDeRuta = clientes.filter(
                 (c) => c.id !== this.props.locationId
             );
+        } catch (error) {
+            this.state.clientesDeRuta = [];
         } finally {
             this.state.cargandoClientesDeRuta = false;
         }
@@ -270,6 +261,7 @@ export class ClienteForm extends Component {
 
     async elegirRuta(rutaId) {
         this.state.rutaId = rutaId;
+        this.state.faltaRuta = false;
         this.state.rutaMenuAbierto = false;
         this.state.busquedaRuta = "";
         this.state.clienteAnteriorId = CLIENTE_ANTERIOR_NINGUNO;
@@ -329,10 +321,12 @@ export class ClienteForm extends Component {
             lector.onerror = reject;
             lector.readAsDataURL(archivo);
         });
-        this.state.fotoPreviewUrl = dataUrl;
-        // res.partner.image_1920 espera el base64 sin el prefijo
-        // "data:image/...;base64,".
-        this.state.fotoBase64 = dataUrl.split(",")[1] || false;
+        // Achicada (1280 px, JPEG 80 %): pesa mucho menos en datos móviles
+        // y en la cola sin señal. res.partner.image_1920 espera el base64
+        // sin el prefijo "data:image/...;base64,".
+        const chica = await achicarFoto(dataUrl);
+        this.state.fotoPreviewUrl = chica.dataUrl;
+        this.state.fotoBase64 = chica.base64;
         this.marcarModificado();
     }
 
@@ -374,21 +368,18 @@ export class ClienteForm extends Component {
         this.state.lat = latitude;
         this.state.lng = longitude;
         if (this.props.modo === "editar" && this.props.locationId) {
-            try {
-                await this.orm.call("fsm.location", "shalom_actualizar_gps", [
-                    [this.props.locationId],
-                    latitude,
-                    longitude,
-                ]);
+            // Por la cola: con señal se guarda al momento; sin señal queda
+            // en el teléfono y se envía sola.
+            const r = await gpsCliente(this.props.locationId, latitude, longitude, this.state.campos.name);
+            if (r.estado === "error") {
+                this.notification.add(r.error || "No se pudieron guardar las coordenadas.", {type: "danger"});
+            } else {
                 this.notification.add(
-                    `Coordenadas guardadas (precisión: ` +
-                    `${Math.round(position.coords.accuracy)}m).`,
+                    r.estado === "ok"
+                        ? `Coordenadas guardadas (precisión: ${Math.round(position.coords.accuracy)}m).`
+                        : "Coordenadas guardadas en el teléfono: se envían solas cuando vuelva la señal.",
                     {type: "success"}
                 );
-            } catch (error) {
-                this.notification.add("No se pudieron guardar las coordenadas.", {
-                    type: "danger",
-                });
             }
         } else {
             this.marcarModificado();
@@ -399,113 +390,108 @@ export class ClienteForm extends Component {
         }
     }
 
+    /** Guardar: crear y editar van por la cola del teléfono (con señal se
+     * guarda al momento, como antes; sin señal queda guardado en el
+     * teléfono y se envía solo, ver clientes_offline.js). */
     async guardar() {
         const nombre = this.state.campos.name.trim();
         if (!nombre) {
             this.notification.add("El nombre comercial es obligatorio.", {type: "warning"});
             return;
         }
+        const rutaId = this.state.rutaId === RUTA_SIN_ASIGNAR ? false : this.state.rutaId;
+        if (this.props.modo === "crear" && !rutaId) {
+            this.state.faltaRuta = true;
+            this.notification.add("Elegí la ruta: es la que le crea la visita para hacerle el pedido.", {type: "warning"});
+            return;
+        }
+        const clienteAnteriorId =
+            this.state.clienteAnteriorId === CLIENTE_ANTERIOR_NINGUNO ? false : this.state.clienteAnteriorId;
+        const ruta = this.state.rutas.find((r) => r.id === rutaId);
+        const anterior = this.state.clientesDeRuta.find((c) => c.id === clienteAnteriorId);
+        const texto = (valor) => (valor || "").trim() || false;
         this.state.guardando = true;
         try {
-            const rutaId = this.state.rutaId === RUTA_SIN_ASIGNAR ? false : this.state.rutaId;
-            const clienteAnteriorId =
-                this.state.clienteAnteriorId === CLIENTE_ANTERIOR_NINGUNO
-                    ? false
-                    : this.state.clienteAnteriorId;
-
             if (this.props.modo === "crear") {
-                await this.orm.call("fsm.location", "shalom_crear_cliente_rapido", [
-                    nombre,
-                    this.state.campos.phone.trim() || false,
-                    this.state.campos.street.trim() || false,
-                    this.state.campos.street2.trim() || false,
-                    this.state.campos.vat.trim() || false,
-                    this.state.campos.mobile.trim() || false,
-                    this.state.campos.email.trim() || false,
-                    this.state.fotoBase64 || false,
-                    this.state.lat || false,
-                    this.state.lng || false,
-                    rutaId,
-                    clienteAnteriorId,
-                    this.state.campos.nombreContacto.trim() || false,
-                ]);
-                this.notification.add(`Cliente "${nombre}" creado.`, {type: "success"});
-            } else {
-                // OJO -- causa real del bug de "coordenadas que se
-                // borran/cambian solas al guardar", reportado en
-                // producción: este write() manda `street`, y
-                // fieldservice_geoengine dispara un geo_localize()
-                // automático (por dirección) apenas detecta un campo de
-                // dirección en un write -- sin importar que ya hubiera
-                // coordenadas buenas guardadas (ej. recién capturadas a
-                // mano con el botón de arriba). El geocoder externo
-                // puede pisarlas con un resultado peor, o vaciarlas si
-                // no encuentra nada -- y como el resultado no siempre
-                // queda en 0 (a veces es simplemente una coordenada mala
-                // pero no vacía), el fix de geo_localize() en
-                // fsm_location.py (que solo restaura si quedó en 0) no
-                // alcanza a cubrir este caso. La solución acá: mandar
-                // SIEMPRE partner_latitude/partner_longitude en esta
-                // misma escritura, con el valor que ya tenemos en
-                // memoria (this.state.lat/lng -- cargado al abrir el
-                // formulario, o actualizado por capturarGps() más
-                // arriba). Al venir explícitas en el mismo write(), no
-                // quedan "vacías" para que el geocoder automático las
-                // toque.
-                const valoresLocation = {
+                const resultado = await crearCliente({
                     name: nombre,
-                    phone: this.state.campos.phone.trim() || false,
-                    street: this.state.campos.street.trim() || false,
-                    street2: this.state.campos.street2.trim() || false,
-                    partner_latitude: this.state.lat || 0,
-                    partner_longitude: this.state.lng || 0,
+                    phone: texto(this.state.campos.phone),
+                    street: texto(this.state.campos.street),
+                    street2: texto(this.state.campos.street2),
+                    vat: texto(this.state.campos.vat),
+                    mobile: texto(this.state.campos.mobile),
+                    email: texto(this.state.campos.email),
+                    nombre_contacto: texto(this.state.campos.nombreContacto),
+                    image_1920: this.state.fotoBase64 || false,
+                    lat: this.state.lat || false,
+                    lng: this.state.lng || false,
+                    route_id: rutaId,
+                    route_name: ruta ? ruta.name : "",
+                    cliente_anterior_id: clienteAnteriorId,
+                    parada_local: anterior ? (anterior.x_orden_ruta || 0) + 1 : 1,
+                });
+                if (resultado.estado === "error") {
+                    this.notification.add(resultado.error || "No se pudo crear el cliente.", {type: "danger"});
+                    return;
+                }
+                const creado = {
+                    ...resultado,
+                    nombre,
+                    rutaNombre: ruta ? ruta.name : "",
+                    anteriorNombre: anterior ? anterior.name : "",
                 };
-                // Solo se manda si el dueño la cambió: el servidor rechaza
-                // cualquier escritura de este campo hecha por un vendedor.
-                if (
-                    this.state.puedeMarcarDistribuidora &&
-                    this.state.esDistribuidora !== this.state.esDistribuidoraOriginal
-                ) {
-                    valoresLocation.x_es_distribuidora = this.state.esDistribuidora;
-                }
-                await this.orm.write("fsm.location", [this.props.locationId], valoresLocation);
-                if (this.state.partnerId) {
-                    const valoresPartner = {
-                        vat: this.state.campos.vat.trim() || false,
-                        mobile: this.state.campos.mobile.trim() || false,
-                        email: this.state.campos.email.trim() || false,
-                        x_nombre_contacto: this.state.campos.nombreContacto.trim() || false,
-                    };
-                    if (this.state.fotoBase64) {
-                        valoresPartner.image_1920 = this.state.fotoBase64;
-                    }
-                    await this.orm.write("res.partner", [this.state.partnerId], valoresPartner);
-                }
-                if (this.state.posicionEditada) {
-                    await this.orm.call("fsm.location", "shalom_asignar_ruta_y_orden", [
-                        [this.props.locationId],
-                        rutaId,
-                        clienteAnteriorId,
-                    ]);
-                }
-                this.notification.add("Datos del cliente actualizados.", {type: "success"});
+                this._cerrarMiNivel();
+                cerrarConAnimacion(this.state, () => this.props.onGuardado(creado));
+                return;
             }
+            const valores = {
+                name: nombre,
+                phone: texto(this.state.campos.phone),
+                street: texto(this.state.campos.street),
+                street2: texto(this.state.campos.street2),
+                lat: this.state.lat || 0,
+                lng: this.state.lng || 0,
+            };
+            if (this.state.partnerId || esProvisorio(this.props.locationId)) {
+                Object.assign(valores, {
+                    vat: texto(this.state.campos.vat),
+                    mobile: texto(this.state.campos.mobile),
+                    email: texto(this.state.campos.email),
+                    nombre_contacto: texto(this.state.campos.nombreContacto),
+                });
+                if (this.state.fotoBase64) {
+                    valores.image_1920 = this.state.fotoBase64;
+                }
+            }
+            if (this.state.puedeMarcarDistribuidora && this.state.esDistribuidora !== this.state.esDistribuidoraOriginal) {
+                valores.es_distribuidora = this.state.esDistribuidora;
+            }
+            if (this.state.posicionEditada) {
+                valores.posicion = {route_id: rutaId, route_name: ruta ? ruta.name : "", cliente_anterior_id: clienteAnteriorId};
+            }
+            const r = await editarCliente(this.props.locationId, valores, nombre);
+            if (r.estado === "error") {
+                this.notification.add(r.error || "No se pudo guardar el cliente.", {type: "danger"});
+                return;
+            }
+            this.notification.add(
+                r.estado === "ok"
+                    ? "Datos del cliente actualizados."
+                    : "Guardado en el teléfono: se envía solo cuando vuelva la señal.",
+                {type: "success"}
+            );
             this._cerrarMiNivel();
-            cerrarConAnimacion(this.state, () => this.props.onGuardado());
+            cerrarConAnimacion(this.state, () =>
+                this.props.onGuardado({estado: r.estado, locationId: this.props.locationId, nombre})
+            );
         } catch (error) {
             console.error("shalom: error al guardar cliente", error);
             const mensajeServidor = error && error.data && error.data.message;
-            this.notification.add(
-                mensajeServidor || "No se pudo guardar el cliente.",
-                {type: "danger"}
-            );
+            this.notification.add(mensajeServidor || "No se pudo guardar el cliente.", {type: "danger"});
         } finally {
             this.state.guardando = false;
         }
     }
-
-    // -- Salir del formulario (flecha "←" de arriba y botón Cancelar
-    // de abajo van los dos por acá) --
 
     /**
      * Si se tocó algo sin guardar, no cierra directo: muestra un

@@ -278,8 +278,8 @@ module.exports = (ctx) => {
         click(qa(".adm-ger-gps-fila")[0].querySelector(".adm-ger-ficha"));
         await esperar(() => m.comp.state.locationIdEditando);
         ok(m.comp.state.locationIdEditando === 100, "'Ficha' abre la ficha del cliente 100");
-        await esperar(() => m.log.some((c) => c.model === "fsm.location" && c.method === "read"));
-        ok(m.log.some((c) => c.model === "fsm.location" && c.method === "read" && c.args[0][0] === 100), "ClienteForm lee al cliente 100");
+        await esperar(() => m.log.some((c) => c.method === "shalom_fichas_cliente_form"));
+        ok(m.log.some((c) => c.method === "shalom_fichas_cliente_form" && c.args[0][0] === 100), "ClienteForm lee al cliente 100");
         // al guardar, se recargan la salud y el reparto
         const nSalud = llamadas(m, "shalom_admin_salud_datos").length;
         const nReparto = llamadas(m, "shalom_admin_reparto_rutas").length;

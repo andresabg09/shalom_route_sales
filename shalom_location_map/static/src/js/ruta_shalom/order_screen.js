@@ -22,6 +22,7 @@ import {
 } from "./datos_offline";
 import {descartar, encolar, esperarResultado, iniciarSincronizador} from "./sincronizador";
 import {IndicadorConexion} from "./indicador_conexion";
+import {esProvisorio} from "./clientes_offline";
 import {normalizarBusqueda} from "./busqueda_utils";
 
 // Modo offline: cuánto se espera la confirmación del servidor antes de
@@ -713,8 +714,10 @@ export class OrderScreen extends Component {
         }
 
         let resultado;
-        if (sinConexion()) {
-            return; // sin señal: manda el carrito del teléfono
+        if (sinConexion() || this.esVisitaProvisoria) {
+            // sin señal, o cliente creado sin señal (todavía no existe en
+            // el servidor): manda el carrito del teléfono
+            return;
         }
         try {
             resultado = await conTimeout(
@@ -776,6 +779,9 @@ export class OrderScreen extends Component {
             return;
         }
         this._sesionCerrada = true;
+        if (this.esVisitaProvisoria) {
+            return;
+        }
         this.orm.call("fsm.order", "shalom_cerrar_sesion_catalogo", [
             [this.props.orderId], this._sesionId,
         ]).catch(() => {});
@@ -796,7 +802,9 @@ export class OrderScreen extends Component {
      * la respuesta (es la misma llamada liviana de siempre, no una
      * extra). */
     async _tickSincronizacionCarrito() {
-        if (this._sincronizando || this._cerrado || this._confirmado) {
+        if (this._sincronizando || this._cerrado || this._confirmado || this.esVisitaProvisoria) {
+            // Visita de un cliente creado sin señal: el carrito queda solo en
+            // el teléfono hasta confirmar (no hay registro en el servidor).
             return;
         }
         // Bug real reportado: en pedidos grandes, "Confirmar pedido"/
@@ -1984,9 +1992,14 @@ export class OrderScreen extends Component {
         this._evalTimer = setTimeout(() => this._evaluarCarrito(), 300);
     }
 
+    /** Visita de un cliente creado sin señal (id provisorio, negativo). */
+    get esVisitaProvisoria() {
+        return esProvisorio(this.props.orderId);
+    }
+
     async _evaluarCarrito() {
         const items = this.itemsCarrito;
-        if (!items.length || !this.state.locationId) {
+        if (!items.length || !this.state.locationId || esProvisorio(this.state.locationId)) {
             this.state.evaluacion = null;
             return;
         }

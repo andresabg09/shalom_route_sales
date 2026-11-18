@@ -1,10 +1,12 @@
 /** @odoo-module **/
 
-import {Component, onWillStart, useState} from "@odoo/owl";
+import {Component, onWillStart, onWillUnmount, useState} from "@odoo/owl";
 import {useService} from "@web/core/utils/hooks";
 import {ClienteForm} from "./cliente_form";
 import {TemaSelector} from "./tema_selector";
 import {normalizarBusqueda} from "./busqueda_utils";
+import {traerMisClientes} from "./datos_offline";
+import {alTerminarEnvio, estadoOffline, iniciarSincronizador} from "./sincronizador";
 
 /**
  * Pestaña "Clientes" (Fase 4): directorio de fsm.location asignadas al
@@ -18,7 +20,8 @@ import {normalizarBusqueda} from "./busqueda_utils";
 export class Clientes extends Component {
     static template = "shalom_location_map.Clientes";
     static components = {ClienteForm, TemaSelector};
-    static props = {};
+    // onTomarPedido(schedule, orderId): "Tomar pedido ahora" del cliente recién creado.
+    static props = {onTomarPedido: {type: Function, optional: true}};
 
     setup() {
         this.orm = useService("orm");
@@ -31,7 +34,20 @@ export class Clientes extends Component {
             modoFormulario: "crear",
             locationIdEditando: null,
             nombreInicialAlta: "",
+            // Hoja "Cliente creado" (mockup aprobado): {nombre, rutaNombre,
+            // parada, anteriorNombre, estado, orderId, schedule} | null.
+            creado: null,
         });
+        // La cola arranca también si la app se abre directo en esta pestaña.
+        iniciarSincronizador((this.env.services && this.env.services.orm) || this.orm, this.notification);
+        // Se vuelve a dibujar cuando cambia la cola (cliente nuevo enviado).
+        this.offline = useState(estadoOffline);
+        const dejarDeOir = alTerminarEnvio((item, respuesta) => {
+            if (["crear_cliente", "editar_cliente"].includes(item.tipo) && ["ok", "eliminado"].includes(respuesta.estado)) {
+                this.cargar();
+            }
+        });
+        onWillUnmount(dejarDeOir);
         // Viene de la búsqueda de Rutas ("Buscar en todos los clientes" o
         // "Crear cliente 'xxx'"): texto ya escrito y, si pidió crear, el
         // formulario de alta abierto con ese nombre.
@@ -56,9 +72,10 @@ export class Clientes extends Component {
     async cargar() {
         this.state.cargando = true;
         try {
-            this.state.clientes = await this.orm.call("fsm.person", "shalom_mis_clientes", []);
+            // Con copia en el teléfono + los creados/editados sin señal.
+            this.state.clientes = await traerMisClientes(this.orm);
         } catch (error) {
-            this.notification.add("No se pudieron cargar tus clientes.", {type: "danger"});
+            this.notification.add("No se pudieron cargar tus clientes (sin señal y sin copia en el teléfono).", {type: "danger"});
         } finally {
             this.state.cargando = false;
         }
@@ -119,8 +136,46 @@ export class Clientes extends Component {
         this.state.formularioAbierto = false;
     }
 
-    async formularioGuardado() {
+    async formularioGuardado(resultado) {
+        const eraAlta = this.state.modoFormulario === "crear";
         this.state.formularioAbierto = false;
+        if (eraAlta && resultado && resultado.estado !== "error") {
+            this.state.creado = resultado;
+        }
         await this.cargar();
+    }
+
+    get textoParadaCreado() {
+        const c = this.state.creado;
+        if (!c) {
+            return "";
+        }
+        if (!c.anteriorNombre) {
+            return "Primera de la ruta";
+        }
+        return c.parada ? `${c.parada}, después de ${c.anteriorNombre}` : `Después de ${c.anteriorNombre}`;
+    }
+
+    /** "Tomar pedido ahora": solo si el cliente tiene visita en un ciclo en
+     * curso de su ruta (si no, no hay dónde cargar el pedido). */
+    get puedeTomarPedido() {
+        const c = this.state.creado;
+        return !!(c && c.orderId && c.schedule && this.props.onTomarPedido);
+    }
+
+    tomarPedidoCreado() {
+        const c = this.state.creado;
+        this.state.creado = null;
+        if (c && c.orderId && c.schedule && this.props.onTomarPedido) {
+            this.props.onTomarPedido(c.schedule, c.orderId);
+        }
+    }
+
+    cerrarCreado() {
+        this.state.creado = null;
+    }
+
+    esSinEnviar(cliente) {
+        return !!cliente.sinEnviar;
     }
 }

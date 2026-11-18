@@ -284,14 +284,7 @@ class FSMLocation(models.Model):
         recibirá con el flujo normal la próxima vez que se genere un
         ciclo."""
         self.ensure_one()
-        ocurrencia = self.env["fsm.route.schedule"].search(
-            [
-                ("route_id", "=", route_id),
-                ("estado", "in", ("en_curso", "por_iniciar")),
-            ],
-            order="date_start desc",
-            limit=1,
-        )
+        ocurrencia = self._shalom_ocurrencia_activa(route_id)
         if not ocurrencia:
             return
         try:
@@ -309,6 +302,126 @@ class FSMLocation(models.Model):
                 "probablemente ya tenía una abierta ahí.",
                 self.id, ocurrencia.id,
             )
+
+    @api.model
+    def _shalom_ocurrencia_activa(self, route_id):
+        """Ciclo de la ruta que el vendedor está usando ahora: el más
+        reciente en curso o por iniciar (ver _shalom_agregar_a_ocurrencia_
+        activa). El teléfono usa la MISMA regla sin señal (cliente_form.js)."""
+        return self.env["fsm.route.schedule"].search(
+            [
+                ("route_id", "=", route_id),
+                ("estado", "in", ("en_curso", "por_iniciar")),
+            ],
+            order="date_start desc",
+            limit=1,
+        )
+
+    def _shalom_visita_en_ocurrencia_activa(self):
+        """(ciclo, visita abierta de este cliente en ese ciclo) o vacíos."""
+        self.ensure_one()
+        Orden = self.env["fsm.order"]
+        if not self.fsm_route_id:
+            return self.env["fsm.route.schedule"], Orden
+        ocurrencia = self._shalom_ocurrencia_activa(self.fsm_route_id.id)
+        if not ocurrencia:
+            return ocurrencia, Orden
+        visita = Orden.search(
+            [
+                ("location_id", "=", self.id),
+                ("x_route_schedule_id", "=", ocurrencia.id),
+                ("stage_id.is_closed", "=", False),
+            ],
+            order="id desc",
+            limit=1,
+        )
+        return ocurrencia, visita
+
+    # ------------------------------------------------------------------
+    # Ficha del cliente sin señal (cola offline, ver shalom_sync_evento.py)
+    # ------------------------------------------------------------------
+
+    def shalom_guardar_cliente(self, valores):
+        """"Editar cliente" de la app del vendedor, en UNA llamada (antes
+        el teléfono hacía varios write seguidos). Lo usa la cola offline
+        (evento editar_cliente), así que se puede editar sin señal: se
+        aplica cuando llega. valores (todas las claves son opcionales):
+        name, phone, street, street2, lat, lng, vat, mobile, email,
+        nombre_contacto, image_1920, es_distribuidora,
+        posicion = {route_id, cliente_anterior_id}."""
+        self.ensure_one()
+        if not isinstance(valores, dict):
+            raise UserError(_("Datos del cliente inválidos."))
+        if "name" in valores and not (valores.get("name") or "").strip():
+            raise UserError(_("El nombre comercial es obligatorio."))
+        vals_ubicacion = {}
+        for campo in ("name", "phone", "street", "street2"):
+            if campo in valores:
+                valor = valores.get(campo)
+                vals_ubicacion[campo] = valor.strip() if isinstance(valor, str) and valor.strip() else False
+        if "lat" in valores or "lng" in valores:
+            vals_ubicacion["partner_latitude"] = valores.get("lat") or 0
+            vals_ubicacion["partner_longitude"] = valores.get("lng") or 0
+        if "es_distribuidora" in valores and self.shalom_puede_marcar_distribuidora():
+            vals_ubicacion["x_es_distribuidora"] = bool(valores.get("es_distribuidora"))
+        if vals_ubicacion:
+            self.write(vals_ubicacion)
+        if self.partner_id:
+            vals_contacto = {}
+            for clave, campo in (("vat", "vat"), ("mobile", "mobile"), ("email", "email"), ("nombre_contacto", "x_nombre_contacto")):
+                if clave in valores:
+                    valor = valores.get(clave)
+                    vals_contacto[campo] = valor.strip() if isinstance(valor, str) and valor.strip() else False
+            if valores.get("image_1920"):
+                vals_contacto["image_1920"] = valores["image_1920"]
+            if vals_contacto:
+                self.partner_id.write(vals_contacto)
+        posicion = valores.get("posicion")
+        if isinstance(posicion, dict):
+            self.shalom_asignar_ruta_y_orden(posicion.get("route_id") or False, posicion.get("cliente_anterior_id") or False)
+        return {"location_id": self.id, "name": self.name}
+
+    @api.model
+    def shalom_fichas_cliente_form(self, location_ids):
+        """Lo que muestra el formulario "Editar cliente", de varios clientes
+        en una llamada, para guardarlo en el teléfono ("Preparar mi día")
+        y poder abrirlo sin señal. {location_id: {...}}"""
+        if not isinstance(location_ids, list):
+            return {}
+        resultado = {}
+        for loc in self.browse([i for i in location_ids if isinstance(i, int)]).exists():
+            contacto = loc.partner_id
+            resultado[loc.id] = {
+                "id": loc.id,
+                "name": loc.name or "",
+                "phone": loc.phone or "",
+                "street": loc.street or "",
+                "street2": loc.street2 or "",
+                "fsm_route_id": [loc.fsm_route_id.id, loc.fsm_route_id.name] if loc.fsm_route_id else False,
+                "partner_latitude": loc.partner_latitude or False,
+                "partner_longitude": loc.partner_longitude or False,
+                "x_es_distribuidora": bool(loc.x_es_distribuidora),
+                "partner_id": [contacto.id, contacto.display_name] if contacto else False,
+                "vat": contacto.vat or "",
+                "mobile": contacto.mobile or "",
+                "email": contacto.email or "",
+                "x_nombre_contacto": contacto.x_nombre_contacto or "",
+                "tiene_foto": bool(contacto.image_128) if contacto else False,
+            }
+        return resultado
+
+    @api.model
+    def shalom_clientes_de_rutas(self, route_ids):
+        """Clientes de cada ruta en su orden ("Va después de" del formulario
+        de cliente), para guardarlo en el teléfono. {route_id: [{id, name,
+        x_orden_ruta}]}"""
+        if not isinstance(route_ids, list):
+            return {}
+        ids = [i for i in route_ids if isinstance(i, int)]
+        resultado = {i: [] for i in ids}
+        for loc in self.search([("fsm_route_id", "in", ids)], order="x_orden_ruta asc, id asc"):
+            resultado[loc.fsm_route_id.id].append({"id": loc.id, "name": loc.name or "", "x_orden_ruta": loc.x_orden_ruta or 0})
+        return resultado
 
     def shalom_actualizar_gps(self, latitude, longitude):
         """Botón 'Registrar coordenadas' de la ficha del cliente

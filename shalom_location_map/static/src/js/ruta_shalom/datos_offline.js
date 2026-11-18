@@ -10,6 +10,14 @@ import {
 } from "./almacen_local";
 import {conTimeout, sinConexion, TiempoAgotadoError} from "./red_utils";
 import {estadoOffline, marcarRed} from "./sincronizador";
+import {
+    aplicarEdiciones,
+    clientesProvisorios,
+    esProvisorio,
+    fichaProvisoria,
+    visitaProvisoria,
+    visitasProvisoriasDeCiclo,
+} from "./clientes_offline";
 
 /**
  * Lecturas con respaldo en el teléfono (modo offline, Fase 2).
@@ -115,7 +123,38 @@ export async function traerRutas(orm, ventana) {
 }
 
 /** RutaDetalle.cargar(): visitas del ciclo + datos de clientes + perfiles + trazado. */
-export function traerDetalleRuta(orm, schedule) {
+export async function traerDetalleRuta(orm, schedule) {
+    // Clientes creados sin señal en esta ruta (todavía en la cola): se
+    // muestran como paradas nuevas hasta que se envíen.
+    const nuevas = visitasProvisoriasDeCiclo(schedule.id);
+    let detalle;
+    try {
+        detalle = await traerDetalleRutaServidor(orm, schedule);
+    } catch (error) {
+        // Ruta sin descargar y sin señal: al menos las paradas nuevas.
+        if (!nuevas.length || !esErrorDeRed(error)) {
+            throw error;
+        }
+        detalle = {ordenes: [], locaciones: [], perfiles: {}, ruta: []};
+    }
+    if (!nuevas.length) {
+        return detalle;
+    }
+    const ordenes = [...(detalle.ordenes || [])];
+    for (const v of nuevas) {
+        const pos = ordenes.findIndex((o) => (o.x_cliente_orden_ruta || 0) >= v.orden.x_cliente_orden_ruta);
+        const fila = {...v.orden, x_cartera_person_id: false, x_cartera_fecha: false, x_cartera_orden: 0, x_cartera_reserva: false, provisoria: true};
+        if (pos < 0) {
+            ordenes.push(fila);
+        } else {
+            ordenes.splice(pos, 0, fila);
+        }
+    }
+    const locaciones = [...(detalle.locaciones || []), ...nuevas.map((v) => ({...v.locacion, x_venta_mas_alta: 0}))];
+    return {...detalle, ordenes, locaciones};
+}
+
+function traerDetalleRutaServidor(orm, schedule) {
     return leerConRespaldo(`ruta:${schedule.id}`, async () => {
         const ordenes = await orm.searchRead(
             "fsm.order",
@@ -151,7 +190,25 @@ export function traerDetalleRuta(orm, schedule) {
 }
 
 /** VisitSheet.cargar(): la visita, su cliente y qué datos le faltan. */
-export function traerVisita(orm, orderId) {
+/** Id real de una visita/cliente creados sin señal, cuando el alta ya se
+ * envió (lo guarda sincronizador.js al recibir la respuesta). */
+export async function idRealDe(provisorio, campo) {
+    const local = await leerLocal(`provisorio:${provisorio}`);
+    return (local && local.valor && local.valor[campo]) || null;
+}
+
+export async function traerVisita(orm, orderId) {
+    if (esProvisorio(orderId)) {
+        const v = visitaProvisoria(orderId);
+        if (v) {
+            return v;
+        }
+        const real = await idRealDe(orderId, "order_id");
+        if (!real) {
+            throw new SinDatosLocalesError(`visita:${orderId}`);
+        }
+        orderId = real;
+    }
     return leerConRespaldo(`visita:${orderId}`, async () => {
         const [orden] = await orm.read("fsm.order", [orderId], [
             "location_id",
@@ -179,11 +236,26 @@ export function traerVisita(orm, orderId) {
 }
 
 export function traerFichaJuego(orm, locationId) {
+    if (esProvisorio(locationId)) {
+        // cliente nuevo: todavía sin historial ni estrellas
+        return Promise.reject(new SinDatosLocalesError(`ficha:${locationId}`));
+    }
     return leerConRespaldo(`ficha:${locationId}`, () => orm.call("fsm.order", "shalom_ficha_juego", [locationId]));
 }
 
 /** OrderScreen._cargarDatosFaltantes(). */
-export function traerFaltantes(orm, orderId) {
+export async function traerFaltantes(orm, orderId) {
+    if (esProvisorio(orderId)) {
+        const v = visitaProvisoria(orderId);
+        if (v) {
+            return {locationId: v.orden.location_id[0], datosFaltantes: []};
+        }
+        const real = await idRealDe(orderId, "order_id");
+        if (!real) {
+            return {locationId: false, datosFaltantes: []};
+        }
+        orderId = real;
+    }
     return leerConRespaldo(`faltantes:${orderId}`, async () => {
         const [orden] = await orm.read("fsm.order", [orderId], ["location_id"]);
         const datosFaltantes = await orm.call("fsm.order", "shalom_campos_cliente_faltantes", [[orderId]]);
@@ -244,6 +316,9 @@ export function traerCatalogo(orm) {
 }
 
 export function traerPedidosAnteriores(orm, locationId) {
+    if (esProvisorio(locationId)) {
+        return Promise.resolve([]); // cliente nuevo: no tiene pedidos anteriores
+    }
     return leerConRespaldo(`pedidos:${locationId}`, () => orm.call("fsm.order", "shalom_pedidos_anteriores", [locationId]));
 }
 
@@ -252,6 +327,9 @@ export function traerFormasPago(orm) {
 }
 
 export function traerUltimaFormaPago(orm, locationId) {
+    if (esProvisorio(locationId)) {
+        return Promise.resolve({payment_method: false, includes_itbms: false});
+    }
     return leerConRespaldo(`ultima_fp:${locationId}`, () =>
         orm.call("fsm.order", "shalom_ultima_forma_pago_e_itbms", [locationId])
     );
@@ -263,6 +341,87 @@ export function traerEtapas(orm) {
 
 export function traerCotizaciones(orm) {
     return leerConRespaldo("cotizaciones", () => orm.call("fsm.person", "shalom_mis_cotizaciones", []));
+}
+
+// -- Clientes (pestaña Clientes y formulario de cliente, también sin señal) --
+
+/** Pestaña Clientes: los del servidor (o la copia) + los creados sin señal,
+ * con lo editado sin señal ya aplicado. */
+export async function traerMisClientes(orm) {
+    let clientes = [];
+    try {
+        clientes = await leerConRespaldo("mis_clientes", () => orm.call("fsm.person", "shalom_mis_clientes", []));
+    } catch (error) {
+        if (!esErrorDeRed(error)) {
+            throw error;
+        }
+        if (!clientesProvisorios().length) {
+            throw error;
+        }
+    }
+    const editados = (clientes || []).map((c) => {
+        const f = aplicarEdiciones(c.id, {...c, x_nombre_contacto: ""});
+        return {...c, name: f.name, phone: f.phone, street: f.street, street2: f.street2, vat: f.vat, mobile: f.mobile, email: f.email};
+    });
+    return [...clientesProvisorios(), ...editados];
+}
+
+/** Selector de ruta del formulario de cliente. */
+export function traerMisRutas(orm) {
+    return leerConRespaldo("mis_rutas", () => orm.call("fsm.person", "shalom_mis_rutas", []));
+}
+
+/** "Va después de": los clientes de una ruta en su orden (+ los nuevos). */
+export async function traerClientesDeRuta(orm, routeId) {
+    const lista = await leerConRespaldo(`clientes_ruta:${routeId}`, async () => {
+        const r = await orm.call("fsm.location", "shalom_clientes_de_rutas", [[routeId]]);
+        return r[routeId] || r[String(routeId)] || [];
+    });
+    const nuevos = clientesProvisorios()
+        .filter((c) => c.fsm_route_id === routeId)
+        .map((c) => ({id: c.id, name: c.name, x_orden_ruta: c.x_orden_ruta}));
+    return [...(lista || []), ...nuevos].sort((a, b) => (a.x_orden_ruta || 0) - (b.x_orden_ruta || 0));
+}
+
+/** "Editar cliente": la ficha completa (también sin señal). */
+export async function traerFichaClienteForm(orm, locationId) {
+    if (esProvisorio(locationId)) {
+        const f = fichaProvisoria(locationId);
+        if (f) {
+            return f;
+        }
+        const real = await idRealDe(locationId, "location_id");
+        if (!real) {
+            throw new SinDatosLocalesError(`cliente_form:${locationId}`);
+        }
+        locationId = real;
+    }
+    const ficha = await leerConRespaldo(`cliente_form:${locationId}`, async () => {
+        const r = await orm.call("fsm.location", "shalom_fichas_cliente_form", [[locationId]]);
+        const f = r[locationId] || r[String(locationId)];
+        if (!f) {
+            throw new Error("El cliente ya no existe.");
+        }
+        return f;
+    });
+    return aplicarEdiciones(locationId, ficha);
+}
+
+/** "Preparar mi día": lo que necesita el formulario de cliente sin señal. */
+async function prepararClientes(orm, schedules) {
+    const routeIds = [...new Set((schedules || []).map((s) => s.route_id).filter(Boolean))];
+    await Promise.all([
+        traerMisRutas(orm).catch(() => null),
+        leerConRespaldo("mis_clientes", () => orm.call("fsm.person", "shalom_mis_clientes", [])).catch(() => null),
+        routeIds.length
+            ? orm
+                  .call("fsm.location", "shalom_clientes_de_rutas", [routeIds])
+                  .then((porRuta) =>
+                      Promise.all(Object.entries(porRuta || {}).map(([id, lista]) => guardarLocal(`clientes_ruta:${id}`, lista)))
+                  )
+                  .catch(() => null)
+            : null,
+    ]);
 }
 
 // ------------------------------------------------------------------
@@ -420,6 +579,16 @@ export async function prepararRuta(orm, schedule) {
         escrituras.push(guardarLocal(`ultima_fp:${locationId}`, datos));
     }
     await Promise.all(escrituras);
+    // Ficha de "Editar cliente" de cada cliente de la ruta (sin señal).
+    const idsClientes = Object.keys(paquete.pedidos || {}).map(Number);
+    if (idsClientes.length) {
+        try {
+            const fichas = await orm.call("fsm.location", "shalom_fichas_cliente_form", [idsClientes]);
+            await Promise.all(Object.entries(fichas || {}).map(([id, f]) => guardarLocal(`cliente_form:${id}`, f)));
+        } catch (error) {
+            console.error("shalom: no se pudieron guardar las fichas de cliente", error);
+        }
+    }
     const ahora = Date.now();
     await guardarLocal(`ruta_preparada:${schedule.id}`, ahora);
     // Ficha de lo que quedó guardado de esta ruta: para mostrarla en el
@@ -478,7 +647,7 @@ export async function limpiarDatosViejos(vigentes, {soloRutas = false} = {}) {
                 }
             }
         }
-        for (const prefijo of ["ficha:", "pedidos:", "ultima_fp:"]) {
+        for (const prefijo of ["ficha:", "pedidos:", "ultima_fp:", "cliente_form:"]) {
             for (const clave of await listarClaves(prefijo)) {
                 if (!clientes.has(clave.slice(prefijo.length))) {
                     borrar.push(clave);
@@ -629,6 +798,7 @@ export async function prepararDia(orm, {fotos = false, schedules = null} = {}) {
         paso("Formas de pago y estados…", 25);
         await Promise.all([traerFormasPago(orm), traerEtapas(orm), traerCotizaciones(orm).catch(() => null)]);
         const elegidas = schedules || rutasParaPreparar(rutas);
+        await prepararClientes(orm, rutas);
         let hechas = 0;
         let fallidas = 0;
         let siguiente = 0;
