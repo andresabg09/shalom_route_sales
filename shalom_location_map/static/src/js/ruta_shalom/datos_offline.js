@@ -265,7 +265,16 @@ export async function traerFaltantes(orm, orderId) {
 
 /** OrderScreen.cargarProductos(): productos + existencias por bodega +
  * estrategias (estas dos últimas a prueba de fallos, como siempre). */
-export function traerCatalogo(orm) {
+export async function traerCatalogo(orm) {
+    const resultado = await traerCatalogoCrudo(orm);
+    // Con señal, las fotos que falten se bajan solas por detrás.
+    if (!sinConexion()) {
+        completarFotos(resultado.productos);
+    }
+    return resultado;
+}
+
+function traerCatalogoCrudo(orm) {
     return leerConRespaldo(
         "catalogo",
         async () => {
@@ -550,6 +559,118 @@ export async function precargarFotos(productos, onProgreso) {
     return hechas;
 }
 
+const FOTO_VERSION_VIEJA = /^\d{14}$/; // versión por fecha (antes de la huella)
+let productosDeFotos = [];
+let completandoFotos = null;
+let repetirFotos = false;
+
+function tieneVersionVigente(producto) {
+    return !!producto.foto_v && !FOTO_VERSION_VIEJA.test(producto.foto_v);
+}
+
+/** Cuenta las fotos del catálogo que ya están en el teléfono. */
+async function contarFotosGuardadas(cache, productos) {
+    const guardadas = new Set();
+    try {
+        for (const pedido of await cache.keys()) {
+            guardadas.add(pedido.url);
+        }
+    } catch {
+        // sin lista: se verá producto por producto
+    }
+    return productos.filter((p) => guardadas.has(urlAbsoluta(urlFotoProducto(p.id, "image_512", p.foto_v))));
+}
+
+/**
+ * Deja TODAS las fotos del catálogo en el teléfono, sin que el vendedor
+ * tenga que recorrer el catálogo: baja por detrás solo las que faltan (6 a
+ * la vez, primero los productos con existencias). Un solo proceso a la
+ * vez; sin señal se pausa y retoma cuando vuelve (ver el oyente "online").
+ */
+export function completarFotos(productos) {
+    productosDeFotos = productos || productosDeFotos;
+    if (completandoFotos) {
+        // Ya hay uno corriendo: se le avisa que repase y se espera al mismo.
+        repetirFotos = true;
+        return completandoFotos;
+    }
+    // La promesa se guarda antes de cualquier espera: no corren dos a la vez.
+    completandoFotos = bajarFotosFaltantes().finally(() => {
+        completandoFotos = null;
+    });
+    return completandoFotos;
+}
+
+async function bajarFotosFaltantes() {
+    try {
+        const cache = await abrirCacheFotos();
+        const lista = productosDeFotos.filter(tieneVersionVigente);
+        if (!cache || !lista.length) {
+            return;
+        }
+        do {
+            repetirFotos = false;
+            const ya = new Set((await contarFotosGuardadas(cache, lista)).map((p) => p.id));
+            estadoOffline.fotosTotal = lista.length;
+            estadoOffline.fotosGuardadas = ya.size;
+            const faltan = lista
+                .filter((p) => !ya.has(p.id))
+                .sort((a, b) => (b.stock_dianke > 0 || b.stock_nevada > 0 ? 1 : 0) - (a.stock_dianke > 0 || a.stock_nevada > 0 ? 1 : 0));
+            let siguiente = 0;
+            const trabajador = async () => {
+                while (siguiente < faltan.length) {
+                    if (sinConexion()) {
+                        return;
+                    }
+                    const producto = faltan[siguiente++];
+                    if (await guardarFoto(cache, urlFotoProducto(producto.id, "image_512", producto.foto_v))) {
+                        estadoOffline.fotosGuardadas += 1;
+                    }
+                }
+            };
+            await Promise.all(Array.from({length: FOTOS_EN_PARALELO}, trabajador));
+        } while (repetirFotos && !sinConexion());
+        if (estadoOffline.fotosGuardadas >= estadoOffline.fotosTotal && estadoOffline.fotosTotal) {
+            if (!estadoOffline.fotosEn) {
+                estadoOffline.fotosEn = Date.now();
+                await guardarLocal("meta:fotos_en", estadoOffline.fotosEn);
+            }
+        }
+    } catch (error) {
+        console.error("shalom: no se pudieron completar las fotos", error);
+    }
+}
+
+/** Al abrir la app: con el catálogo guardado en el teléfono, completa las
+ * fotos que falten. Si el catálogo guardado es de antes de las versiones por
+ * huella (o no hay), con señal lo refresca primero. */
+export async function completarFotosGuardadas(orm) {
+    if (sinConexion()) {
+        return;
+    }
+    const local = await leerLocal("catalogo");
+    const productos = local && local.valor ? local.valor.productos || [] : [];
+    if (productos.length && productos.every(tieneVersionVigente)) {
+        return completarFotos(productos);
+    }
+    if (orm) {
+        try {
+            await traerCatalogo(orm); // dispara completarFotos con lo nuevo
+        } catch {
+            // sin señal buena: se reintenta al abrir otra vez
+        }
+    }
+}
+
+if (typeof window !== "undefined" && window.addEventListener) {
+    // Volvió la señal: seguir con las fotos que quedaron pendientes.
+    window.addEventListener("online", () => {
+        if (productosDeFotos.length) {
+            completarFotos();
+        }
+    });
+}
+
 // ------------------------------------------------------------------
 // Preparar mi día
 // ------------------------------------------------------------------
@@ -770,11 +891,11 @@ function ventanaRutas() {
 
 /**
  * "Preparar mi día": con señal, deja en el teléfono todo lo necesario
- * para trabajar sin ella. `opciones.fotos`: también las fotos del
- * catálogo (~25-40 MB: mejor con Wi-Fi). `opciones.schedules`: rutas a
+ * para trabajar sin ella. Las fotos del catálogo se bajan siempre
+ * (solo las que faltan; ~100 MB la primera vez). `opciones.schedules`: rutas a
  * preparar (si no, las de rutasParaPreparar). Actualiza estadoOffline.
  */
-export async function prepararDia(orm, {fotos = false, schedules = null} = {}) {
+export async function prepararDia(orm, {schedules = null} = {}) {
     if (estadoOffline.preparando) {
         return;
     }
@@ -836,12 +957,10 @@ export async function prepararDia(orm, {fotos = false, schedules = null} = {}) {
         // Lo viejo (ciclos terminados) se borra: el teléfono no acumula.
         await limpiarDatosViejos(elegidas.map((s) => s.id), {soloRutas: fallidas > 0});
         await limpiarFotosViejas(catalogo.productos);
-        if (fotos) {
-            await precargarFotos(catalogo.productos, (hechas, total) =>
-                paso(`Fotos del catálogo: ${hechas} de ${total}…`, 70 + Math.round((30 * hechas) / Math.max(1, total)))
-            );
-            estadoOffline.fotosEn = Date.now();
-            await guardarLocal("meta:fotos_en", estadoOffline.fotosEn);
+        // Las fotos se bajan siempre (solo las que faltan).
+        await completarFotos(catalogo.productos);
+        if (estadoOffline.fotosTotal) {
+            paso(`Fotos del catálogo: ${estadoOffline.fotosGuardadas} de ${estadoOffline.fotosTotal}…`, 95);
         }
         const listas = elegidas.length - fallidas;
         estimarEspacio();

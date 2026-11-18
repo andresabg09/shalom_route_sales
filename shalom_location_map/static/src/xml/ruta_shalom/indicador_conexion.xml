@@ -82,7 +82,7 @@
                             <div class="off-check-titulo">Fotos del catálogo</div>
                             <div class="off-check-sub" t-esc="textoFotos"/>
                         </div>
-                        <i t-attf-class="fa off-check-estado {{offline.fotosEn ? 'off-check-ok fa-check-circle' : 'off-check-falta fa-circle-o'}}" aria-hidden="true"/>
+                        <i t-attf-class="fa off-check-estado {{fotosCompletas ? 'off-check-ok fa-check-circle' : 'off-check-falta fa-circle-o'}}" aria-hidden="true"/>
                     </div>
                     <div class="off-check">
                         <span class="off-check-ico"><i class="fa fa-database" aria-hidden="true"/></span>
@@ -100,13 +100,6 @@
                         <i class="fa fa-info-circle" aria-hidden="true"/>
                         <div><b>Se bajan todas las rutas con clientes pendientes.</b> Con señal débil puede tardar: mejor con Wi-Fi antes de salir.</div>
                     </div>
-                    <label class="off-interruptor">
-                        <span class="off-interruptor-textos">
-                            <span class="off-interruptor-titulo">Incluir fotos del catálogo</span>
-                            <span class="off-check-sub">Pesan bastante la primera vez · después solo las que cambien</span>
-                        </span>
-                        <input type="checkbox" t-att-checked="local.fotos" t-on-change="toggleFotos" t-att-disabled="offline.preparando"/>
-                    </label>
                 </t>
                 <button
                     t-attf-class="off-btn {{datos.frescura === 'al_dia' and !offline.preparando ? 'off-btn-ghost' : ''}}"

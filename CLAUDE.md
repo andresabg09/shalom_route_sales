@@ -230,7 +230,9 @@ the short version:
   - **Fotos del catálogo en el teléfono:** `controllers/offline_sw.py` agrega al
     service worker de Odoo una caché propia (`shalom-fotos-v1`, solo
     `image_256`/`image_512` con `?unique=`); `datos_offline.js` la llena y la
-    limpia (`precargarFotos`, `limpiarFotosViejas`). La versión de cada foto
+    limpia (`completarFotos`, `limpiarFotosViejas`). Las fotos se bajan SIEMPRE solas
+    (al abrir la app, tras cargar el catálogo y al volver la señal), solo las que faltan;
+    el panel cuenta "N de M guardadas". La versión de cada foto
     (`shalom_marcas_fotos`) es la huella (checksum) de la imagen, no la fecha del
     producto: la fecha cambia sola (costo promedio, precios) y hacía bajar todo
     de nuevo cada día. Las de 1024/1920 px (zoom)

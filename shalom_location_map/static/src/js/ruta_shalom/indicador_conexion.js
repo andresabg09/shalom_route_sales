@@ -5,6 +5,7 @@ import {useService} from "@web/core/utils/hooks";
 import {
     borrarDatosDescargados,
     cargarMetaPreparacion,
+    completarFotosGuardadas,
     esErrorDeRed,
     prepararDia,
     prepararSoloNuevas,
@@ -75,7 +76,6 @@ export class IndicadorConexion extends Component {
         // el catálogo abierto encima de la ruta hay dos pastillas montadas,
         // y con el estado compartido el panel se dibujaba dos veces.
         this.local = useState({
-            fotos: false,
             panelAbierto: false,
             abiertoUuid: null,
             verRutas: false, // lista de rutas desplegada
@@ -105,7 +105,10 @@ export class IndicadorConexion extends Component {
         });
         const ormCrudo = (this.env.services && this.env.services.orm) || this.orm;
         iniciarSincronizador(ormCrudo, this.notification);
-        cargarMetaPreparacion();
+        // Al abrir la app: completar por detrás las fotos que falten.
+        cargarMetaPreparacion()
+            .then(() => completarFotosGuardadas(ormCrudo))
+            .catch((error) => console.error("shalom: fotos", error));
     }
 
     get pendientes() {
@@ -192,10 +195,19 @@ export class IndicadorConexion extends Component {
         return d.productos.toLocaleString("en-US") + " productos · " + d.cuando;
     }
 
+    get fotosCompletas() {
+        return this.offline.fotosTotal > 0 && this.offline.fotosGuardadas >= this.offline.fotosTotal;
+    }
+
     get textoFotos() {
-        return this.offline.fotosEn
-            ? "Guardadas desde " + this.datos.fotosCuando + " · solo bajan las que cambien"
-            : "Sin descargar · opcional";
+        const {fotosGuardadas, fotosTotal} = this.offline;
+        if (!fotosTotal) {
+            return this.offline.fotosEn ? "Guardadas en el teléfono" : "Se bajan solas con señal";
+        }
+        const n = (x) => x.toLocaleString("en-US");
+        return this.fotosCompletas
+            ? n(fotosTotal) + " guardadas · solo bajan las que cambien"
+            : n(fotosGuardadas) + " de " + n(fotosTotal) + " guardadas · se siguen bajando solas";
     }
 
     /** "ok" | "viejo" | "falta": ícono de cada fila del checklist. */
@@ -439,17 +451,13 @@ export class IndicadorConexion extends Component {
         window.removeEventListener("touchcancel", this._onSoltarArrastre);
     }
 
-    toggleFotos(ev) {
-        this.local.fotos = ev.target.checked;
-    }
-
     async preparar() {
         // Todo al día: preguntar antes (no hace falta volver a descargar).
-        if (this.datos.frescura === "al_dia" && !this.local.fotos) {
+        if (this.datos.frescura === "al_dia") {
             this.local.confirmandoDescarga = true;
             return;
         }
-        await this._descargar(this.datos.soloNuevas && !this.local.fotos);
+        await this._descargar(this.datos.soloNuevas);
     }
 
     async _descargar(soloNuevas) {
@@ -470,7 +478,7 @@ export class IndicadorConexion extends Component {
             return;
         }
         try {
-            const r = await prepararDia(ormDeLaCola() || this.orm, {fotos: this.local.fotos});
+            const r = await prepararDia(ormDeLaCola() || this.orm);
             if (r) {
                 this.notification.add(
                     r.fallidas

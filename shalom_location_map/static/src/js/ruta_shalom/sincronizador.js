@@ -46,6 +46,8 @@ export const estadoOffline = reactive({
     mensajePreparar: "",
     preparadoEn: null,
     fotosEn: null,
+    fotosGuardadas: 0, // fotos del catálogo ya en el teléfono
+    fotosTotal: 0,
     // Para el checklist "Datos en este teléfono" (ver datos_offline.js):
     rutasPreparadas: [], // ids de ciclos guardados en el teléfono
     rutasDisponibles: null, // ids de ciclos con pendientes (última lista con señal)
@@ -492,7 +494,7 @@ export function _reiniciarSincronizadorParaPruebas() {
     estadoOffline.cola = [];
     estadoOffline.red = "en_linea";
     Object.assign(estadoOffline, {
-        preparadoEn: null, fotosEn: null, rutasPreparadas: [], rutasDisponibles: null,
+        preparadoEn: null, fotosEn: null, fotosGuardadas: 0, fotosTotal: 0, rutasPreparadas: [], rutasDisponibles: null,
         productosGuardados: 0, rutasNombres: {}, rutasMeta: {}, espacioUsado: null,
         preparando: false, progreso: 0, mensajePreparar: "",
     });

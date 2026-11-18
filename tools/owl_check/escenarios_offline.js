@@ -155,6 +155,52 @@ module.exports = (ctx) => {
         }
     };
 
+    escenarios.offline_fotos_automaticas = async function () {
+        console.log("\n[Fotos] se bajan solas, sin abrir el catálogo ni marcar nada");
+        fijarOnLine(true);
+        const guardado = new Map();
+        const bajadas = [];
+        const cacheFalsa = {
+            match: async (u) => guardado.get(typeof u === "string" ? u : u.url),
+            put: async (u, r) => { guardado.set(u, r); },
+            keys: async () => [...guardado.keys()].map((url) => ({url})),
+            delete: async (pedido) => guardado.delete(pedido.url),
+        };
+        const cachesReal = globalThis.caches;
+        const fetchReal = globalThis.fetch;
+        globalThis.caches = {open: async () => cacheFalsa, delete: async () => true};
+        globalThis.fetch = async (url) => {
+            bajadas.push(url);
+            return {status: 200, headers: {get: () => "image/jpeg"}};
+        };
+        try {
+            const productos = [1, 2, 3, 4, 5].map((id) => ({id, foto_v: "abcdef012345678" + id, stock_dianke: id === 5 ? 3 : 0, stock_nevada: 0}));
+            productos.push({id: 6, foto_v: "20261101093000"}); // versión vieja (por fecha): no se baja
+            await bundle.completarFotos(productos);
+            ok(bajadas.length === 5 && guardado.size === 5, "baja todas las fotos con versión vigente", bajadas.length);
+            ok(/\/5\/image_512/.test(bajadas[0]), "primero los productos con existencias", bajadas[0]);
+            ok(bundle.estadoOffline.fotosGuardadas === 5 && bundle.estadoOffline.fotosTotal === 5, "el panel cuenta 5 de 5", [bundle.estadoOffline.fotosGuardadas, bundle.estadoOffline.fotosTotal]);
+            ok(bundle.estadoOffline.fotosEn, "queda marcado 'fotos al día'");
+            await bundle.completarFotos(productos);
+            ok(bajadas.length === 5, "otra vez: no repite lo que ya está");
+            // una nueva foto: baja solo esa; dos disparos a la vez no duplican
+            const mas = productos.concat([{id: 7, foto_v: "abcdef0123456787"}]);
+            await Promise.all([bundle.completarFotos(mas), bundle.completarFotos(mas)]);
+            ok(bajadas.length === 6 && guardado.size === 6, "solo baja la que falta, sin duplicar", bajadas.length);
+            // sin señal: se pausa
+            fijarOnLine(false);
+            const sinSenal = mas.concat([{id: 8, foto_v: "abcdef0123456788"}]);
+            await bundle.completarFotos(sinSenal);
+            ok(bajadas.length === 6, "sin señal no baja nada (queda pendiente)");
+            fijarOnLine(true);
+            await bundle.completarFotos(sinSenal);
+            ok(bajadas.length === 7 && bundle.estadoOffline.fotosGuardadas === 7, "con señal retoma las pendientes", bajadas.length);
+        } finally {
+            globalThis.caches = cachesReal;
+            globalThis.fetch = fetchReal;
+        }
+    };
+
     // -----------------------------------------------------------------
     escenarios.offline_carrito_reintento = async function () {
         console.log("\n[Offline F0] si falla el envío del carrito, los cambios no se pierden");
