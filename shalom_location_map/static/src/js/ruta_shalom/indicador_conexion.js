@@ -5,6 +5,7 @@ import {useService} from "@web/core/utils/hooks";
 import {
     borrarDatosDescargados,
     cargarMetaPreparacion,
+    cuandoAmigable,
     completarFotosGuardadas,
     esErrorDeRed,
     prepararDia,
@@ -197,6 +198,14 @@ export class IndicadorConexion extends Component {
 
     get fotosCompletas() {
         return this.offline.fotosTotal > 0 && this.offline.fotosGuardadas >= this.offline.fotosTotal;
+    }
+
+    get textoClientes() {
+        const {clientesGuardados, clientesEn} = this.offline;
+        if (!clientesEn) {
+            return "Se bajan solos con señal";
+        }
+        return clientesGuardados.toLocaleString("en-US") + " clientes con su ficha · " + cuandoAmigable(clientesEn);
     }
 
     get avisoSegundoPlano() {

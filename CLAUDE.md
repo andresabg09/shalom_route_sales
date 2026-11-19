@@ -225,6 +225,9 @@ the short version:
     enviar, cliente en Clientes, hoja de visita) sale de la cola misma. Al crear,
     la ruta es obligatoria. Hoja "Cliente creado" con "Tomar pedido ahora"
     (`app.abrirPedidoDeCliente`).
+  - **Todos los clientes en el teléfono** (`descargarClientes`/`completarClientes`): el directorio
+    completo (rutas libres) + la ficha de "Editar cliente" de cada uno + las listas "Va después de",
+    bajados solos al abrir la app (cada 12 h) y en "Preparar mi día"; no dependen de las rutas bajadas.
   - **Página sin señal:** `views/offline_page.xml` + `controllers/offline_sw.py`.
     Si se cambia esa página, subir `VERSION_PAGINA_OFFLINE`.
   - **Fotos del catálogo en el teléfono:** `controllers/offline_sw.py` agrega al

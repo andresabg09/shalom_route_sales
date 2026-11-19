@@ -258,6 +258,41 @@ module.exports = (ctx) => {
         }
     };
 
+    escenarios.offline_clientes_todos = async function () {
+        console.log("\n[Clientes] todos con su ficha en el teléfono, sin depender de las rutas descargadas");
+        fijarOnLine(true);
+        const directorio = [];
+        for (let i = 1; i <= 650; i++) {
+            directorio.push({id: i, name: "Cliente " + i, fsm_route_id: i % 2 ? 7 : 8, x_orden_ruta: 1000 - i});
+        }
+        let llamadasFichas = 0;
+        const orm = {call: async (modelo, metodo, args) => {
+            if (metodo === "shalom_mis_clientes") { return directorio; }
+            if (metodo === "shalom_mis_rutas") { return [{id: 7, name: "R7"}, {id: 8, name: "R8"}]; }
+            if (metodo === "shalom_puede_marcar_distribuidora") { return true; }
+            if (metodo === "shalom_fichas_cliente_form") {
+                llamadasFichas += 1;
+                return Object.fromEntries(args[0].map((id) => [id, {id, name: "Cliente " + id, vat: "V" + id}]));
+            }
+            throw new Error("RPC no simulado: " + metodo);
+        }};
+        await bundle.guardarLocal("cliente_form:99999", {id: 99999}); // cliente que ya no existe
+        const n = await bundle.descargarClientes(orm);
+        ok(n === 650 && llamadasFichas === 3, "baja la ficha de los 650 clientes en 3 llamadas", [n, llamadasFichas]);
+        const claves = await bundle.listarClaves("cliente_form:");
+        ok(claves.length === 650 && !claves.includes("cliente_form:99999"), "guarda todas las fichas y borra la del cliente que ya no existe", claves.length);
+        const lista = (await bundle.leerLocal("clientes_ruta:7")).valor;
+        ok(lista.length === 325 && lista[0].x_orden_ruta <= lista[1].x_orden_ruta, "arma la lista 'Va después de' de cada ruta, en orden", lista.length);
+        ok(bundle.estadoOffline.clientesGuardados === 650 && bundle.estadoOffline.clientesEn, "el panel cuenta 650 clientes");
+        // dentro de las 12 h no vuelve a bajar
+        await bundle.completarClientes(orm);
+        ok(llamadasFichas === 3, "al abrir otra vez no repite la descarga (vigencia de 12 h)", llamadasFichas);
+        // sin señal: la ficha de un cliente de una ruta NO descargada abre igual
+        fijarOnLine(false);
+        const ficha = await bundle.traerFichaClienteForm(orm, 600);
+        ok(ficha.name === "Cliente 600" && ficha.vat === "V600", "sin señal abre la ficha de cualquier cliente", ficha);
+    };
+
     // -----------------------------------------------------------------
     escenarios.offline_carrito_reintento = async function () {
         console.log("\n[Offline F0] si falla el envío del carrito, los cambios no se pierden");

@@ -416,21 +416,92 @@ export async function traerFichaClienteForm(orm, locationId) {
     return aplicarEdiciones(locationId, ficha);
 }
 
-/** "Preparar mi día": lo que necesita el formulario de cliente sin señal. */
-async function prepararClientes(orm, schedules) {
-    const routeIds = [...new Set((schedules || []).map((s) => s.route_id).filter(Boolean))];
-    await Promise.all([
-        traerMisRutas(orm).catch(() => null),
-        leerConRespaldo("mis_clientes", () => orm.call("fsm.person", "shalom_mis_clientes", [])).catch(() => null),
-        routeIds.length
-            ? orm
-                  .call("fsm.location", "shalom_clientes_de_rutas", [routeIds])
-                  .then((porRuta) =>
-                      Promise.all(Object.entries(porRuta || {}).map(([id, lista]) => guardarLocal(`clientes_ruta:${id}`, lista)))
-                  )
-                  .catch(() => null)
-            : null,
-    ]);
+const FICHAS_POR_LLAMADA = 300;
+const CLIENTES_VIGENCIA_MS = 12 * 60 * 60 * 1000; // se refrescan solos cada 12 h
+let descargandoClientes = null;
+
+/** Deja en el teléfono TODOS los clientes (las rutas son libres: cualquiera
+ * puede editar o venderle a cualquiera), con su ficha completa para "Editar
+ * cliente", y las listas por ruta de "Va después de". Se baja solo (al abrir
+ * la app y en "Preparar mi día"); no depende de qué rutas se descargaron. */
+export function descargarClientes(orm) {
+    if (descargandoClientes) {
+        return descargandoClientes;
+    }
+    descargandoClientes = (async () => {
+        const [clientes] = await Promise.all([
+            orm.call("fsm.person", "shalom_mis_clientes", []),
+            traerMisRutas(orm).catch(() => null),
+            leerConRespaldo("puede_distribuidora", () => orm.call("fsm.location", "shalom_puede_marcar_distribuidora", [])).catch(() => null),
+        ]);
+        marcarRed(true);
+        await guardarLocal("mis_clientes", clientes);
+        // Listas por ruta ("Va después de"): salen del mismo directorio.
+        const porRuta = {};
+        for (const c of clientes) {
+            if (c.fsm_route_id) {
+                (porRuta[c.fsm_route_id] = porRuta[c.fsm_route_id] || []).push({id: c.id, name: c.name || "", x_orden_ruta: c.x_orden_ruta || 0});
+            }
+        }
+        await Promise.all(
+            Object.entries(porRuta).map(([id, lista]) =>
+                guardarLocal(`clientes_ruta:${id}`, lista.sort((a, b) => a.x_orden_ruta - b.x_orden_ruta))
+            )
+        );
+        // Fichas completas, en tandas y de a 3 llamadas a la vez.
+        const ids = clientes.map((c) => c.id);
+        const tandas = [];
+        for (let i = 0; i < ids.length; i += FICHAS_POR_LLAMADA) {
+            tandas.push(ids.slice(i, i + FICHAS_POR_LLAMADA));
+        }
+        let siguiente = 0;
+        let guardadas = 0;
+        const trabajador = async () => {
+            while (siguiente < tandas.length) {
+                const tanda = tandas[siguiente++];
+                const fichas = await orm.call("fsm.location", "shalom_fichas_cliente_form", [tanda]);
+                await Promise.all(Object.entries(fichas || {}).map(([id, f]) => guardarLocal(`cliente_form:${id}`, f)));
+                guardadas += Object.keys(fichas || {}).length;
+                estadoOffline.clientesGuardados = guardadas;
+            }
+        };
+        await Promise.all(Array.from({length: Math.min(3, tandas.length)}, trabajador));
+        // Clientes que ya no existen o salieron de las rutas: se borran.
+        const vigentes = new Set(ids.map(String));
+        for (const clave of await listarClaves("cliente_form:")) {
+            if (!vigentes.has(clave.slice("cliente_form:".length))) {
+                await borrarLocal(clave);
+            }
+        }
+        estadoOffline.clientesGuardados = ids.length;
+        estadoOffline.clientesEn = Date.now();
+        await guardarLocal("meta:clientes", {en: estadoOffline.clientesEn, total: ids.length});
+        return ids.length;
+    })().finally(() => {
+        descargandoClientes = null;
+    });
+    return descargandoClientes;
+}
+
+/** Al abrir la app: si los clientes no están en el teléfono (o tienen más de
+ * 12 h), se bajan solos por detrás. Sin señal no hace nada. */
+export async function completarClientes(orm, {forzar = false} = {}) {
+    if (sinConexion() || !orm) {
+        return;
+    }
+    const meta = await leerLocal("meta:clientes");
+    if (meta && meta.valor) {
+        estadoOffline.clientesEn = meta.valor.en;
+        estadoOffline.clientesGuardados = meta.valor.total;
+    }
+    if (!forzar && meta && meta.valor && Date.now() - meta.valor.en < CLIENTES_VIGENCIA_MS) {
+        return;
+    }
+    try {
+        await descargarClientes(orm);
+    } catch (error) {
+        console.error("shalom: no se pudieron bajar los clientes", error);
+    }
 }
 
 // ------------------------------------------------------------------
@@ -742,6 +813,7 @@ export async function completarFotosGuardadas(orm) {
     if (sinConexion()) {
         return;
     }
+    completarClientes(orm); // clientes y fichas, por detrás
     const local = await leerLocal("catalogo");
     const productos = local && local.valor ? local.valor.productos || [] : [];
     if (productos.length && productos.every(tieneVersionVigente)) {
@@ -774,6 +846,7 @@ async function reanudarDescargas() {
             return;
         }
         completarFotosGuardadas(ormParaReanudar);
+        completarClientes(ormParaReanudar);
     } else if (productosDeFotos.length) {
         completarFotos();
     }
@@ -886,7 +959,7 @@ export async function limpiarDatosViejos(vigentes, {soloRutas = false} = {}) {
                 }
             }
         }
-        for (const prefijo of ["ficha:", "pedidos:", "ultima_fp:", "cliente_form:"]) {
+        for (const prefijo of ["ficha:", "pedidos:", "ultima_fp:"]) {
             for (const clave of await listarClaves(prefijo)) {
                 if (!clientes.has(clave.slice(prefijo.length))) {
                     borrar.push(clave);
@@ -960,6 +1033,8 @@ export async function borrarDatosDescargados() {
     estadoOffline.rutasPreparadas = [];
     estadoOffline.rutasMeta = {};
     estadoOffline.productosGuardados = 0;
+    estadoOffline.clientesGuardados = 0;
+    estadoOffline.clientesEn = null;
     estadoOffline.mensajePreparar = "";
     await estimarEspacio();
 }
@@ -1043,7 +1118,8 @@ export async function prepararDia(orm, {schedules = null, reanudarDesde = null} 
         paso("Formas de pago y estados…", 25);
         await Promise.all([traerFormasPago(orm), traerEtapas(orm), traerCotizaciones(orm).catch(() => null)]);
         const elegidas = schedules || rutasParaPreparar(rutas);
-        await prepararClientes(orm, rutas);
+        paso("Clientes y sus fichas…", 28);
+        await completarClientes(orm, {forzar: true});
         let hechas = 0;
         let fallidas = 0;
         let siguiente = 0;
@@ -1109,14 +1185,19 @@ export async function prepararDia(orm, {schedules = null, reanudarDesde = null} 
 
 /** Fechas de la última preparación (para "Datos de hace X"). */
 export async function cargarMetaPreparacion() {
-    const [preparado, fotos, rutas, productos, listaRutas, clavesFichas] = await Promise.all([
+    const [preparado, fotos, rutas, productos, listaRutas, clavesFichas, clientesMeta] = await Promise.all([
         leerLocal("meta:preparado_en"),
         leerLocal("meta:fotos_en"),
         leerLocal("meta:rutas_preparadas"),
         leerLocal("meta:productos"),
         leerLocal("rutas"),
         listarClaves("meta:ruta_"),
+        leerLocal("meta:clientes"),
     ]);
+    if (clientesMeta && clientesMeta.valor) {
+        estadoOffline.clientesEn = clientesMeta.valor.en;
+        estadoOffline.clientesGuardados = clientesMeta.valor.total;
+    }
     const metas = {};
     for (const clave of clavesFichas) {
         const ficha = await leerLocal(clave);

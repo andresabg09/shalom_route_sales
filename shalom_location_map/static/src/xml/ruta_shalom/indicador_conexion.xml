@@ -77,6 +77,14 @@
                         <i t-attf-class="fa off-check-estado off-check-{{iconoDatos}} {{iconoDatos === 'ok' ? 'fa-check-circle' : iconoDatos === 'viejo' ? 'fa-exclamation-circle' : 'fa-circle-o'}}" aria-hidden="true"/>
                     </div>
                     <div class="off-check">
+                        <span class="off-check-ico"><i class="fa fa-address-book-o" aria-hidden="true"/></span>
+                        <div class="off-check-textos">
+                            <div class="off-check-titulo">Clientes y sus fichas</div>
+                            <div class="off-check-sub" t-esc="textoClientes"/>
+                        </div>
+                        <i t-attf-class="fa off-check-estado {{offline.clientesEn ? 'off-check-ok fa-check-circle' : 'off-check-falta fa-circle-o'}}" aria-hidden="true"/>
+                    </div>
+                    <div class="off-check">
                         <span class="off-check-ico"><i class="fa fa-picture-o" aria-hidden="true"/></span>
                         <div class="off-check-textos">
                             <div class="off-check-titulo">Fotos del catálogo</div>
